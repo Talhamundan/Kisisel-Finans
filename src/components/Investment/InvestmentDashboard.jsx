@@ -1,13 +1,12 @@
 import React from 'react';
-import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend } from 'recharts';
+import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
 import BESCard from './BESCard';
-import { cardStyle, inputStyle, formatCurrencyPlain, tarihFormatla, COLORS_GENEL, COLORS_PORTFOLIO } from '../../utils/helpers';
+import { inputStyle, formatCurrencyPlain, tarihFormatla, COLORS_GENEL, COLORS_PORTFOLIO } from '../../utils/helpers';
 
 const InvestmentDashboard = ({
     gizliMod,
     genelToplamYatirimGucu,
     toplamKarZarar,
-    toplamYatirimHesapNakiti,
     // New Props for Bottom Bar
     kartYatirimToplami,
     toplamDovizVarligi,
@@ -31,7 +30,6 @@ const InvestmentDashboard = ({
     yatirimIslemleri,
     yatirimArama, setYatirimArama,
     aktifYatirimAy, setAktifYatirimAy,
-    filtreYatirimTuru, setFiltreYatirimTuru,
     mevcutAylar,
     // Actions
     islemSil, fiyatGuncelle,
@@ -41,10 +39,22 @@ const InvestmentDashboard = ({
     besGuncelle,
     islemEkle,
     besOdemeYap,
+    besOdemeIsle,
     portfoyGuncelDegeri,
     tumIslemler, // NEW PROP
     pozisyonSil // NEW PROP
 }) => {
+    const [isMobile, setIsMobile] = React.useState(() => {
+        if (typeof window === 'undefined') return false;
+        return window.innerWidth <= 767;
+    });
+
+    React.useEffect(() => {
+        const onResize = () => setIsMobile(window.innerWidth <= 767);
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
+    }, []);
+
     const cardStyle = {
         background: 'white',
         borderRadius: '20px',
@@ -53,19 +63,6 @@ const InvestmentDashboard = ({
         border: '1px solid rgba(255,255,255,0.8)'
     };
     const formatPara = (tutar) => gizliMod ? "**** ₺" : formatCurrencyPlain(tutar);
-
-    const { netProfit } = React.useMemo(() => {
-        let pl = 0;
-        (yatirimIslemleri || []).forEach(i => {
-            if (i.islemTipi === 'yatirim_satis' && i.alisBirimFiyat && i.birimFiyat && i.adet) {
-                const maliyet = parseFloat(i.alisBirimFiyat);
-                const satis = parseFloat(i.birimFiyat);
-                const kar = (satis - maliyet) * parseFloat(i.adet);
-                pl += kar;
-            }
-        });
-        return { netProfit: pl };
-    }, [yatirimIslemleri]);
 
     const COLORS_MAP = {
         'Hisse': '#3182ce',
@@ -104,21 +101,20 @@ const InvestmentDashboard = ({
 
     return (
         <div>
-            {/* 1. SATIR: İKİ AYRI KART DÜZENİ */}
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '25px', marginBottom: '30px' }}>
+            {/* 1. SATIR: ÖZET + GENEL DAĞILIM */}
+            <div className="responsive-grid-2 investment-grid-top" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '25px', marginBottom: '30px' }}>
                 {/* SOL KART: TOPLAM ÖZET */}
-                <div style={{ ...cardStyle, padding: '30px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                    {/* ... (Existing Summary Content) ... */}
-                    <h3 style={{ margin: 0, color: '#2d3748', textTransform: 'uppercase', fontSize: '18px', fontWeight: '800', letterSpacing: '0.5px' }}>
-                        TOPLAM YATIRIM VARLIĞI
-                    </h3>
-                    <div style={{ fontSize: '13px', color: '#718096', marginTop: '5px' }}>Portföy + Yatırım Hesabı Bakiyesi</div>
+                <div className="responsive-card investment-card" style={{ ...cardStyle, padding: '30px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    <div className="card-title-sm">TOPLAM YATIRIM VARLIĞI</div>
+                    <div className="text-muted" style={{ fontSize: '13px', marginTop: '4px' }}>
+                        Portföy + yatırım hesap bakiyesi
+                    </div>
 
-                    <h1 style={{ fontSize: '48px', margin: '20px 0', fontWeight: '800', color: '#1a202c', letterSpacing: '-2px' }}>
+                    <div className="kpi-amount" style={{ fontSize: '32px', marginTop: '18px' }}>
                         {formatPara(genelToplamYatirimGucu)}
-                    </h1>
+                    </div>
 
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '25px', fontSize: '14px', color: '#4a5568', marginTop: 'auto', paddingTop: '20px', borderTop: '1px solid #edf2f7' }}>
+                    <div className="investment-legend" style={{ display: 'flex', flexWrap: 'wrap', gap: '25px', fontSize: '14px', color: '#4a5568', marginTop: 'auto', paddingTop: '20px', borderTop: '1px solid #edf2f7' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#3182ce' }}></div>
                             <span>Hisse: <b>{formatPara(kartYatirimToplami)}</b></span>
@@ -139,7 +135,7 @@ const InvestmentDashboard = ({
                 </div>
 
                 {/* SAĞ KART: GENEL DAĞILIM PASTA GRAFİĞİ */}
-                <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '280px' }}>
+                <div className="responsive-card investment-card" style={{ ...cardStyle, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '280px' }}>
                     {genelToplamYatirimGucu > 0 ? (
                         <ResponsiveContainer width="100%" height={220}>
                             <PieChart>
@@ -151,7 +147,7 @@ const InvestmentDashboard = ({
                                     outerRadius={80}
                                     paddingAngle={5}
                                     dataKey="value"
-                                    label={({ name }) => name}
+                                    label={isMobile ? false : ({ name }) => name}
                                 >
                                     {(genelVarlikVerisi || []).map((entry, index) => (
                                         <Cell key={`cell-${index}`} fill={COLORS_MAP[entry.name] || COLORS_GENEL[index % COLORS_GENEL.length]} />
@@ -170,21 +166,23 @@ const InvestmentDashboard = ({
             </div>
 
             {/* 2. SATIR: PORTFÖY TABLOSU VE VARLIK DAĞILIMI */}
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '25px', marginBottom: '30px' }}>
+            <div className="responsive-grid-2 investment-grid-middle" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '25px', marginBottom: '30px' }}>
 
                 {/* SOL: PORTFÖY TABLOSU */}
-                <div style={cardStyle}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <div className="responsive-card investment-card" style={cardStyle}>
+                    <div className="investment-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <h4 style={{ margin: 0, color: '#2d3748' }}>💎 Portföy Detayları</h4>
-                            <span style={{ fontSize: '12px', color: toplamKarZarar >= 0 ? 'green' : 'red', fontWeight: 'bold', background: toplamKarZarar >= 0 ? '#f0fff4' : '#fff5f5', padding: '2px 8px', borderRadius: '10px' }}>(K/Z: {toplamKarZarar > 0 ? '+' : ''}{formatPara(toplamKarZarar)})</span>
+                            <div className="card-title">Portföy Detayları</div>
+                            <span style={{ fontSize: '11px', color: toplamKarZarar >= 0 ? 'green' : 'red', fontWeight: 'bold', background: toplamKarZarar >= 0 ? '#f0fff4' : '#fff5f5', padding: '2px 8px', borderRadius: '999px' }}>
+                                K/Z: {toplamKarZarar > 0 ? '+' : ''}{formatPara(toplamKarZarar)}
+                            </span>
                         </div>
-                        <button onClick={piyasalariGuncelle} disabled={guncelleniyor} style={{ background: '#3182ce', color: 'white', border: 'none', padding: '6px 15px', borderRadius: '15px', fontSize: '12px', cursor: 'pointer', fontWeight: 'bold' }}>
-                            {guncelleniyor ? 'Güncelleniyor...' : '🔄 Fiyatları Güncelle'}
+                        <button onClick={piyasalariGuncelle} disabled={guncelleniyor} className="btn-ui btn-ui-primary">
+                            {guncelleniyor ? 'Güncelleniyor...' : 'Fiyatları Güncelle'}
                         </button>
                     </div>
-                    <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', fontSize: '14px', borderCollapse: 'collapse', color: '#333', minWidth: '500px' }}>
+                    <div className="investment-table-wrap" style={{ overflowX: 'auto' }}>
+                        <table className="investment-portfolio-table" style={{ width: '100%', fontSize: '14px', borderCollapse: 'collapse', color: '#333', minWidth: '500px' }}>
                             <thead><tr style={{ textAlign: 'left', color: '#aaa', borderBottom: '1px solid #eee' }}><th style={{ padding: '10px' }}>Varlık</th><th style={{ padding: '10px' }}>Adet</th><th style={{ padding: '10px' }}>Maliyet (Ort.)</th><th style={{ padding: '10px' }}>Güncel F.</th><th style={{ padding: '10px' }}>Değer</th><th style={{ padding: '10px' }}>K/Z</th><th></th><th></th></tr></thead>
                             <tbody>{aggregatedPortfoy.map(p => {
                                 const guncel = p.adet * (p.guncelFiyat || p.alisFiyati);
@@ -213,15 +211,54 @@ const InvestmentDashboard = ({
                 </div>
 
                 {/* SAĞ: VARLIK DAĞILIMI */}
-                <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                    {(portfoy || []).length > 0 ?
+                <div className="responsive-card investment-card" style={{ ...cardStyle, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                    {(portfoy || []).length > 0 ? (
                         <>
-                            <ResponsiveContainer width="100%" height={300}><PieChart><Pie data={portfoyVerisi || []} cx="50%" cy="50%" innerRadius={70} outerRadius={100} paddingAngle={5} dataKey="value" label={({ name }) => name}>{(portfoyVerisi || []).map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS_PORTFOLIO[index % COLORS_PORTFOLIO.length]} />))}</Pie><Tooltip formatter={(value) => gizliMod ? "****" : `${value.toLocaleString()} ₺`} /></PieChart></ResponsiveContainer>
-                            <div style={{ marginTop: '-20px', fontSize: '24px', fontWeight: 'bold', color: '#2d3748' }}>
+                            <div className="card-title-sm" style={{ marginBottom: 8 }}>Portföy Dağılımı</div>
+                            <ResponsiveContainer width="100%" height={260}>
+                                <PieChart>
+                                    <Pie
+                                        data={portfoyVerisi || []}
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius={68}
+                                        outerRadius={100}
+                                        startAngle={90}
+                                        endAngle={-270}
+                                        paddingAngle={3}
+                                        cornerRadius={8}
+                                        dataKey="value"
+                                    >
+                                        {(portfoyVerisi || []).map((entry, index) => (
+                                            <Cell
+                                                key={`cell-${index}`}
+                                                fill={COLORS_PORTFOLIO[index % COLORS_PORTFOLIO.length]}
+                                                stroke="#f9fafb"
+                                                strokeWidth={2}
+                                            />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip
+                                        formatter={(value, name) => [
+                                            gizliMod ? '****' : `${value.toLocaleString('tr-TR')} ₺`,
+                                            name
+                                        ]}
+                                        contentStyle={{
+                                            borderRadius: 12,
+                                            border: 'none',
+                                            boxShadow: '0 10px 25px rgba(15,23,42,0.15)',
+                                            fontSize: 12
+                                        }}
+                                    />
+                                </PieChart>
+                            </ResponsiveContainer>
+                            <div style={{ marginTop: 4, fontSize: 18, fontWeight: 'bold', color: '#2d3748' }}>
                                 {formatPara(portfoyGuncelDegeri)}
                             </div>
                         </>
-                        : <p style={{ fontSize: '12px', color: '#aaa' }}>Henüz varlık yok.</p>}
+                    ) : (
+                        <p style={{ fontSize: '12px', color: '#aaa' }}>Henüz varlık yok.</p>
+                    )}
                 </div>
             </div>
 
@@ -233,6 +270,7 @@ const InvestmentDashboard = ({
                 islemEkle={islemEkle}
                 hesaplar={hesaplar}
                 besOdemeYap={besOdemeYap}
+                besOdemeIsle={besOdemeIsle}
                 modalAc={modalAc}
                 aktifYatirimAy={aktifYatirimAy}
                 yatirimIslemleri={yatirimIslemleri}
@@ -240,14 +278,13 @@ const InvestmentDashboard = ({
             />
 
             {/* 3. SATIR: YENİ İŞLEM VE GEÇMİŞ TABLOSU */}
-            {/* YENİ YATIRIM EKLEME ALANI */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '25px', marginBottom: '30px', alignItems: 'start' }}>
+            <div className="responsive-grid-2 investment-grid-main" style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '25px', marginBottom: '30px', alignItems: 'start' }}>
                 {/* SOL: YENİ YATIRIM EKLEME FORM */}
-                <div style={{ ...cardStyle, height: '500px', display: 'flex', flexDirection: 'column', background: '#f0fff4', border: '1px solid #9ae6b4' }}>
-                    <h4 style={{ marginTop: 0, marginBottom: '20px', color: '#2f855a' }}>📈 Yeni Yatırım Varlığı Al</h4>
+                <div className="responsive-card investment-card investment-fixed-height" style={{ ...cardStyle, height: '500px', display: 'flex', flexDirection: 'column', background: '#f0fff4', border: '1px solid #9ae6b4' }}>
+                    <div className="card-title" style={{ marginBottom: '16px', color: '#2f855a' }}>Yeni Yatırım Varlığı Al</div>
                     <form onSubmit={yatirimAl} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                         <input placeholder="Sembol (THYAO, GRAM...)" value={sembol} onChange={e => setSembol(e.target.value)} style={{ ...inputStyle, border: '1px solid #9ae6b4' }} />
-                        <div style={{ display: 'flex', gap: '10px' }}>
+                        <div className="investment-form-row" style={{ display: 'flex', gap: '10px' }}>
                             <input type="number" placeholder="Adet" value={adet} onChange={e => setAdet(e.target.value)} style={{ ...inputStyle, border: '1px solid #9ae6b4' }} />
                             <input type="number" placeholder="Alış Fiyatı" value={alisFiyati} onChange={e => setAlisFiyati(e.target.value)} style={{ ...inputStyle, border: '1px solid #9ae6b4' }} />
                         </div>
@@ -258,18 +295,18 @@ const InvestmentDashboard = ({
                             <option value="">Ödeme Yapılacak Hesap Seç</option>
                             {(hesaplar || []).map(h => <option key={h.id} value={h.id}>{h.hesapAdi} ({formatPara(h.guncelBakiye)})</option>)}
                         </select>
-                        <div style={{ fontSize: '14px', fontWeight: 'bold', color: 'green' }}>Toplam Tutar: {adet && alisFiyati ? formatPara(adet * alisFiyati) : '0 ₺'}</div>
-                        <button type="submit" disabled={guncelleniyor} style={{ padding: '12px', background: '#48bb78', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
-                            {guncelleniyor ? 'İşleniyor...' : 'VARLIK EKLE'}
+                        <div style={{ fontSize: '13px', fontWeight: '600', color: 'green' }}>Toplam: {adet && alisFiyati ? formatPara(adet * alisFiyati) : '0 ₺'}</div>
+                        <button type="submit" disabled={guncelleniyor} className="btn-ui btn-ui-success">
+                            {guncelleniyor ? 'İşleniyor...' : 'Varlık Ekle'}
                         </button>
                     </form>
                 </div>
 
                 {/* SAĞ: YATIRIM İŞLEM GEÇMİŞİ */}
-                <div style={{ ...cardStyle, maxWidth: '100%', overflow: 'hidden', height: '500px', display: 'flex', flexDirection: 'column' }}>
+                <div className="responsive-card investment-card investment-fixed-height" style={{ ...cardStyle, maxWidth: '100%', overflow: 'hidden', height: '500px', display: 'flex', flexDirection: 'column' }}>
                     {/* ÜST BÖLÜM: AYLAR */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '10px' }}>
-                        <h4 style={{ marginTop: 0, color: '#2c3e50', margin: 0 }}>📜 Yatırım İşlem Geçmişi</h4>
+                    <div className="investment-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '10px' }}>
+                        <div className="card-title">Yatırım İşlem Geçmişi</div>
                         <div className="no-scrollbar" style={{ display: 'flex', gap: '5px', alignItems: 'center', overflowX: 'auto', paddingBottom: '5px', maxWidth: '100%', whiteSpace: 'nowrap' }}>
                             {(mevcutAylar || []).map(ay => (
                                 <button key={ay} onClick={() => setAktifYatirimAy(ay)} style={{ padding: '5px 10px', fontSize: '12px', borderRadius: '15px', border: 'none', cursor: 'pointer', background: aktifYatirimAy === ay ? '#2c3e50' : '#edf2f7', color: aktifYatirimAy === ay ? 'white' : '#4a5568', fontWeight: 'bold', flexShrink: 0 }}>{ay}</button>
@@ -293,11 +330,11 @@ const InvestmentDashboard = ({
                     </div>
 
                     {/* LİSTE */}
-                    <div className="custom-scrollbar" style={{ flex: 1, overflowY: 'auto', paddingRight: '5px' }}>
+                    <div className="custom-scrollbar investment-history-scroll" style={{ flex: 1, overflowY: 'auto', paddingRight: '5px' }}>
                         {(yatirimIslemleri || []).length === 0 ? (
                             <div style={{ textAlign: 'center', color: '#a0aec0', marginTop: '50px', fontStyle: 'italic' }}>Bu ay için işlem bulunamadı.</div>
                         ) : (
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                            <table className="investment-history-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', minWidth: '640px' }}>
                                 <thead style={{ position: 'sticky', top: 0, background: 'white', zIndex: 1, boxShadow: '0 2px 5px rgba(0,0,0,0.05)' }}>
                                     <tr style={{ color: '#718096', textAlign: 'left', fontSize: '12px' }}>
                                         <th style={{ padding: '10px' }}>Tarih</th>
@@ -307,6 +344,7 @@ const InvestmentDashboard = ({
                                         <th style={{ padding: '10px' }}>B.Fiyat</th>
                                         <th style={{ padding: '10px' }}>Açıklama</th>
                                         <th style={{ padding: '10px' }}>Tutar</th>
+                                        <th style={{ padding: '10px' }}></th>
                                         <th style={{ padding: '10px' }}></th>
                                     </tr>
                                 </thead>
@@ -333,7 +371,7 @@ const InvestmentDashboard = ({
                         )}
                     </div>
                     {/* ÖZET: YATIRIM NAKİT AKIŞI */}
-                    <div style={{ marginTop: 'auto', paddingTop: '15px', borderTop: '2px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div className="investment-flow-summary" style={{ marginTop: 'auto', paddingTop: '15px', borderTop: '2px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div style={{ color: '#718096', fontSize: '14px', fontWeight: 'bold' }}>
                             Aylık Yatırım Nakit Akışı ({aktifYatirimAy})
                         </div>
@@ -390,7 +428,7 @@ const InvestmentDashboard = ({
 // Safe rendering helper
 const safeVal = (val, suffix = "") => val ? val + suffix : "";
 
-const PortfolioAnalysisTable = ({ tumIslemler, formatPara, modalAc, pozisyonSil, portfoy, islemSil }) => {
+const PortfolioAnalysisTable = ({ tumIslemler, formatPara, modalAc, portfoy }) => {
     const [hoverIndex, setHoverIndex] = React.useState(-1); // For hover effect
 
     // Create Price Map for Real-time valuations
@@ -546,10 +584,10 @@ const PortfolioAnalysisTable = ({ tumIslemler, formatPara, modalAc, pozisyonSil,
     }, [tumIslemler, priceMap]);
 
     return (
-        <div style={{ background: 'white', borderRadius: '20px', padding: '25px', boxShadow: '0 10px 30px rgba(0,0,0,0.06)', border: '1px solid rgba(255,255,255,0.8)', marginTop: '30px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <div className="responsive-card investment-card investment-analysis-card" style={{ background: 'white', borderRadius: '20px', padding: '25px', boxShadow: '0 10px 30px rgba(0,0,0,0.06)', border: '1px solid rgba(255,255,255,0.8)', marginTop: '30px' }}>
+            <div className="investment-analysis-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                 <h3 style={{ margin: 0, color: '#2d3748' }}>📊 Portföy İşlem Analiz (Pozisyon Bazlı)</h3>
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <div className="investment-analysis-actions" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                     <button
                         onClick={() => modalAc('gecmis_islem_ekle')}
                         style={{
@@ -577,8 +615,8 @@ const PortfolioAnalysisTable = ({ tumIslemler, formatPara, modalAc, pozisyonSil,
                 </div>
             </div>
 
-            <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', color: '#333' }}>
+            <div className="investment-table-wrap" style={{ overflowX: 'auto' }}>
+                <table className="investment-analysis-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', color: '#333' }}>
                     <thead>
                         <tr style={{ background: '#f7fafc', color: '#4a5568', textAlign: 'left' }}>
                             <th style={{ padding: '12px', borderBottom: '2px solid #e2e8f0' }}>Hisse</th>

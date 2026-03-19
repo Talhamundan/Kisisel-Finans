@@ -1,72 +1,76 @@
 import React from 'react';
-import { Home, WalletCards, Briefcase, PlusCircle, Settings } from 'lucide-react';
+import { Home, Briefcase, Target } from 'lucide-react';
 
-const MobileNav = ({ anaSekme, setAnaSekme, modalAc }) => {
+const MobileNav = ({ anaSekme, setAnaSekme }) => {
     return (
         <div className="show-on-mobile" style={{
             position: 'fixed',
             bottom: 0,
             left: 0,
             width: '100%',
-            height: '85px',
+            height: '70px',
             backgroundColor: '#ffffff',
             boxShadow: '0 -4px 12px rgba(0,0,0,0.05)',
             zIndex: 100,
             display: 'flex',
             justifyContent: 'space-around',
-            alignItems: 'flex-start',
-            paddingTop: '10px',
-            paddingBottom: '30px', /* Safe area uyumu */
+            alignItems: 'center',
+            padding: '8px 16px 18px 16px',
             borderTopLeftRadius: '20px',
             borderTopRightRadius: '20px',
         }}>
             <button
                 onClick={() => setAnaSekme('butcem')}
-                style={{ background: 'transparent', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', color: anaSekme === 'butcem' ? '#805ad5' : '#a0aec0', padding: 0 }}
+                style={{
+                    background: 'transparent',
+                    border: 'none',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 4,
+                    color: anaSekme === 'butcem' ? '#805ad5' : '#a0aec0',
+                    padding: 0,
+                    flex: 1
+                }}
             >
                 <Home size={22} strokeWidth={anaSekme === 'butcem' ? 3 : 2} />
-                <span style={{ fontSize: '10px', fontWeight: anaSekme === 'butcem' ? 'bold' : 'normal' }}>Ana Sayfa</span>
-            </button>
-
-            <button
-                onClick={() => {
-                    setAnaSekme('butcem');
-                    setTimeout(() => {
-                        const cuzdanlarSec = document.getElementById('cuzdanlar-section');
-                        if (cuzdanlarSec) {
-                            const offset = cuzdanlarSec.getBoundingClientRect().top + window.scrollY - 80;
-                            window.scrollTo({ top: offset, behavior: 'smooth' });
-                        }
-                    }, 150);
-                }}
-                style={{ background: 'transparent', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', color: '#a0aec0', padding: 0 }}
-            >
-                <WalletCards size={22} />
-                <span style={{ fontSize: '10px', fontWeight: 'normal' }}>Cüzdanlar</span>
-            </button>
-
-            {/* GİDERLER MODALI BUTONU (ORTADA VE BELİRGİN) */}
-            <button
-                onClick={() => modalAc('islem_ekle_mobil')}
-                style={{ background: '#805ad5', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#ffffff', padding: 0, width: '48px', height: '48px', borderRadius: '50%', marginTop: '-25px', boxShadow: '0 4px 10px rgba(128,90,213,0.4)' }}
-            >
-                <PlusCircle size={28} color="#ffffff" strokeWidth={2.5} />
+                <span style={{ fontSize: 10, fontWeight: anaSekme === 'butcem' ? 'bold' : 'normal' }}>Ana Sayfa</span>
             </button>
 
             <button
                 onClick={() => setAnaSekme('yatirimlar')}
-                style={{ background: 'transparent', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', color: anaSekme === 'yatirimlar' ? '#805ad5' : '#a0aec0', padding: 0 }}
+                style={{
+                    background: 'transparent',
+                    border: 'none',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 4,
+                    color: anaSekme === 'yatirimlar' ? '#805ad5' : '#a0aec0',
+                    padding: 0,
+                    flex: 1
+                }}
             >
                 <Briefcase size={22} strokeWidth={anaSekme === 'yatirimlar' ? 3 : 2} />
-                <span style={{ fontSize: '10px', fontWeight: anaSekme === 'yatirimlar' ? 'bold' : 'normal' }}>Portföy</span>
+                <span style={{ fontSize: 10, fontWeight: anaSekme === 'yatirimlar' ? 'bold' : 'normal' }}>Yatırım</span>
             </button>
 
             <button
-                onClick={() => modalAc('ayarlar')}
-                style={{ background: 'transparent', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', color: '#a0aec0', padding: 0 }}
+                onClick={() => setAnaSekme('hedefler')}
+                style={{
+                    background: 'transparent',
+                    border: 'none',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 4,
+                    color: anaSekme === 'hedefler' ? '#805ad5' : '#a0aec0',
+                    padding: 0,
+                    flex: 1
+                }}
             >
-                <Settings size={22} />
-                <span style={{ fontSize: '10px', fontWeight: 'normal' }}>Ayarlar</span>
+                <Target size={22} strokeWidth={anaSekme === 'hedefler' ? 3 : 2} />
+                <span style={{ fontSize: 10, fontWeight: anaSekme === 'hedefler' ? 'bold' : 'normal' }}>Envanter</span>
             </button>
         </div>
     );

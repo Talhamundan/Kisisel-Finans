@@ -20,37 +20,18 @@ const BudgetDashboard = ({
     hesaplar,
     modalAc,
     normalSil,
-    maasEkle,
-    maasAd, setMaasAd,
-    maasTutar, setMaasTutar,
-    maasGun, setMaasGun,
-    maasHesapId, setMaasHesapId,
     filtrelenmisIslemler,
     sadeceCuzdanNakiti,
     genelToplamYatirimGucu,
     netVarlik,
-    hesapEkle,
-    hesapAdi, setHesapAdi,
-    hesapTipi, setHesapTipi,
-    baslangicBakiye, setBaslangicBakiye,
     tanimliFaturalar,
     bekleyenFaturalar,
-    faturaTanimEkle,
-    tanimBaslik, setTanimBaslik,
-    tanimKurum, setTanimKurum,
-    tanimAboneNo, setTanimAboneNo,
     taksitler,
     taksitOde,
     toplamKalanTaksitBorcu,
     abonelikler,
     abonelikOde,
     toplamSabitGider,
-    abonelikEkle,
-    aboAd, setAboAd,
-    aboTutar, setAboTutar,
-    aboGun, setAboGun,
-    aboKategori, setAboKategori,
-    aboHesapId, setAboHesapId,
     kategoriListesi,
     formTab, setFormTab,
     islemEkle,
@@ -84,8 +65,6 @@ const BudgetDashboard = ({
     filtreKategori, setFiltreKategori,
     borclar,
     toplamKalanBorc,
-    borcOde,
-    borcDuzenle,
     excelIndir,
     excelYukle,
     islemSil
@@ -106,21 +85,21 @@ const BudgetDashboard = ({
 
                 {/* 1. SATIR: KARTLAR */}
                 <div className="responsive-card" style={{ ...cardStyle, borderLeft: '5px solid #48bb78' }}>
-                    <h3 className="responsive-title" style={{ margin: 0, color: '#888', fontSize: '11px', letterSpacing: '1px' }}>TOPLAM GELİR ({aktifAy})</h3>
-                    <h1 className="responsive-amount" style={{ fontSize: '26px', margin: '10px 0', color: '#333' }}>{formatPara(toplamGelir)}</h1>
+                    <div className="card-title-sm responsive-title">TOPLAM GELİR ({aktifAy})</div>
+                    <div className="kpi-amount responsive-amount">{formatPara(toplamGelir)}</div>
                 </div>
                 <div className="responsive-card" style={{ ...cardStyle, borderLeft: '5px solid #F59E0B' }}>
-                    <span className="responsive-title" style={{ color: '#888', fontSize: '11px', letterSpacing: '1px' }}>BUGÜN HARCANAN</span>
-                    <h2 className="responsive-amount" style={{ color: '#333', margin: '10px 0', fontSize: '26px' }}>{formatPara(bugunGider)}</h2>
+                    <div className="card-title-sm responsive-title">BUGÜN HARCANAN</div>
+                    <div className="kpi-amount responsive-amount">{formatPara(bugunGider)}</div>
                 </div>
                 <div className="responsive-card" style={{ ...cardStyle, borderLeft: '5px solid #f56565' }}>
-                    <span className="responsive-title" style={{ color: '#888', fontSize: '11px', letterSpacing: '1px' }}>GİDER ({aktifAy})</span>
-                    <h2 className="responsive-amount" style={{ color: '#333', margin: '10px 0', fontSize: '24px' }}>{formatPara(toplamGider)}</h2>
+                    <div className="card-title-sm responsive-title">GİDER ({aktifAy})</div>
+                    <div className="kpi-amount-sm responsive-amount">{formatPara(toplamGider)}</div>
                 </div>
 
                 {/* 2. SATIR: GRAFİK (2 Sütun) ve PASTA (1 Sütun) */}
                 <div style={{ ...cardStyle, gridColumn: 'span 2', minHeight: '300px' }}>
-                    <h4 style={{ margin: '0 0 20px 0', color: '#2d3748' }}>📅 Günlük Harcama Trendi ({aktifAy})</h4>
+                    <div className="card-title" style={{ marginBottom: '16px' }}>Günlük Harcama Trendi ({aktifAy})</div>
                     <ResponsiveContainer width="100%" height={250}>
                         <BarChart data={gunlukVeri || []}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -138,8 +117,36 @@ const BudgetDashboard = ({
                 </div>
 
                 <div className="responsive-card" style={{ ...cardStyle, gridColumn: 'span 1', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-
-                    <ResponsiveContainer width="100%" height={250}><PieChart><Pie data={kategoriVerisi || []} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value" label={({ name }) => name.substring(0, 10)}>{(kategoriVerisi || []).map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />))}</Pie><Tooltip formatter={(value) => formatPara(value)} /></PieChart></ResponsiveContainer>
+                    <div className="card-title-sm" style={{ marginBottom: 8 }}>Kategori Dağılımı</div>
+                    <ResponsiveContainer width="100%" height={230}>
+                        <PieChart>
+                            <Pie
+                                data={kategoriVerisi || []}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={58}
+                                outerRadius={86}
+                                startAngle={90}
+                                endAngle={-270}
+                                paddingAngle={3}
+                                cornerRadius={6}
+                                dataKey="value"
+                            >
+                                {(kategoriVerisi || []).map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="#f9fafb" strokeWidth={2} />
+                                ))}
+                            </Pie>
+                            <Tooltip
+                                formatter={(value, name) => [formatPara(value), name]}
+                                contentStyle={{
+                                    borderRadius: 12,
+                                    border: 'none',
+                                    boxShadow: '0 10px 25px rgba(15,23,42,0.15)',
+                                    fontSize: 12
+                                }}
+                            />
+                        </PieChart>
+                    </ResponsiveContainer>
                 </div>
             </div>
 
@@ -151,7 +158,7 @@ const BudgetDashboard = ({
                     {/* LİMİT */}
                     <div className="responsive-card" style={cardStyle}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                            <h4 style={{ marginTop: 0, marginBottom: 0, color: '#2d3748' }}>🎯 Aylık Bütçe Limiti</h4>
+                            <div className="card-title">Aylık Bütçe Limiti</div>
                             <div style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '5px' }}><input type="number" value={localLimit} onChange={(e) => setLocalLimit(e.target.value)} onBlur={(e) => onLimitChange(parseInt(e.target.value) || 0)} style={{ width: '70px', border: '1px solid #ddd', borderRadius: '5px', padding: '2px', background: 'white', color: '#333' }} /></div>
                         </div>
                         <div style={{ marginBottom: '10px' }}>
@@ -168,9 +175,9 @@ const BudgetDashboard = ({
                     {/* MAAŞ MODÜLÜ */}
                     <div className="responsive-card" style={{ ...cardStyle, height: 'fit-content' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                            <h4 style={{ marginTop: 0, marginBottom: 0, color: '#2d3748' }}>💰 Maaşlar & Gelirler</h4>
-                            <button onClick={() => modalAc('maas_ekle')} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: '8px', border: 'none', cursor: 'pointer', background: '#48bb78', color: 'white', fontWeight: 'bold', fontSize: '12px' }}>
-                                <span>+</span> Gelir Ekle
+                            <div className="card-title">Maaşlar & Gelirler</div>
+                            <button onClick={() => modalAc('maas_ekle')} className="btn-ui btn-ui-success">
+                                + Gelir Ekle
                             </button>
                         </div>
                         <div>
@@ -194,9 +201,9 @@ const BudgetDashboard = ({
                     {/* HESAPLAR */}
                     <div className="responsive-card" style={{ ...cardStyle, height: 'fit-content' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '10px' }}>
-                            <h4 style={{ marginTop: 0, marginBottom: 0, color: '#2d3748' }}>💳 Cüzdanlar & Kartlar</h4>
-                            <button onClick={() => modalAc('hesap_ekle')} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: '8px', border: 'none', cursor: 'pointer', background: '#3182ce', color: 'white', fontWeight: 'bold', fontSize: '12px' }}>
-                                <span>+</span> Hesap Ekle
+                            <div className="card-title">Cüzdanlar & Kartlar</div>
+                            <button onClick={() => modalAc('hesap_ekle')} className="btn-ui btn-ui-primary">
+                                + Hesap Ekle
                             </button>
                         </div>
                         <div style={{ marginBottom: '15px' }}>
@@ -241,7 +248,7 @@ const BudgetDashboard = ({
 
                     {/* TAKSİTLER */}
                     <div className="responsive-card" style={cardStyle}>
-                        <h4 style={{ marginTop: 0, marginBottom: '15px', color: '#2d3748' }}>📦 Taksitli Alışverişler</h4>
+                        <div className="card-title" style={{ marginBottom: '12px' }}>Taksitli Alışverişler</div>
                         {taksitler.length === 0 ? <p style={{ fontSize: '13px', color: '#aaa' }}>Aktif taksit borcu yok.</p> :
                             <div style={{ marginBottom: '15px' }}>
                                 {(taksitler || []).map(t => {
@@ -275,15 +282,17 @@ const BudgetDashboard = ({
                     {/* FATURALAR (YENİ MODÜL) */}
                     <div className="responsive-card" style={{ ...cardStyle, height: 'fit-content' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                            <h4 style={{ marginTop: 0, marginBottom: 0, color: '#2d3748' }}>🧾 Faturalar & Abonelikler</h4>
-                            <button onClick={() => modalAc('fatura_tanim_ekle')} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: '8px', border: 'none', cursor: 'pointer', background: '#4a5568', color: 'white', fontWeight: 'bold', fontSize: '12px' }}>
-                                <span>+</span> Fatura Tanımla
+                            <div className="card-title">Faturalar</div>
+                            <button onClick={() => modalAc('fatura_tanim_ekle')} className="btn-ui btn-ui-neutral">
+                                + Fatura Tanımla
                             </button>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                             {/* Faturalar */}
                             {(tanimliFaturalar || []).map(tanim => {
-                                const bekleyen = bekleyenFaturalar.find(f => f.tanimId === tanim.id);
+                                const bekleyenler = bekleyenFaturalar
+                                    .filter(f => f.tanimId === tanim.id)
+                                    .sort((a, b) => new Date(a.sonOdemeTarihi) - new Date(b.sonOdemeTarihi));
                                 return (
                                     <div key={tanim.id} style={{ marginBottom: '10px', border: '1px solid #eee', borderRadius: '10px', overflow: 'hidden', position: 'relative', zIndex: 10 }}>
                                         <div style={{ padding: '10px', background: '#f7fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -298,15 +307,17 @@ const BudgetDashboard = ({
                                                 <span onClick={() => normalSil("fatura_tanimlari", tanim.id)} style={{ cursor: 'pointer', fontSize: '12px', color: '#e53e3e' }}>🗑️</span>
                                             </div>
                                         </div>
-                                        {bekleyen ? (
-                                            <div style={{ padding: '8px', background: '#fff5f5', borderTop: '1px solid #feb2b2', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <div><div style={{ fontWeight: 'bold', color: '#c53030', fontSize: '13px' }}>{formatPara(bekleyen.tutar)}</div><div style={{ fontSize: '10px', color: '#c53030' }}>Son: {tarihSadeceGunAyYil(bekleyen.sonOdemeTarihi)}</div></div>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                                    <span onClick={() => modalAc('duzenle_bekleyen_fatura', bekleyen)} style={{ cursor: 'pointer', fontSize: '12px' }}>✏️</span>
-                                                    <span onClick={() => normalSil("bekleyen_faturalar", bekleyen.id)} style={{ cursor: 'pointer', fontSize: '12px', color: '#e53e3e', marginRight: '5px' }}>🗑️</span>
-                                                    <button onClick={() => modalAc('fatura_ode', bekleyen)} style={{ background: '#c53030', color: 'white', border: 'none', padding: '4px 10px', borderRadius: '15px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>ÖDE</button>
+                                        {bekleyenler.length > 0 ? (
+                                            bekleyenler.map(bekleyen => (
+                                                <div key={bekleyen.id} style={{ padding: '8px', background: '#fff5f5', borderTop: '1px solid #feb2b2', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <div><div style={{ fontWeight: 'bold', color: '#c53030', fontSize: '13px' }}>{formatPara(bekleyen.tutar)}</div><div style={{ fontSize: '10px', color: '#c53030' }}>Son: {tarihSadeceGunAyYil(bekleyen.sonOdemeTarihi)}</div></div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                        <span onClick={() => modalAc('duzenle_bekleyen_fatura', bekleyen)} style={{ cursor: 'pointer', fontSize: '12px' }}>✏️</span>
+                                                        <span onClick={() => normalSil("bekleyen_faturalar", bekleyen.id)} style={{ cursor: 'pointer', fontSize: '12px', color: '#e53e3e', marginRight: '5px' }}>🗑️</span>
+                                                        <button onClick={() => modalAc('fatura_ode', bekleyen)} style={{ background: '#c53030', color: 'white', border: 'none', padding: '4px 10px', borderRadius: '15px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>ÖDE</button>
+                                                    </div>
                                                 </div>
-                                            </div>
+                                            ))
                                         ) : (<div style={{ padding: '5px', fontSize: '10px', color: '#ccc', textAlign: 'center' }}>Bekleyen yok</div>)}
                                     </div>
                                 )
@@ -317,9 +328,9 @@ const BudgetDashboard = ({
                     {/* ABONELİKLER */}
                     <div className="responsive-card" style={{ ...cardStyle, height: 'fit-content' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                            <h4 style={{ marginTop: 0, marginBottom: 0, color: '#2d3748' }}>🔄 Sabit Giderler</h4>
-                            <button onClick={() => modalAc('abonelik_ekle')} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: '8px', border: 'none', cursor: 'pointer', background: '#805ad5', color: 'white', fontWeight: 'bold', fontSize: '12px' }}>
-                                <span>+</span> Gider Ekle
+                            <div className="card-title">Sabit Giderler</div>
+                            <button onClick={() => modalAc('abonelik_ekle')} className="btn-ui btn-ui-primary">
+                                + Gider Ekle
                             </button>
                         </div>
                         <div style={{ marginBottom: '15px' }}>
@@ -346,9 +357,9 @@ const BudgetDashboard = ({
                     {/* BORÇLAR (YENİ MODÜL) */}
                     <div className="responsive-card" style={cardStyle}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                            <h4 style={{ marginTop: 0, marginBottom: 0, color: '#2d3748' }}>💸 Borçlar</h4>
-                            <button onClick={() => modalAc('borc_tanimla')} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', borderRadius: '8px', border: 'none', cursor: 'pointer', background: '#e53e3e', color: 'white', fontWeight: 'bold', fontSize: '12px' }}>
-                                <span>+</span> Borç Tanımla
+                            <div className="card-title">Borçlar</div>
+                            <button onClick={() => modalAc('borc_tanimla')} className="btn-ui btn-ui-danger">
+                                + Borç Tanımla
                             </button>
                         </div>
                         {(!borclar || borclar.length === 0) ? <p style={{ fontSize: '13px', color: '#aaa' }}>Aktif borç kaydı yok.</p> :
@@ -368,14 +379,14 @@ const BudgetDashboard = ({
                                                 <span>Toplam: {formatPara(b.toplamTutar)}</span>
                                             </div>
                                             <div style={{ width: '100%', height: '8px', background: '#eee', borderRadius: '4px', marginBottom: '10px' }}>
-                                                <div style={{ width: `${Math.min(100, Math.max(0, yuzde))}%`, height: '100%', background: '#3182ce', borderRadius: '4px', transition: 'width 0.5s' }}></div>
+                                                <div style={{ width: `${Math.min(100, Math.max(0, yuzde))}%`, height: '100%', background: '#e53e3e', borderRadius: '4px', transition: 'width 0.5s' }}></div>
                                             </div>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                 <div>
                                                     {b.sonOdemeTarihi && <span style={{ fontSize: '11px', color: '#e53e3e' }}>Son Ödeme: {tarihSadeceGunAyYil(new Date(b.sonOdemeTarihi))}</span>}
                                                 </div>
                                                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                                                    <button onClick={() => modalAc('borc_ode', b)} style={{ background: '#3182ce', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer', fontSize: '11px' }}>Ödeme Yap</button>
+                                                    <button onClick={() => modalAc('borc_ode', b)} style={{ background: '#e53e3e', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer', fontSize: '11px' }}>Ödeme Yap</button>
                                                     <span onClick={() => modalAc('duzenle_borc', b)} style={{ cursor: 'pointer', fontSize: '12px' }}>✏️</span>
                                                     <span onClick={() => normalSil("borclar", b.id)} style={{ cursor: 'pointer', fontSize: '12px' }}>🗑️</span>
                                                 </div>
@@ -396,12 +407,68 @@ const BudgetDashboard = ({
 
                     {/* 1. KART: VERİ GİRİŞ FORMLARI */}
                     <div className="responsive-card" style={cardStyle}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                            <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-                                <button onClick={() => setFormTab("islem")} style={{ padding: '8px 15px', borderRadius: '20px', border: 'none', cursor: 'pointer', background: formTab === "islem" ? '#ed8936' : '#edf2f7', color: formTab === "islem" ? 'white' : '#4a5568', fontWeight: 'bold', fontSize: '12px' }}>İşlem</button>
-                                <button onClick={() => setFormTab("transfer")} style={{ padding: '8px 15px', borderRadius: '20px', border: 'none', cursor: 'pointer', background: formTab === "transfer" ? '#3182ce' : '#edf2f7', color: formTab === "transfer" ? 'white' : '#4a5568', fontWeight: 'bold', fontSize: '12px' }}>Transfer</button>
-                                <button onClick={() => setFormTab("taksit")} style={{ padding: '8px 15px', borderRadius: '20px', border: 'none', cursor: 'pointer', background: formTab === "taksit" ? '#805ad5' : '#edf2f7', color: formTab === "taksit" ? 'white' : '#4a5568', fontWeight: 'bold', fontSize: '12px' }}>Taksit</button>
-                                <button onClick={() => setFormTab("fatura")} style={{ padding: '8px 15px', borderRadius: '20px', border: 'none', cursor: 'pointer', background: formTab === "fatura" ? '#c53030' : '#edf2f7', color: formTab === "fatura" ? 'white' : '#4a5568', fontWeight: 'bold', fontSize: '12px' }}>Fatura</button>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                <button
+                                    onClick={() => setFormTab("islem")}
+                                    style={{
+                                        padding: '6px 12px',
+                                        borderRadius: '999px',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        background: formTab === "islem" ? '#ed8936' : '#edf2f7',
+                                        color: formTab === "islem" ? '#ffffff' : '#4a5568',
+                                        fontWeight: 600,
+                                        fontSize: '11px'
+                                    }}
+                                >
+                                    İşlem
+                                </button>
+                                <button
+                                    onClick={() => setFormTab("transfer")}
+                                    style={{
+                                        padding: '6px 12px',
+                                        borderRadius: '999px',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        background: formTab === "transfer" ? '#3182ce' : '#edf2f7',
+                                        color: formTab === "transfer" ? '#ffffff' : '#4a5568',
+                                        fontWeight: 600,
+                                        fontSize: '11px'
+                                    }}
+                                >
+                                    Transfer
+                                </button>
+                                <button
+                                    onClick={() => setFormTab("taksit")}
+                                    style={{
+                                        padding: '6px 12px',
+                                        borderRadius: '999px',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        background: formTab === "taksit" ? '#805ad5' : '#edf2f7',
+                                        color: formTab === "taksit" ? '#ffffff' : '#4a5568',
+                                        fontWeight: 600,
+                                        fontSize: '11px'
+                                    }}
+                                >
+                                    Taksit
+                                </button>
+                                <button
+                                    onClick={() => setFormTab("fatura")}
+                                    style={{
+                                        padding: '6px 12px',
+                                        borderRadius: '999px',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        background: formTab === "fatura" ? '#c53030' : '#edf2f7',
+                                        color: formTab === "fatura" ? '#ffffff' : '#4a5568',
+                                        fontWeight: 600,
+                                        fontSize: '11px'
+                                    }}
+                                >
+                                    Fatura
+                                </button>
                             </div>
                         </div>
 

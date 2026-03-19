@@ -9,21 +9,43 @@ export const formatCurrencyPlain = (amount) => {
     }).format(amount);
 };
 
+// Firestore Timestamp / JS Date / string -> Date
+export const toDateSafe = (t) => {
+    if (!t) return null;
+    if (t instanceof Date) return isNaN(t.getTime()) ? null : t;
+    if (typeof t === 'string' || typeof t === 'number') {
+        const d = new Date(t);
+        return isNaN(d.getTime()) ? null : d;
+    }
+    if (typeof t?.toDate === 'function') {
+        const d = t.toDate();
+        return d instanceof Date && !isNaN(d.getTime()) ? d : null;
+    }
+    if (typeof t?.seconds === 'number') {
+        const d = new Date(t.seconds * 1000);
+        return isNaN(d.getTime()) ? null : d;
+    }
+    return null;
+};
+
 export const tarihFormatla = (t) => {
     if (!t) return "";
-    const d = new Date(t.seconds * 1000);
+    const d = toDateSafe(t);
+    if (!d) return "";
     return d.toLocaleDateString("tr-TR") + " " + d.toLocaleTimeString("tr-TR", { hour: '2-digit', minute: '2-digit' });
 };
 
 export const tarihSadeceGunAyYil = (t) => {
     if (!t) return "";
-    const d = new Date(t);
+    const d = toDateSafe(t);
+    if (!d) return "";
     return d.toLocaleDateString("tr-TR");
 };
 
 export const ayIsmiGetir = (firebaseTarih) => {
     if (!firebaseTarih) return "Bilinmiyor";
-    const date = new Date(firebaseTarih.seconds * 1000);
+    const date = toDateSafe(firebaseTarih);
+    if (!date) return "Bilinmiyor";
     return date.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
 };
 
@@ -31,25 +53,26 @@ export const ayIsmiGetir = (firebaseTarih) => {
 
 export const inputStyle = {
     width: '100%',
-    padding: '12px 15px',
-    borderRadius: '10px',
-    border: '1px solid #e2e8f0',
-    backgroundColor: '#fff',
-    color: '#1e293b',
-    fontSize: '15px',
+    padding: '11px 14px',
+    borderRadius: 'var(--radius-input, 12px)',
+    border: '1px solid var(--border, rgba(15, 23, 42, 0.12))',
+    backgroundColor: 'var(--surface-solid, #fff)',
+    color: 'var(--text, #0f172a)',
+    fontSize: '14px',
     outline: 'none',
     boxSizing: 'border-box',
     transition: 'all 0.2s ease',
     appearance: 'none',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+    boxShadow: 'var(--shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.06))'
 };
 
 export const cardStyle = {
-    background: '#ffffff',
-    padding: '20px',
-    borderRadius: '15px',
-    boxShadow: '0 5px 15px rgba(0,0,0,0.05)',
-    color: '#333'
+    background: 'var(--surface, rgba(255, 255, 255, 0.92))',
+    padding: '18px',
+    borderRadius: 'var(--radius-card, 18px)',
+    boxShadow: 'var(--shadow-md, 0 10px 30px rgba(15, 23, 42, 0.08))',
+    border: '1px solid var(--border, rgba(15, 23, 42, 0.08))',
+    color: 'var(--text, #0f172a)'
 };
 
 export const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#AF19FF', '#FF1919', '#e15fed', '#82ca9d'];

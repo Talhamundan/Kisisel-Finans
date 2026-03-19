@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
 import { db } from '../firebase';
 
 export const useDataListeners = (user, alanKodu) => {
@@ -26,9 +26,9 @@ export const useDataListeners = (user, alanKodu) => {
 
     // Varsayılan seçimler (UI için gerekli olabilir, burada tutuyoruz çünkü ayarlar yüklendiğinde güncelleniyorlar)
     const [varsayilanKategori, setVarsayilanKategori] = useState("Market");
-    const [varsayilanTaksitKategori, setVarsayilanTaksitKategori] = useState("Market");
-    const [varsayilanAboKategori, setVarsayilanAboKategori] = useState("Fatura");
-    const [varsayilanVarlikTuru, setVarsayilanVarlikTuru] = useState("Hisse");
+    const [varsayilanTaksitKategori] = useState("Market");
+    const [varsayilanAboKategori] = useState("Fatura");
+    const [varsayilanVarlikTuru] = useState("Hisse");
 
     useEffect(() => {
         if (!user || !alanKodu) {

@@ -12,29 +12,30 @@ const HighQualityModal = ({ isOpen, onClose, title, icon, children, footerButton
         <div
             style={{
                 position: 'fixed',
-                top: 0,
-                left: 0,
+                inset: 0,
                 width: '100%',
                 height: '100%',
-                background: 'rgba(0,0,0,0.6)', // Slightly darker for better contrast
-                backdropFilter: 'blur(5px)',
+                background: 'rgba(15, 23, 42, 0.55)',
+                backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
                 display: 'flex',
                 justifyContent: 'center',
                 alignItems: 'center',
-                zIndex: 99999 // Ultra high z-index
+                zIndex: 99999
             }}
             onClick={onClose}
         >
             <div
                 style={{
-                    background: 'white',
-                    width: width,
+                    background: 'var(--surface-solid, #ffffff)',
+                    width: '100%',
+                    maxWidth: width,
                     minHeight: minHeight,
                     maxHeight: maxHeight,
                     overflowY: 'auto',
-                    borderRadius: '16px',
-                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-                    border: '1px solid rgba(255,255,255,0.2)',
+                    borderRadius: '18px',
+                    boxShadow: '0 24px 60px rgba(15, 23, 42, 0.30)',
+                    border: '1px solid rgba(148, 163, 184, 0.18)',
                     display: 'flex',
                     flexDirection: 'column',
                     animation: 'fadeIn 0.25s ease-out',
@@ -43,35 +44,42 @@ const HighQualityModal = ({ isOpen, onClose, title, icon, children, footerButton
                 onClick={e => e.stopPropagation()}
             >
                 {/* HEADER */}
-                <div style={{ padding: '20px 24px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ padding: '14px 18px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        {icon && <span style={{ fontSize: '24px' }}>{icon}</span>}
-                        <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold', color: '#1e293b' }}>{title}</h3>
+                        {icon && <span style={{ fontSize: '18px' }}>{icon}</span>}
+                        <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: '#0f172a', letterSpacing: '0.1px' }}>{title}</h3>
                     </div>
                     <button
                         onClick={onClose}
-                        style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '20px', color: '#94a3b8', padding: '5px' }}
+                        style={{
+                            border: 'none',
+                            background: 'transparent',
+                            cursor: 'pointer',
+                            fontSize: '18px',
+                            color: '#94a3b8',
+                            padding: '4px'
+                        }}
                     >
                         ✕
                     </button>
                 </div>
 
                 {/* BODY */}
-                <div style={{ padding: '24px' }}>
+                <div style={{ padding: '18px 20px' }}>
                     {children}
                 </div>
 
                 {/* FOOTER (Optional) */}
                 {footerButtons && (
-                    <div style={{ padding: '16px 24px', background: '#f8fafc', borderTop: '1px solid #f1f5f9', borderBottomLeftRadius: '16px', borderBottomRightRadius: '16px', display: 'flex', gap: '10px' }}>
+                    <div style={{ padding: '14px 18px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', borderBottomLeftRadius: '18px', borderBottomRightRadius: '18px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                         {footerButtons}
                     </div>
                 )}
             </div>
             <style>{`
                 @keyframes fadeIn {
-                    from { opacity: 0; transform: scale(0.95) translateY(10px); }
-                    to { opacity: 1; transform: scale(1) translateY(0); }
+                    from { opacity: 0; transform: translateY(10px) scale(0.98); }
+                    to { opacity: 1; transform: translateY(0) scale(1); }
                 }
             `}</style>
         </div>,

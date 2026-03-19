@@ -1,7 +1,6 @@
 import React from 'react';
 
 const Header = ({
-    alanKodu,
     anaSekme,
     setAnaSekme,
     gizliMod,
@@ -12,7 +11,7 @@ const Header = ({
     cikisYap
 }) => {
     return (
-        <div style={{
+        <div className="app-header" style={{
             position: 'fixed',
             top: 0,
             left: 0,
@@ -29,15 +28,12 @@ const Header = ({
             boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
         }}>
 
-            {/* SOL: LOGO & KOD */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+            {/* SOL: LOGO */}
+            <div className="app-header-left" style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                 <h1 style={{ margin: 0, fontSize: '22px', fontWeight: '900', color: '#1a202c', display: 'flex', alignItems: 'center', gap: '5px' }}>
                     <span>🚀</span>
-                    <span style={{ display: window.innerWidth < 600 ? 'none' : 'block' }}>CÜZDANIM</span>
+                    <span className="app-header-title">CÜZDANIM</span>
                 </h1>
-                <span style={{ fontSize: '11px', background: '#edf2f7', padding: '4px 8px', borderRadius: '6px', color: '#718096', fontFamily: 'monospace', fontWeight: 'bold' }}>
-                    {alanKodu}
-                </span>
             </div>
 
             {/* ORTA: NAVİGASYON BUTONLARI */}
@@ -96,12 +92,12 @@ const Header = ({
             </div>
 
             {/* SAĞ: KULLANICI KONTROLLERİ */}
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <div className="app-header-right" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 <button onClick={() => setGizliMod(!gizliMod)} style={{ background: 'transparent', border: 'none', fontSize: '20px', cursor: 'pointer', padding: '5px', outline: 'none' }}>
                     {gizliMod ? '🙈' : '👁️'}
                 </button>
 
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'end', marginRight: '5px' }}>
+                <div className="app-header-user" style={{ display: 'flex', flexDirection: 'column', alignItems: 'end', marginRight: '5px' }}>
                     <span style={{ fontSize: '13px', fontWeight: '700', color: '#2d3748' }}>{user?.displayName?.split(' ')[0]}</span>
                 </div>
 

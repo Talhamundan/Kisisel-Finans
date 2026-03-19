@@ -8,6 +8,7 @@ const BESCard = ({
     toplamBesYatirimi,
     hesaplar,
     besOdemeYap,
+    besOdemeIsle,
     besGuncelle,
     islemEkle,
     modalAc,
@@ -171,23 +172,33 @@ const BESCard = ({
 
     const handleOdemeSubmit = async (e) => {
         e.preventDefault();
-        await islemEkle(null, {
-            hesapId: formOdemeHesapId,
-            tutar: formOdemeTutar,
-            aciklama: 'BES Aylık Ödeme',
-            kategori: 'BES',
-            islemTipi: 'gider',
-            tarih: formOdemeTarih
-        });
-        closeModal();
+        let success = true;
+        if (besOdemeIsle) {
+            success = await besOdemeIsle(islemEkle, {
+                hesapId: formOdemeHesapId,
+                tutar: formOdemeTutar,
+                aciklama: 'BES Aylık Ödeme',
+                tarih: formOdemeTarih
+            });
+        } else {
+            success = await islemEkle(null, {
+                hesapId: formOdemeHesapId,
+                tutar: formOdemeTutar,
+                aciklama: 'BES Aylık Ödeme',
+                kategori: 'BES',
+                islemTipi: 'gider',
+                tarih: formOdemeTarih
+            });
+        }
+        if (success !== false) closeModal();
     };
 
 
     return (
-        <div style={{ ...cardStyle, marginBottom: '30px', background: '#fff', position: 'relative' }}>
+        <div className="responsive-card bes-card" style={{ ...cardStyle, marginBottom: '30px', background: '#fff', position: 'relative' }}>
 
             {/* HEADER & SETTINGS ICON */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+            <div className="bes-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
                 <h4 style={{ margin: 0, color: '#805ad5', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     ☂️ Bireysel Emeklilik (BES) Takip
                     {veri.durum === 'durduruldu' && <span style={{ fontSize: '12px', background: '#feb2b2', color: '#9b2c2c', padding: '2px 6px', borderRadius: '4px' }}> DURAKLATILDI </span>}
@@ -195,16 +206,16 @@ const BESCard = ({
                 <div onClick={openAyarlar} style={{ cursor: 'pointer', fontSize: '20px', color: '#a0aec0' }} title="Ayarlar">⚙️</div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: '30px', alignItems: 'center' }}>
+            <div className="bes-layout" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: '30px', alignItems: 'center' }}>
 
                 {/* SOL: Özet Rakamlar */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                <div className="bes-summary-col" style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                     <div>
                         <div style={{ fontSize: '13px', color: '#718096' }}>Toplam Anlık Birikim</div>
                         <div style={{ fontSize: '32px', fontWeight: '800', color: '#2d3748' }}>{formatPara(guncelTutar)}</div>
                     </div>
                     {/* Üst Satır İstatistikler */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '10px' }}>
+                    <div className="bes-stats-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '10px' }}>
                         <div>
                             <div style={{ fontSize: '12px', color: '#a0aec0' }}>Cebimden Çıkan</div>
                             <div style={{ fontWeight: 'bold', color: '#4a5568', fontSize: '13px' }}>{formatPara(toplamBesYatirimi)}</div>
@@ -228,9 +239,9 @@ const BESCard = ({
                     {/* Alt Kısım: Seçili Ay Detayı */}
                     <div style={{ paddingTop: '10px', borderTop: '1px solid #edf2f7' }}>
                         {ayFiltresiVar ? (
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '13px' }}>
+                            <div className="bes-monthly-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '13px' }}>
                                 <span style={{ fontWeight: '600', color: '#718096' }}>Seçili Ay ({aktifYatirimAy}):</span>
-                                <div style={{ display: 'flex', gap: '15px' }}>
+                                <div className="bes-monthly-values" style={{ display: 'flex', gap: '15px' }}>
                                     <span style={{ color: '#48bb78' }}>Yatırılan: <b>{formatPara(seciliAyYatirilan)}</b></span>
                                     <span style={{ color: '#c53030' }}>Kesinti: <b>{formatPara(seciliAyKesinti)}</b></span>
                                     <span style={{ color: seciliAyNetYatirim > 0 ? '#198754' : 'inherit', fontWeight: 'bold' }}>
@@ -247,7 +258,7 @@ const BESCard = ({
                 </div>
 
                 {/* ORTA: Fon Dağılımı */}
-                <div style={{ height: '200px', display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
+                <div className="bes-fon-col" style={{ height: '200px', display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
 
                     <div style={{ fontSize: '12px', color: '#718096', marginBottom: '5px', display: 'flex', alignItems: 'center', gap: '5px' }}>
                         Fon Dağılımı
@@ -260,16 +271,32 @@ const BESCard = ({
                                 data={fonDagilimi}
                                 cx="50%"
                                 cy="50%"
-                                innerRadius={40}
+                                innerRadius={38}
                                 outerRadius={60}
-                                paddingAngle={5}
+                                startAngle={90}
+                                endAngle={-270}
+                                paddingAngle={3}
+                                cornerRadius={8}
                                 dataKey="value"
                             >
                                 {fonDagilimi.map((entry, index) => (
-                                    <Cell key={`cell - ${index} `} fill={COLORS_GENEL[index % COLORS_GENEL.length]} />
+                                    <Cell
+                                        key={`cell-${index}`}
+                                        fill={COLORS_GENEL[index % COLORS_GENEL.length]}
+                                        stroke="#f9fafb"
+                                        strokeWidth={2}
+                                    />
                                 ))}
                             </Pie>
-                            <Tooltip formatter={(val) => `% ${val} `} />
+                            <Tooltip
+                                formatter={(val, name) => [`% ${val}`, name]}
+                                contentStyle={{
+                                    borderRadius: 12,
+                                    border: 'none',
+                                    boxShadow: '0 10px 25px rgba(15,23,42,0.15)',
+                                    fontSize: 12
+                                }}
+                            />
                         </PieChart>
                     </ResponsiveContainer>
                     <div style={{ display: 'flex', gap: '10px', fontSize: '10px', color: '#718096', flexWrap: 'wrap', justifyContent: 'center' }}>
@@ -282,7 +309,7 @@ const BESCard = ({
                 </div>
 
                 {/* SAĞ: Aksiyonlar */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', justifyContent: 'center' }}>
+                <div className="bes-actions" style={{ display: 'flex', flexDirection: 'column', gap: '15px', justifyContent: 'center' }}>
                     <button
                         onClick={() => besOdemeYap ? besOdemeYap(veri, islemEkle, openOdemeEkle) : openOdemeEkle()}
                         style={{
@@ -329,7 +356,7 @@ const BESCard = ({
                     <input type="number" value={formGuncelDevlet} onChange={e => setFormGuncelDevlet(e.target.value)} placeholder="Boş = Otomatik (%30)" style={{ ...inputStyle, marginBottom: '5px' }} />
                     <div style={{ fontSize: '11px', color: '#a0aec0', marginBottom: '20px' }}>*Boş bırakırsanız sistem otomatik (%30) hesaplar.</div>
 
-                    <button type="submit" style={{ width: '100%', background: '#38a169', color: 'white', padding: '14px', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold' }}>GÜNCELLE</button>
+                    <button type="submit" className="modal-success-btn">GÜNCELLE</button>
                 </form>
             </HighQualityModal>
 
@@ -355,7 +382,7 @@ const BESCard = ({
                         </div>
                     ))}
                     <button type="button" onClick={() => setFormFonlar([...formFonlar, { name: '', value: '' }])} style={{ fontSize: '12px', color: '#3182ce', background: 'none', border: 'none', cursor: 'pointer', marginBottom: '15px' }}>+ Fon Ekle</button>
-                    <button type="submit" style={{ width: '100%', background: '#3182ce', color: 'white', padding: '14px', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold' }}>KAYDET</button>
+                    <button type="submit" className="modal-primary-btn">KAYDET</button>
                 </form>
             </HighQualityModal>
 
@@ -384,7 +411,7 @@ const BESCard = ({
                         </select>
                     </div>
 
-                    <button type="submit" style={{ width: '100%', background: '#805ad5', color: 'white', padding: '14px', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold' }}>KAYDET</button>
+                    <button type="submit" className="modal-primary-btn">KAYDET</button>
                 </form>
             </HighQualityModal>
 
@@ -403,7 +430,7 @@ const BESCard = ({
                     <label style={{ fontSize: '13px', color: '#4a5568', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Tarih</label>
                     <input type="datetime-local" value={formOdemeTarih} onChange={e => setFormOdemeTarih(e.target.value)} style={{ ...inputStyle, marginBottom: '20px' }} required />
 
-                    <button type="submit" style={{ width: '100%', background: '#38a169', color: 'white', padding: '14px', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold' }}>ONAYLA</button>
+                    <button type="submit" className="modal-success-btn">ONAYLA</button>
                 </form>
             </HighQualityModal>
 

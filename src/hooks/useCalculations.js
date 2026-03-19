@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { ayIsmiGetir, formatCurrencyPlain } from '../utils/helpers';
+import { ayIsmiGetir, formatCurrencyPlain, toDateSafe } from '../utils/helpers';
 
 export const useCalculations = (
     data, // { hesaplar, islemler, portfoy, abonelikler, taksitler, maaslar, bekleyenFaturalar, tanimliFaturalar, besVerisi, satislar, borclar }
@@ -22,6 +22,8 @@ export const useCalculations = (
 
     // --- CALCULATIONS ---
     const formatPara = (tutar) => gizliMod ? "**** ₺" : (parseFloat(tutar) || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " ₺";
+
+    const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 
     // 1. Filtrelenmis Islemler (Bütçe)
     const filtrelenmisIslemler = useMemo(() => {
@@ -64,8 +66,8 @@ export const useCalculations = (
 
         islemler.forEach(i => {
             if (!i.tarih) return;
-            // timestamp to Date
-            const d = new Date(i.tarih.seconds * 1000);
+            const d = toDateSafe(i.tarih);
+            if (!d) return;
 
             // YYYYMM format for chronological sorting
             const sortKey = d.getFullYear() * 100 + d.getMonth();
@@ -97,7 +99,8 @@ export const useCalculations = (
     }, [mevcutAylar]);
     // Totals
     const bugunGider = filtrelenmisIslemler.filter(i => {
-        const d = new Date(i.tarih.seconds * 1000);
+        const d = toDateSafe(i.tarih);
+        if (!d) return false;
         return i.islemTipi === 'gider' &&
             d.getDate() === new Date().getDate() &&
             d.getMonth() === new Date().getMonth() &&
@@ -107,12 +110,24 @@ export const useCalculations = (
     const toplamGelir = filtrelenmisIslemler.filter(i => i.islemTipi === 'gelir').reduce((acc, i) => acc + i.tutar, 0);
     const toplamGider = filtrelenmisIslemler.filter(i => i.islemTipi === 'gider').reduce((acc, i) => acc + i.tutar, 0);
     const harcananLimit = filtrelenmisIslemler.filter(i => i.islemTipi === 'gider' && i.kategori !== 'Transfer' && i.kategori !== 'Kira' && i.kategori !== 'Kira/Aidat' && i.kategori !== 'Yatırım').reduce((acc, i) => acc + i.tutar, 0);
-    const limitYuzdesi = Math.min((harcananLimit / aylikLimit) * 100, 100);
+    const safeLimit = Math.max(0, parseFloat(aylikLimit) || 0);
+    const limitYuzdesi = safeLimit > 0 ? Math.min((harcananLimit / safeLimit) * 100, 100) : 0;
     const limitRenk = limitYuzdesi > 90 ? '#e53e3e' : limitYuzdesi > 75 ? '#dd6b20' : '#48bb78';
 
     // Charts
     const kategoriVerisi = filtrelenmisIslemler.filter(i => i.islemTipi === 'gider' && i.kategori !== 'Transfer').reduce((acc, curr) => { const mevcut = acc.find(item => item.name === curr.kategori); if (mevcut) { mevcut.value += curr.tutar; } else { acc.push({ name: curr.kategori, value: curr.tutar }); } return acc; }, []);
-    const gunlukVeri = filtrelenmisIslemler.filter(i => i.islemTipi === 'gider').reduce((acc, curr) => { const gun = new Date(curr.tarih.seconds * 1000).getDate(); const mevcut = acc.find(item => item.name === gun); if (mevcut) mevcut.value += curr.tutar; else acc.push({ name: gun, value: curr.tutar }); return acc; }, []).sort((a, b) => a.name - b.name);
+    const gunlukVeri = filtrelenmisIslemler
+        .filter(i => i.islemTipi === 'gider')
+        .reduce((acc, curr) => {
+            const d = toDateSafe(curr.tarih);
+            if (!d) return acc;
+            const gun = d.getDate();
+            const mevcut = acc.find(item => item.name === gun);
+            if (mevcut) mevcut.value += curr.tutar;
+            else acc.push({ name: gun, value: curr.tutar });
+            return acc;
+        }, [])
+        .sort((a, b) => a.name - b.name);
 
     let gunlukOrtalama = 0;
     if (aktifAy !== "Tümü") {
@@ -180,10 +195,11 @@ export const useCalculations = (
     useEffect(() => {
         // App.jsx:238 logic
         if (islemler.length === 0 && abonelikler.length === 0 && taksitler.length === 0 && maaslar.length === 0 && hesaplar.length === 0 && bekleyenFaturalar.length === 0) return;
-        const bugun = new Date();
-        const mevcutAy = bugun.getMonth();
-        const mevcutYil = bugun.getFullYear();
-        const mevcutGun = bugun.getDate();
+        const now = new Date();
+        const mevcutAy = now.getMonth();
+        const mevcutYil = now.getFullYear();
+        const mevcutGun = now.getDate();
+        const today0 = startOfDay(now);
         let tempBildirimler = [];
 
         // 1. Kredi Kartı
@@ -192,7 +208,8 @@ export const useCalculations = (
                 const kesimGunuInt = parseInt(h.kesimGunu);
                 if (mevcutGun >= kesimGunuInt && mevcutGun < kesimGunuInt + 10) {
                     const odemeYapildiMi = islemler.some(islem => {
-                        const t = new Date(islem.tarih.seconds * 1000);
+                        const t = toDateSafe(islem.tarih);
+                        if (!t) return false;
                         return t.getMonth() === mevcutAy && t.getFullYear() === mevcutYil && t.getDate() >= kesimGunuInt && (islem.hedefId === h.id || islem.hesapId === h.id) && (islem.islemTipi === 'transfer' || islem.islemTipi === 'gelir');
                     });
                     if (!odemeYapildiMi && h.guncelBakiye < 0) {
@@ -209,8 +226,10 @@ export const useCalculations = (
             const besOdendi = islemler.some(i =>
                 i.kategori === 'BES' &&
                 i.islemTipi === 'gider' &&
-                new Date(i.tarih.seconds * 1000).getMonth() === mevcutAy &&
-                new Date(i.tarih.seconds * 1000).getFullYear() === mevcutYil
+                (() => {
+                    const d = toDateSafe(i.tarih);
+                    return d && d.getMonth() === mevcutAy && d.getFullYear() === mevcutYil;
+                })()
             );
 
             if (!besOdendi && mevcutGun >= odemeGunu) {
@@ -222,8 +241,12 @@ export const useCalculations = (
         maaslar.forEach(maas => {
             if (mevcutGun >= maas.gun) {
                 const yattiMi = islemler.some(islem => {
-                    const islemTarih = new Date(islem.tarih.seconds * 1000);
-                    return islemTarih.getMonth() === mevcutAy && islemTarih.getFullYear() === mevcutYil && islem.aciklama.toLowerCase().includes(maas.ad.toLowerCase()) && islem.islemTipi === 'gelir';
+                    const islemTarih = toDateSafe(islem.tarih);
+                    if (!islemTarih) return false;
+                    return islemTarih.getMonth() === mevcutAy &&
+                        islemTarih.getFullYear() === mevcutYil &&
+                        (islem.aciklama || "").toLowerCase().includes((maas.ad || "").toLowerCase()) &&
+                        islem.islemTipi === 'gelir';
                 });
                 if (!yattiMi) tempBildirimler.push({ id: maas.id, tip: 'maas', mesaj: `💰 ${maas.ad} günü geldi!`, tutar: maas.tutar, data: maas, renk: 'green' });
             }
@@ -233,20 +256,24 @@ export const useCalculations = (
         abonelikler.forEach(abo => {
             if (mevcutGun >= abo.gun) {
                 const odendiMi = islemler.some(islem => {
-                    const islemTarih = new Date(islem.tarih.seconds * 1000);
-                    return islemTarih.getMonth() === mevcutAy && islemTarih.getFullYear() === mevcutYil && islem.aciklama.toLowerCase().includes(abo.ad.toLowerCase());
+                    const islemTarih = toDateSafe(islem.tarih);
+                    if (!islemTarih) return false;
+                    return islemTarih.getMonth() === mevcutAy &&
+                        islemTarih.getFullYear() === mevcutYil &&
+                        (islem.aciklama || "").toLowerCase().includes((abo.ad || "").toLowerCase());
                 });
                 if (!odendiMi) tempBildirimler.push({ id: abo.id, tip: 'abonelik', mesaj: `⚠️ ${abo.ad} ödenmedi! (${abo.gun}. gün)`, tutar: abo.tutar, data: abo, renk: 'red' });
             }
         });
 
-        // 4. Faturalar
-        bekleyenFaturalar.forEach(f => {
+        // 4. Faturalar (Tarihe göre sıralı renderlanması için sort işlemi)
+        const siraliFaturalar = [...bekleyenFaturalar].sort((a, b) => new Date(a.sonOdemeTarihi) - new Date(b.sonOdemeTarihi));
+        siraliFaturalar.forEach(f => {
             if (f.sonOdemeTarihi) {
-                const sonOdeme = new Date(f.sonOdemeTarihi);
-                const sO = new Date(sonOdeme.setHours(0, 0, 0, 0));
-                const bG = new Date(bugun.setHours(0, 0, 0, 0));
-                const kalanGun = Math.ceil((sO - bG) / (1000 * 60 * 60 * 24));
+                const sonOdeme = toDateSafe(f.sonOdemeTarihi);
+                if (!sonOdeme) return;
+                const sO = startOfDay(sonOdeme);
+                const kalanGun = Math.ceil((sO - today0) / (1000 * 60 * 60 * 24));
                 const tanim = tanimliFaturalar.find(t => t.id === f.tanimId);
                 const ad = tanim ? tanim.baslik : "Bilinmeyen Fatura";
                 if (kalanGun < 0) {
@@ -261,10 +288,10 @@ export const useCalculations = (
         if (borclar && borclar.length > 0) {
             borclar.forEach(b => {
                 if (b.kalanTutar > 0 && b.sonOdemeTarihi) {
-                    const sonOdeme = new Date(b.sonOdemeTarihi);
-                    const sO = new Date(sonOdeme.setHours(0, 0, 0, 0));
-                    const bG = new Date(bugun.setHours(0, 0, 0, 0));
-                    const kalanGun = Math.ceil((sO - bG) / (1000 * 60 * 60 * 24));
+                    const sonOdeme = toDateSafe(b.sonOdemeTarihi);
+                    if (!sonOdeme) return;
+                    const sO = startOfDay(sonOdeme);
+                    const kalanGun = Math.ceil((sO - today0) / (1000 * 60 * 60 * 24));
 
                     if (kalanGun < 0) {
                         tempBildirimler.push({ id: b.id + '_borc', tip: 'borc_hatirlatma', mesaj: `🔥 ${b.ad} Borcu GECİKTİ! (${Math.abs(kalanGun)} gün)`, tutar: b.kalanTutar, data: b, renk: 'red' });
@@ -293,7 +320,7 @@ export const useCalculations = (
         }
 
         setBildirimler(tempBildirimler);
-    }, [islemler, abonelikler, taksitler, maaslar, hesaplar, bekleyenFaturalar, tanimliFaturalar, satislar, borclar]);
+    }, [islemler, abonelikler, taksitler, maaslar, hesaplar, bekleyenFaturalar, tanimliFaturalar, besVerisi, satislar, borclar]);
 
     return {
         // Filters

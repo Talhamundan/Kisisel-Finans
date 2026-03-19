@@ -5,7 +5,7 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(['dist', 'src/yedek.js']),
   {
     files: ['**/*.{js,jsx}'],
     extends: [
@@ -23,7 +23,13 @@ export default defineConfig([
       },
     },
     rules: {
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      // Keep signal, but don't block dev flow for UI refactors.
+      'no-unused-vars': ['warn', { varsIgnorePattern: '^[A-Z_]' }],
+
+      // This codebase uses effects for sync/stream listeners (Firestore) and derived UI state.
+      // The following rules are too aggressive here and create noisy false positives.
+      'react-hooks/purity': 'off',
+      'react-hooks/set-state-in-effect': 'off',
     },
   },
 ])

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import HighQualityModal from '../Shared/HighQualityModal';
 import { formatCurrencyPlain, inputStyle, tarihSadeceGunAyYil } from '../../utils/helpers';
+import { toast } from 'react-toastify';
 
 // Sub-component to handle Portföy Düzenleme with own state
 const IslemEkleMobilModal = ({ close, islemEkle, hesaplar, kategoriListesi, inputStyle }) => {
@@ -73,7 +74,7 @@ const PositionEditModal = ({ seciliVeri, pozisyonGuncelle, close, inputStyle }) 
                 if (!isNaN(d.getTime())) return d.toISOString().slice(0, 16);
             }
             return "";
-        } catch (e) {
+        } catch {
             return "";
         }
     };
@@ -460,6 +461,10 @@ const ModalManager = ({
         title = "İşlemi Düzenle";
         const isInvestment = (seciliVeri.islemTipi && seciliVeri.islemTipi.includes('yatirim')) || seciliVeri.kategori === 'Yatırım';
         const isTransfer = seciliVeri.islemTipi === 'transfer' || seciliVeri.kategori === 'Transfer';
+        const seciliKategori = kategori || seciliVeri.kategori || "";
+        const normalKategoriOpsiyonlari = (kategoriListesi || []).includes(seciliKategori)
+            ? (kategoriListesi || [])
+            : [seciliKategori, ...(kategoriListesi || []).filter(k => k !== seciliKategori)].filter(Boolean);
 
         // Auto-Calc Handler
         const handleCalc = (val, type) => {
@@ -541,16 +546,28 @@ const ModalManager = ({
                     <input type="datetime-local" value={islemTarihi} onChange={e => setIslemTarihi(e.target.value)} style={{ ...inputStyle, padding: '12px 15px', fontSize: '14px' }} />
                 </div>
 
+                {!isTransfer && (
+                    <div style={{ marginBottom: '15px' }}>
+                        <label style={{ display: 'block', fontSize: '12px', color: '#4a5568', fontWeight: 'bold', marginBottom: '5px' }}>Ödeme Aracı</label>
+                        <select value={secilenHesapId} onChange={e => setSecilenHesapId(e.target.value)} style={{ ...inputStyle, padding: '12px 15px', fontSize: '14px' }} required>
+                            <option value="">Hangi Hesaptan?</option>
+                            {(hesaplar || []).map(h => <option key={h.id} value={h.id}>{h.hesapAdi}</option>)}
+                        </select>
+                    </div>
+                )}
+
                 <div style={{ marginBottom: '25px' }}>
                     <label style={{ display: 'block', fontSize: '12px', color: '#4a5568', fontWeight: 'bold', marginBottom: '5px' }}>Kategori</label>
                     {seciliVeri.kategori === 'BES' ? (
                         <input value="BES" disabled style={{ ...inputStyle, background: '#f8fafc', color: '#94a3b8', padding: '12px 15px', fontSize: '14px', cursor: 'not-allowed' }} />
                     ) : (isTransfer) ? (
-                        <input value="Transfer" disabled style={{ ...inputStyle, background: '#f8fafc', color: '#94a3b8', padding: '12px 15px', fontSize: '14px', cursor: 'not-allowed' }} />
+                        <input value={seciliVeri.kategori || "Transfer"} disabled style={{ ...inputStyle, background: '#f8fafc', color: '#94a3b8', padding: '12px 15px', fontSize: '14px', cursor: 'not-allowed' }} />
                     ) : (isInvestment) ? (
                         <select value={kategori} onChange={e => setKategori(e.target.value)} style={{ ...inputStyle, padding: '12px 15px', fontSize: '14px' }}>{yatirimTurleri.map(t => <option key={t} value={t}>{t}</option>)}</select>
                     ) : (
-                        <select value={kategori} onChange={e => setKategori(e.target.value)} style={{ ...inputStyle, padding: '12px 15px', fontSize: '14px' }}>{kategoriListesi.map(k => <option key={k} value={k}>{k}</option>)}</select>
+                        <select value={seciliKategori} onChange={e => setKategori(e.target.value)} style={{ ...inputStyle, padding: '12px 15px', fontSize: '14px' }}>
+                            {normalKategoriOpsiyonlari.map(k => <option key={k} value={k}>{k}</option>)}
+                        </select>
                     )}
                 </div>
 
@@ -660,18 +677,18 @@ const ModalManager = ({
     }
 
     else if (aktifModal === 'ayarlar_yonetim') {
-        title = <span style={{ fontFamily: "'Times New Roman', Times, serif" }}>Ayarlar</span>;
+        title = <span>Ayarlar</span>;
         icon = "⚙️";
         customWidth = "380px";
         customMinHeight = "550px";
 
         const tagStyle = (bg) => ({
             background: bg, color: '#000', padding: '4px 10px', borderRadius: '15px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px', border: `1px solid ${bg === '#fff' ? '#e2e8f0' : 'transparent'}`,
-            fontWeight: '500', fontFamily: "'Times New Roman', Times, serif"
+            fontWeight: '500'
         });
 
         content = (
-            <div style={{ position: 'relative', fontFamily: "'Times New Roman', Times, serif" }}>
+            <div style={{ position: 'relative' }}>
                 {/* SİLME ONAY OVERLAY */}
                 {silinecekObje && (
                     <div style={{
@@ -688,13 +705,13 @@ const ModalManager = ({
                             </div>
                         </div>
                         <div style={{ display: 'flex', gap: '8px' }}>
-                            <button onClick={() => setSilinecekObje(null)} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e0', background: 'white', color: '#4a5568', cursor: 'pointer', fontSize: '11px', fontFamily: "'Times New Roman', Times, serif" }}>İPTAL</button>
+                            <button onClick={() => setSilinecekObje(null)} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e0', background: 'white', color: '#4a5568', cursor: 'pointer', fontSize: '11px' }}>İPTAL</button>
                             <button onClick={() => {
                                 if (silinecekObje.type === 'kategori') onKategoriUpdate(kategoriListesi.filter(x => x !== silinecekObje.name));
                                 else onYatirimTuruUpdate(yatirimTurleri.filter(x => x !== silinecekObje.name));
                                 setSilinecekObje(null);
                                 toast.success("Silindi.");
-                            }} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: '#e53e3e', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '11px', fontFamily: "'Times New Roman', Times, serif" }}>SİL</button>
+                            }} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: '#e53e3e', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '11px' }}>SİL</button>
                         </div>
                     </div>
                 )}
@@ -709,8 +726,8 @@ const ModalManager = ({
                     ))}
                 </div>
                 <form onSubmit={(e) => { e.preventDefault(); if (!yeniKategoriAdi) return; onKategoriUpdate([...(kategoriListesi || []), yeniKategoriAdi]); setYeniKategoriAdi(""); toast.success("Kategori eklendi"); }} style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
-                    <input value={yeniKategoriAdi} onChange={e => setYeniKategoriAdi(e.target.value)} placeholder="Yeni Kategori" style={{ ...inputStyle, background: '#f8fafc', border: '1px solid #e2e8f0', fontSize: '12px', padding: '8px', fontFamily: "'Times New Roman', Times, serif" }} />
-                    <button type="submit" style={{ padding: '0 16px', borderRadius: '8px', border: 'none', background: 'green', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px', fontFamily: "'Times New Roman', Times, serif" }}>Ekle</button>
+                    <input value={yeniKategoriAdi} onChange={e => setYeniKategoriAdi(e.target.value)} placeholder="Yeni Kategori" style={{ ...inputStyle, background: '#f8fafc', border: '1px solid #e2e8f0', fontSize: '12px', padding: '8px' }} />
+                    <button type="submit" style={{ padding: '0 16px', borderRadius: '8px', border: 'none', background: 'green', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>Ekle</button>
                 </form>
 
                 {/* 2. YATIRIM TÜRLERİ */}
@@ -723,8 +740,8 @@ const ModalManager = ({
                     ))}
                 </div>
                 <form onSubmit={(e) => { e.preventDefault(); if (!yeniYatirimTuruAdi) return; onYatirimTuruUpdate([...(yatirimTurleri || []), yeniYatirimTuruAdi]); setYeniYatirimTuruAdi(""); toast.success("Tür eklendi"); }} style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
-                    <input value={yeniYatirimTuruAdi} onChange={e => setYeniYatirimTuruAdi(e.target.value)} placeholder="Yeni Tür (Fon, Coin...)" style={{ ...inputStyle, background: '#f8fafc', border: '1px solid #e2e8f0', fontSize: '12px', padding: '8px', fontFamily: "'Times New Roman', Times, serif" }} />
-                    <button type="submit" style={{ padding: '0 16px', borderRadius: '8px', border: 'none', background: '#3182ce', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px', fontFamily: "'Times New Roman', Times, serif" }}>Ekle</button>
+                    <input value={yeniYatirimTuruAdi} onChange={e => setYeniYatirimTuruAdi(e.target.value)} placeholder="Yeni Tür (Fon, Coin...)" style={{ ...inputStyle, background: '#f8fafc', border: '1px solid #e2e8f0', fontSize: '12px', padding: '8px' }} />
+                    <button type="submit" style={{ padding: '0 16px', borderRadius: '8px', border: 'none', background: '#3182ce', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>Ekle</button>
                 </form>
 
                 {/* 3. VERİ TAŞIMA */}
@@ -734,8 +751,8 @@ const ModalManager = ({
                         Mevcut Kodunuz: <b>{alanKodu}</b>. Taşımak için yeni kodu girin.
                     </div>
                     <form onSubmit={verileriTasi} style={{ display: 'flex', gap: '8px' }}>
-                        <input value={yeniKodInput} onChange={e => setYeniKodInput(e.target.value.toUpperCase())} placeholder="YENİ KOD" style={{ ...inputStyle, flex: 1, border: '1px solid #fbd38d', background: 'white', fontSize: '12px', padding: '8px', fontFamily: "'Times New Roman', Times, serif" }} />
-                        <button type="submit" disabled={tasimaIslemiSuruyor} style={{ background: '#c05621', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '11px', fontFamily: "'Times New Roman', Times, serif" }}>{tasimaIslemiSuruyor ? '...' : 'TAŞI'}</button>
+                        <input value={yeniKodInput} onChange={e => setYeniKodInput(e.target.value.toUpperCase())} placeholder="YENİ KOD" style={{ ...inputStyle, flex: 1, border: '1px solid #fbd38d', background: 'white', fontSize: '12px', padding: '8px' }} />
+                        <button type="submit" disabled={tasimaIslemiSuruyor} style={{ background: '#c05621', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '11px' }}>{tasimaIslemiSuruyor ? '...' : 'TAŞI'}</button>
                     </form>
                 </div>
             </div>
@@ -749,6 +766,7 @@ const ModalManager = ({
                 <input value={taksitBaslik} onChange={e => setTaksitBaslik(e.target.value)} placeholder="Ne aldın?" style={{ ...inputStyle, marginBottom: '15px' }} />
                 <input type="number" value={taksitToplamTutar} onChange={e => setTaksitToplamTutar(e.target.value)} placeholder="Toplam Borç" style={{ ...inputStyle, marginBottom: '15px' }} />
                 <input type="number" value={taksitSayisi} onChange={e => setTaksitSayisi(e.target.value)} placeholder="Taksit Sayısı" style={{ ...inputStyle, marginBottom: '15px' }} />
+                <input type="date" value={taksitAlisTarihi || ""} onChange={e => setTaksitAlisTarihi(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} />
                 <select value={taksitKategori} onChange={e => setTaksitKategori(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }}>{kategoriListesi.map(k => <option key={k} value={k}>{k}</option>)}</select>
                 <select value={taksitHesapId} onChange={e => setTaksitHesapId(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }}><option value="">Hangi Karttan?</option>{hesaplar.map(h => <option key={h.id} value={h.id}>{h.hesapAdi}</option>)}</select>
                 <div style={{ marginBottom: '20px', fontSize: '14px', color: '#6366f1', fontWeight: 'bold' }}>Aylık: {taksitToplamTutar && taksitSayisi ? formatPara(taksitToplamTutar / taksitSayisi) : '0 ₺'}</div>

@@ -7,8 +7,6 @@ const GoalsInventory = ({
     envanter = [],
     satislar = [],
     actions,
-    genelToplamYatirimGucu,
-    islemEkle,
     gizliMod // New Prop
 }) => {
 
@@ -37,11 +35,6 @@ const GoalsInventory = ({
     const [formEklenenPara, setFormEklenenPara] = useState("");
     const [formEklenenBorcOdeme, setFormEklenenBorcOdeme] = useState(""); // New: Borc Odeme
 
-    // Inline Form State (Goals Widget)
-    const [inlineHedefAd, setInlineHedefAd] = useState("");
-    const [inlineHedefTutar, setInlineHedefTutar] = useState("");
-    const [inlineLink, setInlineLink] = useState("");
-
     // --- CALCULATIONS ---
     const toplamAlacaklar = (satislar || []).reduce((acc, s) => {
         const kalan = (parseFloat(s.satisFiyati) - parseFloat(s.tahsilEdilen));
@@ -49,11 +42,6 @@ const GoalsInventory = ({
     }, 0);
 
     const toplamEnvanterDegeri = (envanter || []).reduce((acc, e) => acc + (parseFloat(e.deger) || 0), 0);
-    const toplamTicariKar = (satislar || []).reduce((acc, s) => {
-        const kar = parseFloat(s.satisFiyati) - (parseFloat(s.alisMaliyeti) || 0);
-        return acc + kar;
-    }, 0);
-
     const toplamTahsilat = (satislar || []).reduce((acc, s) => acc + (parseFloat(s.tahsilEdilen) || 0), 0);
     const toplamEnvanterOdeme = (envanter || []).reduce((acc, e) => acc + (e.odenenTutar !== undefined ? parseFloat(e.odenenTutar) : parseFloat(e.deger || 0)), 0);
     const toplamSatisOdeme = (satislar || []).reduce((acc, s) => acc + (s.odenenTutar !== undefined ? parseFloat(s.odenenTutar) : parseFloat(s.alisMaliyeti || 0)), 0);
@@ -199,17 +187,12 @@ const GoalsInventory = ({
                                 const tamamlandi = h.biriken >= h.hedefTutar;
 
                                 const move = async (dir) => {
-                                    const currentIndex = h.orderIndex || 0;
-                                    const targetIndex = currentIndex + dir;
                                     const currentPos = index;
                                     const targetPos = index + dir;
 
                                     if (targetPos < 0 || targetPos >= array.length) return; // Out of bounds
 
                                     const targetItem = array[targetPos];
-                                    const newOrderA = targetItem.orderIndex !== undefined ? targetItem.orderIndex : targetPos;
-                                    const newOrderB = h.orderIndex !== undefined ? h.orderIndex : currentPos;
-
                                     await actions.hedefDuzenle(h.id, { ...h, orderIndex: targetPos });
                                     await actions.hedefDuzenle(targetItem.id, { ...targetItem, orderIndex: currentPos });
                                 };
@@ -409,7 +392,7 @@ const GoalsInventory = ({
                     <input type="number" value={formDeger} onChange={e => { setFormDeger(e.target.value); setFormOdenenTutar(e.target.value); }} placeholder="Alış Maliyeti (₺)" style={{ ...inputStyle, marginBottom: '15px' }} />
                     <input type="number" value={formOdenenTutar} onChange={e => setFormOdenenTutar(e.target.value)} placeholder="Ödenen Tutar" style={{ ...inputStyle, marginBottom: '15px' }} required />
                     <input type="date" value={formTarih} onChange={e => setFormTarih(e.target.value)} style={{ ...inputStyle, marginBottom: '20px' }} />
-                    <button type="submit" disabled={isProcessing} style={{ width: '100%', background: '#38a169', color: 'white', padding: '14px', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold', opacity: isProcessing ? 0.7 : 1 }}>{isProcessing ? 'KAYDEDİLİYOR...' : 'KAYDET'}</button>
+                    <button type="submit" disabled={isProcessing} className="modal-success-btn">{isProcessing ? 'KAYDEDİLİYOR...' : 'KAYDET'}</button>
                 </form>
             </HighQualityModal>
 
@@ -426,7 +409,7 @@ const GoalsInventory = ({
                     <input type="number" value={formDeger} onChange={e => setFormDeger(e.target.value)} placeholder="Alış Maliyeti" style={{ ...inputStyle, marginBottom: '15px' }} />
                     <input type="number" value={formOdenenTutar} onChange={e => setFormOdenenTutar(e.target.value)} placeholder="Ödenen Tutar" style={{ ...inputStyle, marginBottom: '15px' }} />
                     <input type="date" value={formTarih} onChange={e => setFormTarih(e.target.value)} style={{ ...inputStyle, marginBottom: '20px' }} />
-                    <button type="submit" disabled={isProcessing} style={{ width: '100%', background: '#3182ce', color: 'white', padding: '14px', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold', opacity: isProcessing ? 0.7 : 1 }}>{isProcessing ? 'GÜNCELLENİYOR...' : 'GÜNCELLE'}</button>
+                    <button type="submit" disabled={isProcessing} className="modal-primary-btn">{isProcessing ? 'GÜNCELLENİYOR...' : 'GÜNCELLE'}</button>
                 </form>
             </HighQualityModal>
 
@@ -456,7 +439,7 @@ const GoalsInventory = ({
                     <input type="number" value={formSatisFiyati} onChange={e => setFormSatisFiyati(e.target.value)} placeholder="Satış Fiyatı (₺)" style={{ ...inputStyle, marginBottom: '15px' }} required />
                     <input type="date" value={formTarih} onChange={e => setFormTarih(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} />
                     <input type="number" value={formPesinat} onChange={e => setFormPesinat(e.target.value)} placeholder="Peşinat (Varsa)" style={{ ...inputStyle, marginBottom: '20px' }} />
-                    <button type="submit" disabled={isProcessing} style={{ width: '100%', background: '#805ad5', color: 'white', padding: '14px', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold', opacity: isProcessing ? 0.7 : 1 }}>{isProcessing ? 'İŞLENİYOR...' : 'SATIŞI ONAYLA'}</button>
+                    <button type="submit" disabled={isProcessing} className="modal-primary-btn">{isProcessing ? 'İŞLENİYOR...' : 'SATIŞI ONAYLA'}</button>
                 </form>
             </HighQualityModal>
 
@@ -495,7 +478,7 @@ const GoalsInventory = ({
                     <label style={{ fontSize: '12px', color: '#718096', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Satış Tarihi</label>
                     <input type="date" value={formTarih} onChange={e => setFormTarih(e.target.value)} style={{ ...inputStyle, marginBottom: '20px' }} />
 
-                    <button type="submit" disabled={isProcessing} style={{ width: '100%', background: '#3182ce', color: 'white', padding: '14px', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold', opacity: isProcessing ? 0.7 : 1 }}>{isProcessing ? 'KAYDEDİLİYOR...' : 'KAYDET'}</button>
+                    <button type="submit" disabled={isProcessing} className="modal-primary-btn">{isProcessing ? 'KAYDEDİLİYOR...' : 'KAYDET'}</button>
                 </form>
             </HighQualityModal>
 
@@ -510,7 +493,7 @@ const GoalsInventory = ({
                 }}>
                     <div style={{ marginBottom: '15px', color: '#4a5568' }}>Kalan Alacak: <b>{modalState.data ? formatPara(modalState.data.satisFiyati - modalState.data.tahsilEdilen) : 0}</b></div>
                     <input type="number" autoFocus value={formEklenenPara} onChange={e => setFormEklenenPara(e.target.value)} placeholder="Tahsil Edilen Tutar" style={{ ...inputStyle, marginBottom: '20px' }} required />
-                    <button type="submit" disabled={isProcessing} style={{ width: '100%', background: '#38a169', color: 'white', padding: '14px', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold', opacity: isProcessing ? 0.7 : 1 }}>{isProcessing ? 'EKLENİYOR...' : 'EKLE'}</button>
+                    <button type="submit" disabled={isProcessing} className="modal-success-btn">{isProcessing ? 'EKLENİYOR...' : 'EKLE'}</button>
                 </form>
             </HighQualityModal>
 
@@ -528,7 +511,7 @@ const GoalsInventory = ({
                     <input type="number" value={formHedefTutar} onChange={e => setFormHedefTutar(e.target.value)} placeholder="Hedeflenen Tutar (₺)" style={{ ...inputStyle, marginBottom: '15px' }} required />
                     {/* biriken input removed as per request */}
                     <input value={formHedefLink} onChange={e => setFormHedefLink(e.target.value)} placeholder="Ürün Linki (Opsiyonel)" style={{ ...inputStyle, marginBottom: '20px' }} />
-                    <button type="submit" disabled={isProcessing} style={{ width: '100%', background: '#805ad5', color: 'white', padding: '14px', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold', opacity: isProcessing ? 0.7 : 1 }}>{isProcessing ? 'KAYDEDİLİYOR...' : 'KAYDET'}</button>
+                    <button type="submit" disabled={isProcessing} className="modal-primary-btn">{isProcessing ? 'KAYDEDİLİYOR...' : 'KAYDET'}</button>
                 </form>
             </HighQualityModal>
 
@@ -545,7 +528,7 @@ const GoalsInventory = ({
                     <input type="number" value={formHedefTutar} onChange={e => setFormHedefTutar(e.target.value)} placeholder="Hedef Tutar" style={{ ...inputStyle, marginBottom: '15px' }} />
                     <input type="number" value={formHedefBiriken} onChange={e => setFormHedefBiriken(e.target.value)} placeholder="Biriken" style={{ ...inputStyle, marginBottom: '15px' }} />
                     <input value={formHedefLink} onChange={e => setFormHedefLink(e.target.value)} placeholder="Link" style={{ ...inputStyle, marginBottom: '20px' }} />
-                    <button type="submit" disabled={isProcessing} style={{ width: '100%', background: '#3182ce', color: 'white', padding: '14px', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold', opacity: isProcessing ? 0.7 : 1 }}>{isProcessing ? 'KAYDEDİLİYOR...' : 'KAYDET'}</button>
+                    <button type="submit" disabled={isProcessing} className="modal-primary-btn">{isProcessing ? 'KAYDEDİLİYOR...' : 'KAYDET'}</button>
                 </form>
             </HighQualityModal>
 
@@ -562,7 +545,7 @@ const GoalsInventory = ({
                         <b>{modalState.data?.hedefAdi}</b> için birikim ekliyorsunuz.
                     </div>
                     <input type="number" autoFocus value={formEklenenPara} onChange={e => setFormEklenenPara(e.target.value)} placeholder="Eklenecek Tutar (₺)" style={{ ...inputStyle, marginBottom: '20px' }} required />
-                    <button type="submit" disabled={isProcessing} style={{ width: '100%', background: '#38a169', color: 'white', padding: '14px', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold', opacity: isProcessing ? 0.7 : 1 }}>{isProcessing ? 'EKLENİYOR...' : 'EKLE'}</button>
+                    <button type="submit" disabled={isProcessing} className="modal-success-btn">{isProcessing ? 'EKLENİYOR...' : 'EKLE'}</button>
                 </form>
             </HighQualityModal>
 
@@ -577,7 +560,7 @@ const GoalsInventory = ({
                 }}>
                     <div style={{ marginBottom: '15px', color: '#4a5568' }}>Kalan Borç: <b>{modalState.data ? formatPara(modalState.data.deger - (modalState.data.odenenTutar || 0)) : 0}</b></div>
                     <input type="number" autoFocus value={formEklenenBorcOdeme} onChange={e => setFormEklenenBorcOdeme(e.target.value)} placeholder="Ödenecek Tutar" style={{ ...inputStyle, marginBottom: '20px' }} required />
-                    <button type="submit" disabled={isProcessing} style={{ width: '100%', background: '#38a169', color: 'white', padding: '14px', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold', opacity: isProcessing ? 0.7 : 1 }}>{isProcessing ? 'ÖDENİYOR...' : 'ÖDE'}</button>
+                    <button type="submit" disabled={isProcessing} className="modal-success-btn">{isProcessing ? 'ÖDENİYOR...' : 'ÖDE'}</button>
                 </form>
             </HighQualityModal>
 

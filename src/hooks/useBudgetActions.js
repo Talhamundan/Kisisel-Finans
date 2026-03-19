@@ -182,24 +182,6 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
         }
     }
 
-    const islemSil = async (id) => {
-        // ... (Logic from App.jsx) ...
-        // Need to refetch doc or pass data? App.jsx fetches doc.
-        const docRef = doc(db, "nakit_islemleri", id);
-        // ... We need to read it first
-        // Note: Swals are async. 
-        // NOTE: In App.jsx islemSil logic was fetching doc. I will assume it's fine.
-        // COPY PASTE from App.jsx but fix references
-        // ...
-        // Wait, better to fetch doc inside here.
-        // ...
-        // Replicating App.jsx fully:
-        const docSnap = await import("firebase/firestore").then(mod => mod.getDoc(docRef));
-        // using imported getDoc
-        // ...
-        // Actually I imported getDoc manually.
-        /* ... */
-    }
     // Re-implementing islemSil properly
     const islemSilAction = async (id) => {
         const docRef = doc(db, "nakit_islemleri", id);
@@ -274,16 +256,76 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
 
     const islemDuzenle = async (e, id, veriler) => {
         e.preventDefault();
-        const guncelTarih = islemTarihi ? new Date(islemTarihi) : new Date();
-        const updateData = { aciklama: islemAciklama, tutar: parseFloat(islemTutar), tarih: guncelTarih };
-        if (veriler.islemTipi.includes('yatirim') || veriler.kategori === 'Yatırım') {
-            updateData.yatirimTuru = kategori;
-            updateData.adet = islemAdet ? parseFloat(islemAdet) : 0;
-            updateData.birimFiyat = islemBirimFiyat ? parseFloat(islemBirimFiyat) : 0;
-        } else { updateData.kategori = kategori; }
-        await updateDoc(doc(db, "nakit_islemleri", id), updateData);
-        toast.success("İşlem güncellendi.");
-        return true;
+        try {
+            const yeniTutar = parseFloat(islemTutar);
+            if (isNaN(yeniTutar)) {
+                toast.warning("Geçerli bir tutar giriniz.");
+                return false;
+            }
+
+            const guncelTarih = islemTarihi ? new Date(islemTarihi) : new Date();
+            const isTransfer = veriler.islemTipi === 'transfer' || veriler.kategori === 'Transfer';
+            const eskiTutar = parseFloat(veriler.tutar || 0);
+            const eskiHesapId = veriler.hesapId || "";
+            const yeniHesapId = isTransfer ? "" : (secilenHesapId || eskiHesapId);
+
+            if (!isTransfer && !yeniHesapId) {
+                toast.warning("Lütfen ödeme aracı seçiniz.");
+                return false;
+            }
+
+            const updateData = { aciklama: islemAciklama, tutar: yeniTutar, tarih: guncelTarih };
+            if (veriler.islemTipi.includes('yatirim') || veriler.kategori === 'Yatırım') {
+                updateData.yatirimTuru = kategori;
+                updateData.adet = islemAdet ? parseFloat(islemAdet) : 0;
+                updateData.birimFiyat = islemBirimFiyat ? parseFloat(islemBirimFiyat) : 0;
+            } else {
+                updateData.kategori = kategori;
+            }
+
+            const batch = writeBatch(db);
+
+            if (isTransfer) {
+                const fark = yeniTutar - eskiTutar;
+                if (Math.abs(fark) > 0.0001) {
+                    if (veriler.kaynakId) {
+                        batch.update(doc(db, "hesaplar", veriler.kaynakId), { guncelBakiye: increment(-fark) });
+                    }
+                    if (veriler.hedefId) {
+                        batch.update(doc(db, "hesaplar", veriler.hedefId), { guncelBakiye: increment(fark) });
+                    }
+                }
+            } else {
+                updateData.hesapId = yeniHesapId;
+                const isPozitif = veriler.islemTipi === 'gelir' || veriler.islemTipi === 'yatirim_satis';
+                const isNegatif = veriler.islemTipi === 'gider' || veriler.islemTipi === 'yatirim_alis';
+                const islemSign = isPozitif ? 1 : (isNegatif ? -1 : 0);
+
+                if (islemSign !== 0) {
+                    if (eskiHesapId && eskiHesapId === yeniHesapId) {
+                        const fark = islemSign * (yeniTutar - eskiTutar);
+                        if (Math.abs(fark) > 0.0001) {
+                            batch.update(doc(db, "hesaplar", yeniHesapId), { guncelBakiye: increment(fark) });
+                        }
+                    } else {
+                        if (eskiHesapId) {
+                            batch.update(doc(db, "hesaplar", eskiHesapId), { guncelBakiye: increment(-(islemSign * eskiTutar)) });
+                        }
+                        batch.update(doc(db, "hesaplar", yeniHesapId), { guncelBakiye: increment(islemSign * yeniTutar) });
+                    }
+                }
+            }
+
+            batch.update(doc(db, "nakit_islemleri", id), updateData);
+            await batch.commit();
+
+            toast.success("İşlem güncellendi.");
+            return true;
+        } catch (error) {
+            console.error("İşlem güncelleme hatası:", error);
+            toast.error("İşlem güncellenemedi.");
+            return false;
+        }
     }
 
     const normalSil = async (koleksiyon, id) => {
@@ -849,11 +891,11 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
     const fillTransactionForm = (v) => {
         setIslemAciklama(v.aciklama);
         setIslemTutar(v.tutar);
+        setSecilenHesapId(v.hesapId || "");
         setIslemAdet(v.adet || ""); // Fill Quantity
         setIslemBirimFiyat(v.birimFiyat || ""); // Fill Unit Price
-        if (v.islemTipi === 'transfer') { setKategori("Transfer"); }
-        else if (v.islemTipi?.includes('yatirim')) { setKategori(v.yatirimTuru || "Hisse"); }
-        else { setKategori(v.kategori); }
+        if (v.islemTipi?.includes('yatirim')) { setKategori(v.yatirimTuru || "Hisse"); }
+        else { setKategori(v.kategori || ""); }
         if (v.tarih) { const date = new Date(v.tarih.seconds * 1000); const isoString = new Date(date.getTime() - (date.getTimezoneOffset() * 60000)).toISOString().slice(0, 16); setIslemTarihi(isoString); }
     }
     const fillSubscriptionForm = (v) => { setAboAd(v.ad); setAboTutar(v.tutar); setAboGun(v.gun); setAboHesapId(v.hesapId); setAboKategori(v.kategori); }

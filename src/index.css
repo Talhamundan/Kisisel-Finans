@@ -1,55 +1,226 @@
+/* --- GLOBAL THEME (LIGHT, PREMIUM) --- */
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Text',
+    'Segoe UI', sans-serif;
   line-height: 1.5;
   font-weight: 400;
-
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
+  color-scheme: light;
+  color: #0f172a;
+  background-color: #0b1120;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  /* Design tokens */
+  --bg-app: #f7f9fc;
+  --surface: rgba(255, 255, 255, 0.92);
+  --surface-solid: #ffffff;
+  --border: rgba(15, 23, 42, 0.08);
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 10px 30px rgba(15, 23, 42, 0.08);
+  --radius-card: 18px;
+  --radius-input: 12px;
+  --text: #0f172a;
+  --text-muted: rgba(15, 23, 42, 0.62);
+  --text-faint: rgba(15, 23, 42, 0.45);
+  --accent: #4f46e5;
+  --accent-2: #7c3aed;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-width: 320px;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  background:
+    radial-gradient(circle at top left, #1d2433 0, transparent 55%),
+    radial-gradient(circle at bottom right, #020617 0, transparent 55%),
+    #020617;
+  color: var(--text);
+}
+
+#root {
+  width: 100%;
+  min-height: 100dvh;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 a {
   font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
+  color: #4f46e5;
+  text-decoration: none;
 }
 
 a:hover {
-  color: #535bf2;
+  color: #4338ca;
 }
 
-body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
-}
-
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+h1,
+h2,
+h3,
+h4 {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Display',
+    'Segoe UI', sans-serif;
 }
 
 button {
-  border-radius: 8px;
+  border-radius: 999px;
   border: 1px solid transparent;
   padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
+  font-size: 0.95rem;
+  font-weight: 600;
   font-family: inherit;
-  background-color: #1a1a1a;
+  background-color: transparent;
   cursor: pointer;
-  transition: border-color 0.25s;
+  transition: background-color 0.15s ease, border-color 0.15s ease,
+    transform 0.05s ease;
 }
 
-button:hover {
-  border-color: #646cff;
+button:active {
+  transform: scale(0.98);
+}
+
+/* --- UI UTILITIES --- */
+.text-muted {
+  color: var(--text-muted) !important;
+}
+
+.text-faint {
+  color: var(--text-faint) !important;
+}
+
+.card-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  color: var(--text);
+}
+
+.card-title-sm {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.kpi-amount {
+  margin: 10px 0 0 0;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  color: var(--text);
+}
+
+.kpi-amount-sm {
+  margin: 8px 0 0 0;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  color: var(--text);
+}
+
+.btn-ui {
+  border-radius: 12px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  border: 1px solid transparent;
+}
+
+.btn-ui-primary {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+  color: #fff;
+  box-shadow: 0 10px 25px rgba(79, 70, 229, 0.18);
+}
+
+.btn-ui-neutral {
+  background: rgba(15, 23, 42, 0.04);
+  border-color: var(--border);
+  color: rgba(15, 23, 42, 0.75);
+}
+
+.btn-ui-success {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  color: #fff;
+  box-shadow: 0 10px 25px rgba(34, 197, 94, 0.18);
+}
+
+.btn-ui-danger {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #fff;
+  box-shadow: 0 10px 25px rgba(239, 68, 68, 0.18);
+}
+
+/* --- APP SHELL LAYOUT --- */
+.app-shell {
+  padding: 95px 30px 30px 30px;
+  box-sizing: border-box;
+  background: var(--bg-app, #f7f9fc);
+  min-height: 100vh;
+  color: var(--text, #0f172a);
+  width: 100%;
+}
+
+/* --- MODAL BUTTONS (for HighQualityModal & in-modal forms) --- */
+.modal-primary-btn {
+  width: 100%;
+  border-radius: 12px;
+  padding: 11px 14px !important;
+  border: none !important;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%) !important;
+  color: #ffffff !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.2px;
+  box-shadow: 0 10px 25px rgba(79, 70, 229, 0.18);
+}
+
+.modal-success-btn {
+  width: 100%;
+  border-radius: 12px;
+  padding: 11px 14px !important;
+  border: none !important;
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%) !important;
+  color: #ffffff !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.2px;
+  box-shadow: 0 10px 25px rgba(34, 197, 94, 0.18);
+}
+
+.modal-danger-btn {
+  width: 100%;
+  border-radius: 12px;
+  padding: 11px 14px !important;
+  border: none !important;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+  color: #ffffff !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.2px;
+  box-shadow: 0 10px 25px rgba(239, 68, 68, 0.18);
 }
 
 /* Remove outline for all focused elements */
@@ -67,21 +238,6 @@ select:focus,
 .btn-check:focus+.btn,
 .btn:focus {
   box-shadow: none !important;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-
-  a:hover {
-    color: #747bff;
-  }
-
-  button {
-    background-color: #f9f9f9;
-  }
 }
 
 /* --- FORCED WHITE THEME for INPUTS (USER REQUEST) --- */
@@ -154,14 +310,17 @@ textarea:focus {
   /* --- BÜTÇE EKRANI MOBİL OPTİMİZASYONLARI --- */
   .responsive-grid-3,
   .responsive-grid-2 {
+    /* Inline gridTemplateColumns'ı kesin ezmek için grid yerine flex kullan */
+    display: flex !important;
+    flex-direction: column !important;
     grid-template-columns: 1fr !important;
-    gap: 20px !important;
+    gap: 16px !important;
   }
 
   .responsive-card {
-    border-radius: 24px !important;
+    border-radius: 18px !important;
     /* Daha yumuşak "app" hissi */
-    padding: 20px !important;
+    padding: 16px !important;
   }
 
   .responsive-title {
@@ -169,15 +328,224 @@ textarea:focus {
   }
 
   .responsive-amount {
-    font-size: 24px !important;
+    font-size: 22px !important;
     /* Büyük fontları 1 tık küçült (text-2xl) */
     word-break: break-word;
     /* Taşmaları engelle */
+  }
+
+  .app-shell {
+    padding-top: 80px;
+    padding-left: 16px;
+    padding-right: 16px;
+    padding-bottom: 110px; /* Mobile bottom nav + FAB için ekstra boşluk */
+  }
+
+  /* Header: compact + less clutter */
+  .app-header {
+    padding: 10px 12px !important;
+    gap: 10px;
+  }
+
+  .app-header-left {
+    gap: 10px !important;
+    min-width: 0;
+  }
+
+  .app-header-title {
+    display: none;
+  }
+
+  .app-header-right {
+    gap: 6px !important;
+  }
+
+  .app-header-user {
+    display: none;
+  }
+
+  .app-header button {
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    padding: 0 !important;
+  }
+
+  /* Feedback button: keep above MobileNav */
+  .feedback-fab {
+    bottom: 110px !important;
+    right: 14px !important;
+    width: 52px !important;
+    height: 52px !important;
+    font-size: 20px !important;
+  }
+
+  /* --- YATIRIM EKRANI MOBİL OPTİMİZASYONLARI --- */
+  .investment-grid-top,
+  .investment-grid-middle,
+  .investment-grid-main {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+  }
+
+  .investment-fixed-height {
+    height: auto !important;
+    max-height: none !important;
+  }
+
+  .investment-history-scroll {
+    max-height: 420px;
+    overflow: auto;
+    padding-right: 0 !important;
+  }
+
+  .investment-card-header {
+    flex-wrap: wrap;
+    align-items: flex-start !important;
+    gap: 10px;
+  }
+
+  .investment-legend {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px !important;
+  }
+
+  .investment-form-row {
+    flex-direction: column;
+    gap: 10px !important;
+  }
+
+  .investment-flow-summary {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 8px;
+  }
+
+  .investment-analysis-header {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 12px;
+  }
+
+  .investment-analysis-actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch !important;
+  }
+
+  .investment-analysis-actions>button {
+    width: 100%;
+  }
+
+  .investment-table-wrap th,
+  .investment-table-wrap td {
+    padding: 8px !important;
+    white-space: nowrap;
+  }
+
+  .investment-portfolio-table {
+    min-width: 0 !important;
+  }
+
+  .investment-history-table {
+    min-width: 560px !important;
+  }
+
+  .investment-analysis-table {
+    min-width: 680px !important;
+  }
+
+  .investment-portfolio-table th:nth-child(2),
+  .investment-portfolio-table td:nth-child(2),
+  .investment-portfolio-table th:nth-child(3),
+  .investment-portfolio-table td:nth-child(3),
+  .investment-portfolio-table th:nth-child(4),
+  .investment-portfolio-table td:nth-child(4),
+  .investment-portfolio-table th:nth-child(8),
+  .investment-portfolio-table td:nth-child(8) {
+    display: none;
+  }
+
+  .investment-history-table th:nth-child(2),
+  .investment-history-table td:nth-child(2),
+  .investment-history-table th:nth-child(4),
+  .investment-history-table td:nth-child(4),
+  .investment-history-table th:nth-child(5),
+  .investment-history-table td:nth-child(5),
+  .investment-history-table th:nth-child(6),
+  .investment-history-table td:nth-child(6) {
+    display: none;
+  }
+
+  /* --- BES KARTI MOBİL OPTİMİZASYONU --- */
+  .bes-header {
+    gap: 10px;
+  }
+
+  .bes-layout {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 18px !important;
+  }
+
+  .bes-stats-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 12px !important;
+  }
+
+  .bes-monthly-row {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 8px;
+  }
+
+  .bes-monthly-values {
+    width: 100%;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px !important;
+  }
+
+  .bes-monthly-values span:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .bes-fon-col {
+    height: 230px !important;
+  }
+
+  .bes-actions {
+    width: 100%;
+  }
+
+  .bes-actions button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .investment-legend {
+    grid-template-columns: 1fr !important;
   }
 }
 
 @media (min-width: 768px) {
   .show-on-mobile {
     display: none !important;
+  }
+
+  /* Desktop grid refinements for dashboards */
+  .responsive-grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 24px;
+  }
+
+  .responsive-grid-2 {
+    display: grid;
+    grid-template-columns: 1.1fr 1.9fr;
+    gap: 24px;
   }
 }

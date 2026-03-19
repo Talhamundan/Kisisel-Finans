@@ -218,9 +218,9 @@ export const useInvestmentActions = (user, alanKodu) => {
 
         // --- HELPER: Yahoo Finance (BIST / Fallback) ---
         const fetchYahooPrice = async (symbol) => {
+            const CORS_PROXY = import.meta.env.VITE_CORS_PROXY_URL || 'https://corsproxy.io/?';
             try {
-                // Using corsproxy.io for reliability
-                const url = `https://corsproxy.io/?https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`;
+                const url = `${CORS_PROXY}https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`;
                 const res = await fetch(url);
                 if (!res.ok) throw new Error("Yahoo API Error");
                 const data = await res.json();
@@ -248,6 +248,8 @@ export const useInvestmentActions = (user, alanKodu) => {
             } catch (e) {
                 console.warn("Currency API failed, using fallbacks.", e);
             }
+
+            let yahooFailed = false;
 
             const promises = portfoy.map(async (p) => {
                 let yeniFiyat = null;
@@ -285,7 +287,11 @@ export const useInvestmentActions = (user, alanKodu) => {
                         if (!yahooSymbol.includes('.')) {
                             yahooSymbol += ".IS";
                         }
-                        yeniFiyat = await fetchYahooPrice(yahooSymbol);
+                            const fetched = await fetchYahooPrice(yahooSymbol);
+                            if (!fetched) {
+                                yahooFailed = true;
+                            }
+                            yeniFiyat = fetched;
                     }
                 }
 
@@ -296,7 +302,11 @@ export const useInvestmentActions = (user, alanKodu) => {
             });
 
             await Promise.all(promises);
-            toast.success("Tüm fiyatlar güncellendi (Finnhub & Yahoo).");
+            if (yahooFailed) {
+                toast.warn("Bazı semboller için Yahoo verisi alınamadı, mevcut fiyatlar korundu.");
+            } else {
+                toast.success("Tüm fiyatlar güncellendi (Finnhub & Yahoo).");
+            }
         } catch (e) {
             console.error("Critical Update Error:", e);
             toast.error("Güncelleme başarısız oldu.");
@@ -332,8 +342,6 @@ export const useInvestmentActions = (user, alanKodu) => {
         }
 
         try {
-            const nakitRef = collection(db, "nakit_islemleri");
-
             // Iterate and Process
             for (const item of itemsToDelete) {
                 // 1. Get the Portfoy Document to know exact details (Date/Cost) for matching
@@ -552,6 +560,63 @@ export const useInvestmentActions = (user, alanKodu) => {
         }
     }
 
+    const besBakiyesiniArtir = async (odemeTutari) => {
+        if (!alanKodu) return false;
+        const tutar = parseFloat(odemeTutari);
+        if (isNaN(tutar) || tutar <= 0) return false;
+
+        try {
+            const docRef = doc(db, "ayarlar", alanKodu);
+            const snapshot = await getDoc(docRef);
+            const ayarData = snapshot.exists() ? snapshot.data() : {};
+            const mevcutBesData = ayarData?.bes_data || {};
+            const mevcutGuncelTutar = parseFloat(mevcutBesData.guncelTutar) || 0;
+
+            await setDoc(docRef, {
+                bes_data: {
+                    ...mevcutBesData,
+                    guncelTutar: parseFloat((mevcutGuncelTutar + tutar).toFixed(2))
+                }
+            }, { merge: true });
+
+            return true;
+        } catch (error) {
+            console.error("BES bakiye güncelleme hatası:", error);
+            return false;
+        }
+    };
+
+    const besOdemeIsle = async (islemEkle, { hesapId, tutar, tarih, aciklama }) => {
+        if (!islemEkle) {
+            toast.error("Ödeme fonksiyonu bulunamadı.");
+            return false;
+        }
+
+        const odemeTutar = parseFloat(tutar);
+        if (!hesapId || isNaN(odemeTutar) || odemeTutar <= 0) {
+            toast.warning("Geçerli hesap ve tutar giriniz.");
+            return false;
+        }
+
+        const success = await islemEkle(null, {
+            hesapId,
+            tutar: odemeTutar,
+            aciklama: aciklama || 'BES Aylık Ödeme',
+            kategori: 'BES',
+            islemTipi: 'gider',
+            tarih: tarih || new Date()
+        });
+
+        if (success === false) return false;
+
+        const besBakiyeGuncel = await besBakiyesiniArtir(odemeTutar);
+        if (!besBakiyeGuncel) {
+            toast.warning("Ödeme kaydedildi fakat BES kart bakiyesi güncellenemedi.");
+        }
+
+        return true;
+    };
+
     return {
         sembol, setSembol,
         adet, setAdet,
@@ -563,6 +628,7 @@ export const useInvestmentActions = (user, alanKodu) => {
         yatirimAl, satisYap, fiyatGuncelle, piyasalariGuncelle, besGuncelle,
         portfoyDuzenle, fillPortfolioForm, gecmisIslemEkle,
         pozisyonSil, // The new rollback-enabled function
+        besOdemeIsle,
         besOdemeYap: async (besVerisi_IGNORED, islemEkle, manuelEkleAc) => {
             console.log("💰 besOdemeYap ÇAĞRILDI (Database-First Mode)");
 
@@ -592,15 +658,15 @@ export const useInvestmentActions = (user, alanKodu) => {
                 if (settings && settings.varsayilanTutar && settings.varsayilanHesapId) {
                     console.log("✅ Otomatik Ödeme Başlıyor...");
 
-                    // 3. EXECUTE PAYMENT via islemEkle (which handles addDoc to 'nakit_islemleri' and updateDoc balance)
-                    await islemEkle(null, {
+                    // 3. EXECUTE PAYMENT + BES BALANCE UPDATE
+                    const success = await besOdemeIsle(islemEkle, {
                         hesapId: settings.varsayilanHesapId,
-                        tutar: parseFloat(settings.varsayilanTutar),
+                        tutar: settings.varsayilanTutar,
                         aciklama: 'BES Aylık Ödeme (Otomatik)',
-                        kategori: 'BES',
-                        islemTipi: 'gider',
                         tarih: new Date()
                     });
+
+                    if (success === false) return;
 
                     console.log("✅ Ödeme İşlemi Tamam");
                     toast.success("✅ Otomatik Ödeme Başarılı");
@@ -1048,9 +1114,6 @@ export const useInvestmentActions = (user, alanKodu) => {
                     const docRef = doc(db, "nakit_islemleri", buyData.id);
                     const snap = await getDoc(docRef);
                     if (snap.exists()) {
-                        const oldData = snap.data();
-                        const oldTotal = parseFloat(oldData.tutar);
-
                         const newPrice = parseFloat(buyData.fiyat);
                         const newQty = parseFloat(buyData.adet);
                         const newTotal = newPrice * newQty;

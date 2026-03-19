@@ -36,6 +36,7 @@ const Feedback = ({ userEmail }) => {
             {/* Floating Action Button */}
             <button
                 onClick={() => setIsOpen(true)}
+                className="feedback-fab"
                 style={{
                     position: 'fixed',
                     bottom: '20px',
@@ -74,7 +75,6 @@ const Feedback = ({ userEmail }) => {
                     alignItems: 'center',
                     justifyContent: 'center',
                     zIndex: 10000,
-                    fontFamily: 'Georgia, serif',
                 }}>
                     <div style={{
                         backgroundColor: 'white',

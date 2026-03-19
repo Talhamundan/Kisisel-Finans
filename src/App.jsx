@@ -366,7 +366,7 @@ function App() {
     );
 
     return (
-        <div style={{ paddingTop: '95px', paddingLeft: '30px', paddingRight: '30px', paddingBottom: '30px', fontFamily: 'Segoe UI', width: '100vw', boxSizing: 'border-box', background: '#f7f9fc', minHeight: '100vh', color: '#333', overflowX: 'hidden' }}>
+        <div className="app-shell">
             <ToastContainer position="top-right" autoClose={2000} theme="light" />
 
             <ModalManager
@@ -425,7 +425,7 @@ function App() {
                 verileriTasi={budgetActions.verileriTasi}
                 yeniKodInput={budgetActions.yeniKodInput} setYeniKodInput={budgetActions.setYeniKodInput}
                 tasimaIslemiSuruyor={budgetActions.tasimaIslemiSuruyor}
-                satisYap={(e) => investmentActions.satisYap(seciliVeri, budgetActions.secilenHesapId, budgetActions.islemTutar)}
+                satisYap={() => investmentActions.satisYap(seciliVeri, budgetActions.secilenHesapId, budgetActions.islemTutar)}
                 secilenHesapId={budgetActions.secilenHesapId} setSecilenHesapId={budgetActions.setSecilenHesapId}
                 onKategoriUpdate={onKategoriUpdate}
                 onYatirimTuruUpdate={onYatirimTuruUpdate}
@@ -464,7 +464,6 @@ function App() {
             />
 
             <Header
-                alanKodu={alanKodu}
                 anaSekme={anaSekme}
                 setAnaSekme={setAnaSekme}
                 gizliMod={gizliMod}
@@ -634,6 +633,7 @@ function App() {
                     toplamBesYatirimi={calculations.toplamBesYatirimi}
                     besGuncelle={investmentActions.besGuncelle}
                     besOdemeYap={investmentActions.besOdemeYap}
+                    besOdemeIsle={investmentActions.besOdemeIsle}
                     islemEkle={budgetActions.islemEkle}
                 />
             )}
