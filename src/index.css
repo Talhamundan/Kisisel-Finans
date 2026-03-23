@@ -389,6 +389,22 @@ textarea:focus {
     gap: 16px !important;
   }
 
+  .investment-grid-main {
+    align-items: stretch !important;
+  }
+
+  .investment-grid-main > .investment-card {
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  /* iOS/Android focus zoom'u engellemek için form alanları 16px+ */
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
   .investment-fixed-height {
     height: auto !important;
     max-height: none !important;

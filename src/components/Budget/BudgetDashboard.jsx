@@ -65,6 +65,7 @@ const BudgetDashboard = ({
     filtreKategori, setFiltreKategori,
     borclar,
     toplamKalanBorc,
+    borcOrderGuncelle,
     excelIndir,
     excelYukle,
     islemSil
@@ -76,6 +77,26 @@ const BudgetDashboard = ({
     useEffect(() => {
         setLocalLimit(aylikLimit);
     }, [aylikLimit]);
+
+    const siraliBorclar = [...(borclar || [])]
+        .sort((a, b) => {
+            const orderFark = (a.orderIndex || 0) - (b.orderIndex || 0);
+            if (orderFark !== 0) return orderFark;
+            const aTime = a.eklenmeTarihi?.seconds || 0;
+            const bTime = b.eklenmeTarihi?.seconds || 0;
+            return bTime - aTime;
+        });
+
+    const toplamKategoriGideri = (kategoriVerisi || []).reduce((sum, item) => sum + (parseFloat(item.value) || 0), 0);
+    const pieData = [...(kategoriVerisi || [])]
+        .filter(item => (parseFloat(item.value) || 0) > 0)
+        .sort((a, b) => b.value - a.value)
+        .map((item, index) => ({
+            ...item,
+            color: COLORS[index % COLORS.length],
+            yuzde: toplamKategoriGideri > 0 ? Math.round((item.value / toplamKategoriGideri) * 100) : 0
+        }));
+    const merkezAyMetni = aktifAy === "Tümü" ? "Tüm Dönem" : aktifAy;
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}> {/* Ana Container gap düzeltildi */}
@@ -116,26 +137,34 @@ const BudgetDashboard = ({
                     )}
                 </div>
 
-                <div className="responsive-card" style={{ ...cardStyle, gridColumn: 'span 1', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                    <div className="card-title-sm" style={{ marginBottom: 8 }}>Kategori Dağılımı</div>
-                    <ResponsiveContainer width="100%" height={230}>
+                <div className="responsive-card" style={{ ...cardStyle, gridColumn: 'span 1', paddingTop: '18px' }}>
+                    <ResponsiveContainer width="100%" height={270}>
                         <PieChart>
                             <Pie
-                                data={kategoriVerisi || []}
+                                data={pieData}
                                 cx="50%"
-                                cy="50%"
+                                cy="45%"
                                 innerRadius={58}
-                                outerRadius={86}
+                                outerRadius={90}
                                 startAngle={90}
                                 endAngle={-270}
-                                paddingAngle={3}
-                                cornerRadius={6}
+                                paddingAngle={4}
+                                cornerRadius={9}
                                 dataKey="value"
                             >
-                                {(kategoriVerisi || []).map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="#f9fafb" strokeWidth={2} />
+                                {pieData.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={entry.color} stroke="#f9fafb" strokeWidth={5} />
                                 ))}
                             </Pie>
+                            <text x="50%" y="43%" textAnchor="middle" fill="#64748b" style={{ fontSize: 11, fontWeight: 700 }}>
+                                Toplam Gider
+                            </text>
+                            <text x="50%" y="52.5%" textAnchor="middle" fill="#0f172a" style={{ fontSize: 18, fontWeight: 800 }}>
+                                {formatPara(toplamKategoriGideri)}
+                            </text>
+                            <text x="50%" y="60.5%" textAnchor="middle" fill="#94a3b8" style={{ fontSize: 11, fontWeight: 700 }}>
+                                {merkezAyMetni}
+                            </text>
                             <Tooltip
                                 formatter={(value, name) => [formatPara(value), name]}
                                 contentStyle={{
@@ -147,6 +176,21 @@ const BudgetDashboard = ({
                             />
                         </PieChart>
                     </ResponsiveContainer>
+                    {pieData.length === 0 ? (
+                        <div style={{ marginTop: '4px', color: '#94a3b8', fontSize: '11px', textAlign: 'center' }}>
+                            Bu ay için kategori verisi yok.
+                        </div>
+                    ) : (
+                        <div style={{ marginTop: '-10px', display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
+                            {pieData.map((item, index) => (
+                                <div key={`${item.name}-${index}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', border: '1px solid #cbd5e1', borderRadius: '999px', padding: '6px 11px', background: '#ffffff' }}>
+                                    <span style={{ width: '9px', height: '9px', borderRadius: '50%', background: item.color, flexShrink: 0 }} />
+                                    <span style={{ color: '#334155', fontSize: '9px', fontWeight: 700 }}>{item.name}</span>
+                                    <span style={{ color: '#94a3b8', fontSize: '9px', fontWeight: 700 }}>%{item.yuzde}</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -364,13 +408,44 @@ const BudgetDashboard = ({
                         </div>
                         {(!borclar || borclar.length === 0) ? <p style={{ fontSize: '13px', color: '#aaa' }}>Aktif borç kaydı yok.</p> :
                             <div style={{ marginBottom: '15px' }}>
-                                {(borclar || []).map(b => {
-                                    const yuzde = ((b.toplamTutar - b.kalanTutar) / b.toplamTutar) * 100;
+                                {siraliBorclar.map((b, index, array) => {
+                                    const toplamTutar = parseFloat(b.toplamTutar) || 0;
+                                    const kalanTutar = parseFloat(b.kalanTutar) || 0;
+                                    const yuzde = toplamTutar > 0 ? ((toplamTutar - kalanTutar) / toplamTutar) * 100 : 0;
+
+                                    const move = async (dir) => {
+                                        const currentPos = index;
+                                        const targetPos = index + dir;
+                                        if (targetPos < 0 || targetPos >= array.length || !borcOrderGuncelle) return;
+
+                                        const normalizePromises = array
+                                            .map((item, itemIndex) => {
+                                                const mevcutSira = Number.isFinite(Number(item.orderIndex)) ? Number(item.orderIndex) : itemIndex;
+                                                if (mevcutSira === itemIndex) return null;
+                                                return borcOrderGuncelle(item.id, { orderIndex: itemIndex });
+                                            })
+                                            .filter(Boolean);
+
+                                        if (normalizePromises.length > 0) {
+                                            await Promise.all(normalizePromises);
+                                        }
+
+                                        const targetItem = array[targetPos];
+                                        await borcOrderGuncelle(b.id, { orderIndex: targetPos });
+                                        await borcOrderGuncelle(targetItem.id, { orderIndex: currentPos });
+                                    };
+
                                     return (
                                         <div key={b.id} style={{ padding: '10px', borderBottom: '1px solid #f0f0f0', fontSize: '13px' }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
                                                 <div>
-                                                    <b>{b.ad}</b>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                            <button type="button" onClick={() => move(-1)} disabled={index === 0} style={{ border: 'none', background: 'transparent', cursor: index === 0 ? 'default' : 'pointer', opacity: index === 0 ? 0.3 : 1, fontSize: '10px', padding: 0 }}>▲</button>
+                                                            <button type="button" onClick={() => move(1)} disabled={index === array.length - 1} style={{ border: 'none', background: 'transparent', cursor: index === array.length - 1 ? 'default' : 'pointer', opacity: index === array.length - 1 ? 0.3 : 1, fontSize: '10px', padding: 0 }}>▼</button>
+                                                        </div>
+                                                        <b>{b.ad}</b>
+                                                    </div>
                                                 </div>
                                                 <span style={{ fontWeight: 'bold' }}>{formatPara(b.kalanTutar)} <small style={{ color: '#999' }}>Kaldı</small></span>
                                             </div>

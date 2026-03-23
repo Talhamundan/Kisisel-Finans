@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import HighQualityModal from '../Shared/HighQualityModal';
 import { formatCurrencyPlain, inputStyle, tarihSadeceGunAyYil } from '../../utils/helpers';
 import { toast } from 'react-toastify';
+import Swal from 'sweetalert2';
 
 // Sub-component to handle Portföy Düzenleme with own state
 const IslemEkleMobilModal = ({ close, islemEkle, hesaplar, kategoriListesi, inputStyle }) => {
@@ -241,7 +242,7 @@ const ModalManager = ({
     borcKalanTutar, setBorcKalanTutar,
     borcTarih, setBorcTarih,
     borcKategori, setBorcKategori,
-    borcEkle, borcDuzenle, borcOde
+    borcEkle, borcDuzenle, borcOde, borcSil
 
 }) => {
 
@@ -660,7 +661,25 @@ const ModalManager = ({
                 e.preventDefault();
                 if (!borcOdemeTutarState || !borcSecilenHesapIdState) return alert("Lütfen tutar ve hesap seçiniz.");
                 const res = await borcOde(seciliVeri, borcOdemeTutarState, borcSecilenHesapIdState);
-                if (res) close();
+                if (!res?.success) return;
+
+                close();
+
+                if (res.borcKapandi) {
+                    const karar = await Swal.fire({
+                        title: 'Borç Kapandı! 🎉',
+                        text: `${res.borcAd} borcu tamamlandı. Listeden kaldırılsın mı?`,
+                        icon: 'success',
+                        showCancelButton: true,
+                        confirmButtonText: 'Kaldır',
+                        cancelButtonText: 'Listede Tut',
+                        zIndex: 200000
+                    });
+
+                    if (karar.isConfirmed) {
+                        await borcSil?.(res.borcId);
+                    }
+                }
             }}>
                 <div style={{ marginBottom: '20px', padding: '15px', background: '#fdf2f8', borderRadius: '12px', color: '#831843' }}>
                     <p style={{ margin: 0, fontWeight: 'bold', fontSize: '16px' }}>{seciliVeri?.ad}</p>

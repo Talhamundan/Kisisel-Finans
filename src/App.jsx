@@ -74,6 +74,22 @@ function App() {
         }
     }, []);
 
+    // Sekme değişince sayfayı en üste al (scroll container: #root)
+    useEffect(() => {
+        const rafId = window.requestAnimationFrame(() => {
+            const rootEl = document.getElementById("root");
+            if (rootEl) {
+                rootEl.scrollTo({ top: 0, left: 0, behavior: "auto" });
+                rootEl.scrollTop = 0;
+            }
+            window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+            document.documentElement.scrollTop = 0;
+            document.body.scrollTop = 0;
+        });
+
+        return () => window.cancelAnimationFrame(rafId);
+    }, [anaSekme]);
+
     // 4. HELPER FUNCTIONS (View-Specific Logic)
     const cikisYap = async () => {
         await authLogout();
@@ -459,6 +475,7 @@ function App() {
                 borcEkle={budgetActions.borcEkle}
                 borcDuzenle={budgetActions.borcDuzenle}
                 borcOde={budgetActions.borcOde}
+                borcSil={budgetActions.borcSil}
                 // NEW PROPS FOR MOBILE TRANSACTION ADD MODAL
                 islemEkle={budgetActions.islemEkle}
             />
@@ -585,6 +602,7 @@ function App() {
                     toplamKalanBorc={calculations.toplamKalanBorc}
                     borcOde={budgetActions.borcOde}
                     borcDuzenle={budgetActions.borcDuzenle}
+                    borcOrderGuncelle={budgetActions.borcOrderGuncelle}
 
                     excelIndir={() => budgetActions.excelIndir(data.islemler)}
                     excelYukle={budgetActions.excelYukle}

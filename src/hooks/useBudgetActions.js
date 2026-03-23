@@ -555,11 +555,18 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
                 return false;
             }
             const kalan = borcKalanTutar ? parseFloat(borcKalanTutar) : tutar;
+            const borcQuery = query(collection(db, "borclar"), where("alanKodu", "==", alanKodu));
+            const borcSnap = await getDocs(borcQuery);
+            const maxOrderIndex = borcSnap.docs.reduce((max, belge) => {
+                const sira = Number(belge.data()?.orderIndex);
+                return Number.isFinite(sira) ? Math.max(max, sira) : max;
+            }, -1);
 
             const data = {
                 uid: user.uid, alanKodu,
                 ad: borcAd, toplamTutar: tutar, kalanTutar: kalan,
                 kategori: borcKategori || "Borç Ödemesi",
+                orderIndex: maxOrderIndex + 1,
                 eklenmeTarihi: new Date()
             };
             if (borcTarih) data.sonOdemeTarihi = borcTarih;
@@ -599,9 +606,27 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
         }
     }
 
+    const borcOrderGuncelle = async (id, yeniVeri) => {
+        if (!id) return false;
+        try {
+            await updateDoc(doc(db, "borclar", id), yeniVeri);
+            return true;
+        } catch (err) {
+            console.error(err);
+            toast.error("Borç sırası güncellenemedi");
+            return false;
+        }
+    }
+
     const borcOde = async (borc, odemeTutar, secilenHesapId) => {
         try {
             const odeme = parseFloat(odemeTutar);
+            const mevcutKalan = parseFloat(borc?.kalanTutar) || 0;
+            if (isNaN(odeme) || odeme <= 0) {
+                toast.error("Geçerli bir ödeme tutarı girin");
+                return { success: false };
+            }
+
             // 1. İşlemi Kaydet (Gider)
             await addDoc(collection(db, "nakit_islemleri"), {
                 uid: user.uid, alanKodu,
@@ -616,13 +641,36 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
             await updateDoc(doc(db, "hesaplar", secilenHesapId), { guncelBakiye: increment(-odeme) });
 
             // 3. Borcun Kalan Tutarını Düş
-            await updateDoc(doc(db, "borclar", borc.id), { kalanTutar: increment(-odeme) });
+            const yeniKalan = mevcutKalan - odeme;
+            if (yeniKalan <= 0) {
+                await updateDoc(doc(db, "borclar", borc.id), { kalanTutar: 0 });
+            } else {
+                await updateDoc(doc(db, "borclar", borc.id), { kalanTutar: yeniKalan });
+            }
 
             toast.success("Ödeme işlendi.");
-            return true;
+            return {
+                success: true,
+                borcKapandi: yeniKalan <= 0,
+                borcId: borc.id,
+                borcAd: borc.ad
+            };
         } catch (err) {
             console.error(err);
             toast.error("Ödeme işlenemedi");
+            return { success: false };
+        }
+    }
+
+    const borcSil = async (id) => {
+        if (!id) return false;
+        try {
+            await deleteDoc(doc(db, "borclar", id));
+            toast.success("Borç listeden kaldırıldı.");
+            return true;
+        } catch (err) {
+            console.error(err);
+            toast.error("Borç kaldırılamadı");
             return false;
         }
     }
@@ -928,7 +976,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
         taksitEkle, taksitOde, taksitDuzenle,
         abonelikEkle, abonelikOde, abonelikDuzenle,
         maasEkle, maasYatir, maasDuzenle,
-        borcEkle, borcDuzenle, borcOde,
+        borcEkle, borcDuzenle, borcOrderGuncelle, borcOde, borcSil,
         faturaTanimEkle, faturaGir, faturaOde, bekleyenFaturaDuzenle, faturaTanimDuzenle,
         excelIndir, excelYukle, verileriTasi,
 
