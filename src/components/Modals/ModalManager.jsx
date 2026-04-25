@@ -242,7 +242,20 @@ const ModalManager = ({
     borcKalanTutar, setBorcKalanTutar,
     borcTarih, setBorcTarih,
     borcKategori, setBorcKategori,
-    borcEkle, borcDuzenle, borcOde, borcSil
+    borcEkle, borcDuzenle, borcOde, borcSil,
+
+    // Cari Props
+    cariBaslik, setCariBaslik,
+    cariTutar, setCariTutar,
+    cariHesapId, setCariHesapId,
+    cariKategori, setCariKategori,
+    cariTarih, setCariTarih,
+    cariNot, setCariNot,
+    cariIadeTutar, setCariIadeTutar,
+    cariIadeHesapId, setCariIadeHesapId,
+    cariHarcamaEkle,
+    cariHarcamaDuzenle,
+    cariIadeAl
 
 }) => {
 
@@ -691,6 +704,83 @@ const ModalManager = ({
                     {(hesaplar || []).map(h => <option key={h.id} value={h.id}>{h.hesapAdi} ({formatPara(h.guncelBakiye)})</option>)}
                 </select>
                 <button type="submit" style={{ width: '100%', background: '#805ad5', color: 'white', padding: '14px', borderRadius: '12px', border: 'none', fontWeight: 'bold', fontSize: '16px', cursor: 'pointer' }}>ÖDEMEYİ YAP</button>
+            </form>
+        );
+    }
+
+    else if (aktifModal === 'cari_harcama_ekle') {
+        title = "Şirket Harcaması";
+        icon = "🧾";
+        content = (
+            <form onSubmit={(e) => cariHarcamaEkle(e, close)}>
+                <input placeholder="Açıklama (Örn: Otobüs bileti, Type-C kablo)" value={cariBaslik || ''} onChange={e => setCariBaslik(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} required />
+                <input type="number" step="0.01" placeholder="Tutar (₺)" value={cariTutar || ''} onChange={e => setCariTutar(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} required />
+                <select value={cariKategori || ''} onChange={e => setCariKategori(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }}>
+                    <option value="Şirket Harcaması">Şirket Harcaması</option>
+                    <option value="Yol / Bilet İadesi">Yol / Bilet İadesi</option>
+                    <option value="Yemek / Temsil">Yemek / Temsil</option>
+                    <option value="Ofis / Malzeme">Ofis / Malzeme</option>
+                    <option value="Diğer Cari">Diğer Cari</option>
+                </select>
+                <select value={cariHesapId || ''} onChange={e => setCariHesapId(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} required>
+                    <option value="">Hangi hesaptan/karttan ödedin?</option>
+                    {(hesaplar || []).map(h => <option key={h.id} value={h.id}>{h.hesapAdi} ({formatPara(h.guncelBakiye)})</option>)}
+                </select>
+                <input type="date" value={cariTarih || ''} onChange={e => setCariTarih(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} />
+                <input placeholder="Not (fiş verildi, elden alınacak vb.)" value={cariNot || ''} onChange={e => setCariNot(e.target.value)} style={{ ...inputStyle, marginBottom: '20px' }} />
+                <div style={{ marginBottom: '20px', padding: '12px', borderRadius: '10px', background: '#fff7ed', color: '#9a3412', fontSize: '12px' }}>
+                    Bu kayıt hesap bakiyeni düşürür, ama kişisel gider grafiklerine dahil edilmez.
+                </div>
+                <button type="submit" style={{ width: '100%', background: '#dd6b20', color: 'white', padding: '14px', borderRadius: '12px', border: 'none', fontWeight: 'bold', fontSize: '16px', cursor: 'pointer' }}>CARİ ALACAK KAYDET</button>
+            </form>
+        );
+    }
+
+    else if (aktifModal === 'duzenle_cari') {
+        title = "Cari Kaydı Düzenle";
+        icon = "✏️";
+        content = (
+            <form onSubmit={(e) => cariHarcamaDuzenle(e, seciliVeri, close)}>
+                <input placeholder="Açıklama" value={cariBaslik || ''} onChange={e => setCariBaslik(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} required />
+                <input type="number" step="0.01" placeholder="Tutar (₺)" value={cariTutar || ''} onChange={e => setCariTutar(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} required />
+                <select value={cariKategori || ''} onChange={e => setCariKategori(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }}>
+                    <option value="Şirket Harcaması">Şirket Harcaması</option>
+                    <option value="Yol / Bilet İadesi">Yol / Bilet İadesi</option>
+                    <option value="Yemek / Temsil">Yemek / Temsil</option>
+                    <option value="Ofis / Malzeme">Ofis / Malzeme</option>
+                    <option value="Diğer Cari">Diğer Cari</option>
+                </select>
+                <select value={cariHesapId || ''} onChange={e => setCariHesapId(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} required>
+                    <option value="">Hangi hesaptan/karttan ödedin?</option>
+                    {(hesaplar || []).map(h => <option key={h.id} value={h.id}>{h.hesapAdi} ({formatPara(h.guncelBakiye)})</option>)}
+                </select>
+                <input type="date" value={cariTarih || ''} onChange={e => setCariTarih(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} />
+                <input placeholder="Not" value={cariNot || ''} onChange={e => setCariNot(e.target.value)} style={{ ...inputStyle, marginBottom: '20px' }} />
+                <button type="submit" style={{ width: '100%', background: '#3182ce', color: 'white', padding: '14px', borderRadius: '12px', border: 'none', fontWeight: 'bold', fontSize: '16px', cursor: 'pointer' }}>GÜNCELLE</button>
+            </form>
+        );
+    }
+
+    else if (aktifModal === 'cari_iade_al') {
+        title = "Cari İade Al";
+        icon = "💵";
+        const kalan = Math.max(0, (parseFloat(seciliVeri?.tutar) || 0) - (parseFloat(seciliVeri?.iadeAlinan) || 0));
+        content = (
+            <form onSubmit={async (e) => {
+                e.preventDefault();
+                const success = await cariIadeAl(seciliVeri, cariIadeTutar, cariIadeHesapId);
+                if (success) close();
+            }}>
+                <div style={{ marginBottom: '20px', padding: '15px', background: '#fff7ed', borderRadius: '12px', color: '#9a3412' }}>
+                    <p style={{ margin: 0, fontWeight: 'bold', fontSize: '16px' }}>{seciliVeri?.baslik}</p>
+                    <p style={{ margin: '8px 0 0 0', fontSize: '13px' }}>Bekleyen İade: <b>{formatPara(kalan)}</b></p>
+                </div>
+                <input type="number" step="0.01" autoFocus placeholder="Alınan iade tutarı" value={cariIadeTutar || ''} onChange={e => setCariIadeTutar(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} required />
+                <select value={cariIadeHesapId || ''} onChange={e => setCariIadeHesapId(e.target.value)} style={{ ...inputStyle, marginBottom: '20px' }} required>
+                    <option value="">İade hangi hesaba girdi?</option>
+                    {(hesaplar || []).map(h => <option key={h.id} value={h.id}>{h.hesapAdi} ({formatPara(h.guncelBakiye)})</option>)}
+                </select>
+                <button type="submit" style={{ width: '100%', background: '#48bb78', color: 'white', padding: '14px', borderRadius: '12px', border: 'none', fontWeight: 'bold', fontSize: '16px', cursor: 'pointer' }}>İADEYİ KAYDET</button>
             </form>
         );
     }

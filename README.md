@@ -37,7 +37,11 @@ This project is a React web application designed to track personal income, expen
     VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
     VITE_FIREBASE_APP_ID=your_app_id
     VITE_FIREBASE_MEASUREMENT_ID=your_measurement_id
+    VITE_FINNHUB_API_KEY=your_finnhub_api_key
+    VITE_CORS_PROXY_URL=https://corsproxy.io/?
     ```
+
+    `VITE_FINNHUB_API_KEY` ABD hisse fiyatları için kullanılır. `VITE_CORS_PROXY_URL` ise Yahoo Finance üzerinden BIST/fon fiyatı alınırken tarayıcı CORS engellerini aşmak için opsiyoneldir.
 
 4.  Uygulamayı çalıştırın / Run the application:
     ```bash
@@ -49,6 +53,9 @@ This project is a React web application designed to track personal income, expen
 *   React
 *   Vite
 *   Firebase (Auth, Firestore)
-*   Tailwind CSS
 *   Recharts (Grafikler/Charts)
 *   XLSX (Excel İşlemleri/Excel Operations)
+
+## Güvenlik Notu / Security Note
+
+Firestore kurallarında kullanıcı kimliği (`uid`) ile alan kodu (`alanKodu`) ilişkisinin doğrulandığından emin olun. Alan kodu istemci tarafında saklandığı için veri erişimi yalnızca istemci filtrelerine bırakılmamalıdır.

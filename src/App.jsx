@@ -134,6 +134,8 @@ function App() {
         if (tip === 'tahsilat_ekle') investmentActions.setTahsilatTutar(veri.satisFiyati - veri.tahsilEdilen);
         if (tip === 'duzenle_borc') budgetActions.fillBorcForm(veri);
         if (tip === 'borc_tanimla') budgetActions.resetBorcForm();
+        if (tip === 'duzenle_cari') budgetActions.fillCariForm(veri);
+        if (tip === 'cari_iade_al') budgetActions.fillCariIadeForm(veri);
     }
 
     // Settings Updaters
@@ -476,6 +478,17 @@ function App() {
                 borcDuzenle={budgetActions.borcDuzenle}
                 borcOde={budgetActions.borcOde}
                 borcSil={budgetActions.borcSil}
+                cariBaslik={budgetActions.cariBaslik} setCariBaslik={budgetActions.setCariBaslik}
+                cariTutar={budgetActions.cariTutar} setCariTutar={budgetActions.setCariTutar}
+                cariHesapId={budgetActions.cariHesapId} setCariHesapId={budgetActions.setCariHesapId}
+                cariKategori={budgetActions.cariKategori} setCariKategori={budgetActions.setCariKategori}
+                cariTarih={budgetActions.cariTarih} setCariTarih={budgetActions.setCariTarih}
+                cariNot={budgetActions.cariNot} setCariNot={budgetActions.setCariNot}
+                cariIadeTutar={budgetActions.cariIadeTutar} setCariIadeTutar={budgetActions.setCariIadeTutar}
+                cariIadeHesapId={budgetActions.cariIadeHesapId} setCariIadeHesapId={budgetActions.setCariIadeHesapId}
+                cariHarcamaEkle={budgetActions.cariHarcamaEkle}
+                cariHarcamaDuzenle={budgetActions.cariHarcamaDuzenle}
+                cariIadeAl={budgetActions.cariIadeAl}
                 // NEW PROPS FOR MOBILE TRANSACTION ADD MODAL
                 islemEkle={budgetActions.islemEkle}
             />
@@ -600,9 +613,11 @@ function App() {
 
                     borclar={data.borclar}
                     toplamKalanBorc={calculations.toplamKalanBorc}
+                    cariIslemler={data.cariIslemler}
                     borcOde={budgetActions.borcOde}
                     borcDuzenle={budgetActions.borcDuzenle}
                     borcOrderGuncelle={budgetActions.borcOrderGuncelle}
+                    cariSil={budgetActions.cariSil}
 
                     excelIndir={() => budgetActions.excelIndir(data.islemler)}
                     excelYukle={budgetActions.excelYukle}

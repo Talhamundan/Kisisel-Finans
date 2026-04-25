@@ -4,7 +4,6 @@ import { db } from '../firebase';
 import { toast } from 'react-toastify';
 import Swal from 'sweetalert2';
 import { formatCurrencyPlain } from '../utils/helpers';
-import * as XLSX from 'xlsx';
 
 export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tanimliFaturalar) => {
     // --- FORM STATES ---
@@ -59,6 +58,16 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
     const [borcKalanTutar, setBorcKalanTutar] = useState("");
     const [borcTarih, setBorcTarih] = useState("");
     const [borcKategori, setBorcKategori] = useState(kategoriListesi && kategoriListesi[0] ? kategoriListesi[0] : "");
+
+    // Cari / şirket alacakları
+    const [cariBaslik, setCariBaslik] = useState("");
+    const [cariTutar, setCariTutar] = useState("");
+    const [cariHesapId, setCariHesapId] = useState("");
+    const [cariKategori, setCariKategori] = useState("Şirket Harcaması");
+    const [cariTarih, setCariTarih] = useState("");
+    const [cariNot, setCariNot] = useState("");
+    const [cariIadeTutar, setCariIadeTutar] = useState("");
+    const [cariIadeHesapId, setCariIadeHesapId] = useState("");
 
     // Fatura Tanım / Giriş
     const [tanimBaslik, setTanimBaslik] = useState("");
@@ -155,7 +164,8 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
 
             const tarih = (manualData && manualData.tarih) ? new Date(manualData.tarih) : (islemTarihi ? new Date(islemTarihi) : new Date());
 
-            await addDoc(collection(db, "nakit_islemleri"), {
+            const batch = writeBatch(db);
+            batch.set(doc(collection(db, "nakit_islemleri")), {
                 uid: user.uid,
                 alanKodu,
                 hesapId: hedefHesapId,
@@ -166,9 +176,10 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
                 tarih
             });
 
-            await updateDoc(doc(db, "hesaplar", hedefHesapId), {
+            batch.update(doc(db, "hesaplar", hedefHesapId), {
                 guncelBakiye: increment(hedefTipi === 'gelir' ? tutar : -tutar)
             });
+            await batch.commit();
 
             if (!manualData) {
                 setIslemTutar(""); setIslemAciklama(""); setIslemTarihi("");
@@ -365,8 +376,10 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
             const h = hesaplar.find(h => h.id === transferHedefId);
             const tarih = transferTarihi ? new Date(transferTarihi) : new Date();
 
+            const batch = writeBatch(db);
+
             // 1. Transfer Logic (Money Moved)
-            await addDoc(collection(db, "nakit_islemleri"), {
+            batch.set(doc(collection(db, "nakit_islemleri")), {
                 uid: user.uid, alanKodu, islemTipi: "transfer", kategori: "Transfer",
                 tutar: tutar, aciklama: `${k?.hesapAdi} ➝ ${h?.hesapAdi}` + (ucret > 0 ? ` (+${formatCurrencyPlain(ucret)} Komisyon)` : ""),
                 tarih: tarih, kaynakId: transferKaynakId, hedefId: transferHedefId
@@ -374,7 +387,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
 
             // 2. Fee Logic (Extra Expense)
             if (ucret > 0) {
-                await addDoc(collection(db, "nakit_islemleri"), {
+                batch.set(doc(collection(db, "nakit_islemleri")), {
                     uid: user.uid,
                     alanKodu,
                     hesapId: transferKaynakId, // Fee deducted from Source
@@ -388,9 +401,10 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
 
             // 3. Update Balances
             // Source: Deduct Tutar AND Fee
-            await updateDoc(doc(db, "hesaplar", transferKaynakId), { guncelBakiye: increment(-(tutar + ucret)) });
+            batch.update(doc(db, "hesaplar", transferKaynakId), { guncelBakiye: increment(-(tutar + ucret)) });
             // Target: Add Tutar only
-            await updateDoc(doc(db, "hesaplar", transferHedefId), { guncelBakiye: increment(tutar) });
+            batch.update(doc(db, "hesaplar", transferHedefId), { guncelBakiye: increment(tutar) });
+            await batch.commit();
 
             toast.success("Transfer (ve varsa ücret) işlendi!");
             setTransferTutar(""); setTransferUcreti(""); setTransferKaynakId(""); setTransferHedefId(""); setTransferTarihi("");
@@ -418,13 +432,15 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
             const kart = hesaplar.find(h => h.id === kkOdemeKartId);
             const kaynak = hesaplar.find(h => h.id === kkOdemeKaynakId);
 
-            await addDoc(collection(db, "nakit_islemleri"), {
+            const batch = writeBatch(db);
+            batch.set(doc(collection(db, "nakit_islemleri")), {
                 uid: user.uid, alanKodu, islemTipi: "transfer", kategori: "Kredi Kartı Ödemesi",
                 tutar: tutar, aciklama: `${kaynak.hesapAdi} ➝ ${kart.hesapAdi} Borç Ödeme`,
                 tarih: new Date(), kaynakId: kkOdemeKaynakId, hedefId: kkOdemeKartId
             });
-            await updateDoc(doc(db, "hesaplar", kkOdemeKaynakId), { guncelBakiye: increment(-tutar) });
-            await updateDoc(doc(db, "hesaplar", kkOdemeKartId), { guncelBakiye: increment(tutar) });
+            batch.update(doc(db, "hesaplar", kkOdemeKaynakId), { guncelBakiye: increment(-tutar) });
+            batch.update(doc(db, "hesaplar", kkOdemeKartId), { guncelBakiye: increment(tutar) });
+            await batch.commit();
 
             toast.success("Kredi kartı ödemesi yapıldı!");
             setKkOdemeTutar(""); setKkOdemeKaynakId(""); setKkOdemeKartId("");
@@ -471,19 +487,27 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
     const taksitOde = async (t) => {
         const result = await Swal.fire({ title: 'Taksit İşlensin mi?', html: `<b>${t.baslik}</b> için bu ayın taksiti işlenecek.<br/><br/><span style="font-size:1.2em; color:#4f46e5; font-weight:bold">${formatCurrencyPlain(t.aylikTutar)}</span>`, icon: 'question', showCancelButton: true, confirmButtonText: 'Evet, İşle', cancelButtonText: 'İptal' });
         if (!result.isConfirmed) return;
-        await addDoc(collection(db, "nakit_islemleri"), { uid: user.uid, alanKodu, hesapId: t.hesapId, islemTipi: "gider", kategori: t.kategori || "Taksit", tutar: t.aylikTutar, aciklama: `${t.baslik} (${t.odenmisTaksit + 1}/${t.taksitSayisi})`, tarih: new Date(), taksitId: t.id });
-        await updateDoc(doc(db, "hesaplar", t.hesapId), { guncelBakiye: increment(-t.aylikTutar) });
         const yeniSayac = t.odenmisTaksit + 1;
+        const commitPayment = async (shouldDelete = false) => {
+            const batch = writeBatch(db);
+            batch.set(doc(collection(db, "nakit_islemleri")), { uid: user.uid, alanKodu, hesapId: t.hesapId, islemTipi: "gider", kategori: t.kategori || "Taksit", tutar: t.aylikTutar, aciklama: `${t.baslik} (${yeniSayac}/${t.taksitSayisi})`, tarih: new Date(), taksitId: t.id });
+            batch.update(doc(db, "hesaplar", t.hesapId), { guncelBakiye: increment(-t.aylikTutar) });
+            if (shouldDelete) batch.delete(doc(db, "taksitler", t.id));
+            else batch.update(doc(db, "taksitler", t.id), { odenmisTaksit: yeniSayac });
+            await batch.commit();
+        };
+
         if (yeniSayac >= t.taksitSayisi) {
-            Swal.fire({
+            const finishResult = await Swal.fire({
                 title: 'Taksit Bitti! 🎉',
                 text: `${t.baslik} taksitleri (${t.taksitSayisi} ay) bitti. Kaldırılsın mı?`,
                 icon: 'success',
                 showCancelButton: true,
                 confirmButtonText: 'Kaldır',
                 cancelButtonText: 'Listede Tut'
-            }).then(async (res) => { if (res.isConfirmed) await deleteDoc(doc(db, "taksitler", t.id)); else await updateDoc(doc(db, "taksitler", t.id), { odenmisTaksit: yeniSayac }); });
-        } else { await updateDoc(doc(db, "taksitler", t.id), { odenmisTaksit: yeniSayac }); }
+            });
+            await commitPayment(finishResult.isConfirmed);
+        } else { await commitPayment(); }
         toast.success("Taksit işlendi.");
     }
     const taksitDuzenle = async (e, id) => { e.preventDefault(); const toplam = parseFloat(taksitToplamTutar); const sayi = parseInt(taksitSayisi); const aylik = toplam / sayi; const tarih = taksitAlisTarihi ? new Date(taksitAlisTarihi) : new Date(); await updateDoc(doc(db, "taksitler", id), { baslik: taksitBaslik, toplamTutar: toplam, taksitSayisi: sayi, aylikTutar: aylik, hesapId: taksitHesapId, kategori: taksitKategori, alisTarihi: tarih }); toast.success("Taksit güncellendi."); return true; }
@@ -512,7 +536,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
             return false;
         }
     }
-    const abonelikOde = async (abonelik) => { const result = await Swal.fire({ title: 'Ödeme Onayı', html: `${abonelik.ad} (<b>${formatCurrencyPlain(abonelik.tutar)}</b>) ödensin mi?`, icon: 'question', showCancelButton: true, confirmButtonText: 'Evet, Öde', cancelButtonText: 'İptal' }); if (!result.isConfirmed) return; await addDoc(collection(db, "nakit_islemleri"), { uid: user.uid, alanKodu, hesapId: abonelik.hesapId, islemTipi: "gider", kategori: abonelik.kategori || "Fatura", tutar: abonelik.tutar, aciklama: abonelik.ad + " (Otomatik)", tarih: new Date() }); await updateDoc(doc(db, "hesaplar", abonelik.hesapId), { guncelBakiye: increment(-abonelik.tutar) }); toast.success("Ödeme işlendi."); }
+    const abonelikOde = async (abonelik) => { const result = await Swal.fire({ title: 'Ödeme Onayı', html: `${abonelik.ad} (<b>${formatCurrencyPlain(abonelik.tutar)}</b>) ödensin mi?`, icon: 'question', showCancelButton: true, confirmButtonText: 'Evet, Öde', cancelButtonText: 'İptal' }); if (!result.isConfirmed) return; const batch = writeBatch(db); batch.set(doc(collection(db, "nakit_islemleri")), { uid: user.uid, alanKodu, hesapId: abonelik.hesapId, islemTipi: "gider", kategori: abonelik.kategori || "Fatura", tutar: abonelik.tutar, aciklama: abonelik.ad + " (Otomatik)", tarih: new Date() }); batch.update(doc(db, "hesaplar", abonelik.hesapId), { guncelBakiye: increment(-abonelik.tutar) }); await batch.commit(); toast.success("Ödeme işlendi."); }
     const abonelikDuzenle = async (e, id) => { e.preventDefault(); await updateDoc(doc(db, "abonelikler", id), { ad: aboAd, tutar: parseFloat(aboTutar), gun: aboGun, hesapId: aboHesapId, kategori: aboKategori }); toast.success("Sabit gider güncellendi."); return true; }
 
     // --- MAAŞ ---
@@ -538,7 +562,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
             return false;
         }
     }
-    const maasYatir = async (maas) => { const result = await Swal.fire({ title: 'Maaş Yatırılsın mı?', html: `💰 <b>${maas.ad}</b> tutarı (${formatCurrencyPlain(maas.tutar)}) hesaba işlensin mi?`, icon: 'question', showCancelButton: true, confirmButtonText: 'Evet, Yatır', confirmButtonColor: 'green' }); if (!result.isConfirmed) return; await addDoc(collection(db, "nakit_islemleri"), { uid: user.uid, alanKodu, hesapId: maas.hesapId, islemTipi: "gelir", kategori: "Maaş/Gelir", tutar: maas.tutar, aciklama: `${maas.ad} (Otomatik)`, tarih: new Date() }); await updateDoc(doc(db, "hesaplar", maas.hesapId), { guncelBakiye: increment(maas.tutar) }); toast.success("Gelir hesaba işlendi!"); }
+    const maasYatir = async (maas) => { const result = await Swal.fire({ title: 'Maaş Yatırılsın mı?', html: `💰 <b>${maas.ad}</b> tutarı (${formatCurrencyPlain(maas.tutar)}) hesaba işlensin mi?`, icon: 'question', showCancelButton: true, confirmButtonText: 'Evet, Yatır', confirmButtonColor: 'green' }); if (!result.isConfirmed) return; const batch = writeBatch(db); batch.set(doc(collection(db, "nakit_islemleri")), { uid: user.uid, alanKodu, hesapId: maas.hesapId, islemTipi: "gelir", kategori: "Maaş/Gelir", tutar: maas.tutar, aciklama: `${maas.ad} (Otomatik)`, tarih: new Date() }); batch.update(doc(db, "hesaplar", maas.hesapId), { guncelBakiye: increment(maas.tutar) }); await batch.commit(); toast.success("Gelir hesaba işlendi!"); }
     const maasDuzenle = async (e, id) => { e.preventDefault(); await updateDoc(doc(db, "maaslar", id), { ad: maasAd, tutar: parseFloat(maasTutar), gun: maasGun, hesapId: maasHesapId }); toast.success("Gelir kalemi güncellendi."); return true; }
 
     // --- BORÇ ---
@@ -627,8 +651,10 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
                 return { success: false };
             }
 
+            const batch = writeBatch(db);
+
             // 1. İşlemi Kaydet (Gider)
-            await addDoc(collection(db, "nakit_islemleri"), {
+            batch.set(doc(collection(db, "nakit_islemleri")), {
                 uid: user.uid, alanKodu,
                 hesapId: secilenHesapId,
                 islemTipi: "gider", kategori: borc.kategori || "Borç Ödemesi",
@@ -638,15 +664,16 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
             });
 
             // 2. Bakiyeden Düş
-            await updateDoc(doc(db, "hesaplar", secilenHesapId), { guncelBakiye: increment(-odeme) });
+            batch.update(doc(db, "hesaplar", secilenHesapId), { guncelBakiye: increment(-odeme) });
 
             // 3. Borcun Kalan Tutarını Düş
             const yeniKalan = mevcutKalan - odeme;
             if (yeniKalan <= 0) {
-                await updateDoc(doc(db, "borclar", borc.id), { kalanTutar: 0 });
+                batch.update(doc(db, "borclar", borc.id), { kalanTutar: 0 });
             } else {
-                await updateDoc(doc(db, "borclar", borc.id), { kalanTutar: yeniKalan });
+                batch.update(doc(db, "borclar", borc.id), { kalanTutar: yeniKalan });
             }
+            await batch.commit();
 
             toast.success("Ödeme işlendi.");
             return {
@@ -674,6 +701,236 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
             return false;
         }
     }
+
+    // --- CARİ / ŞİRKET ALACAKLARI ---
+    const cariHarcamaEkle = async (e, close) => {
+        if (e) e.preventDefault();
+        try {
+            if (!cariBaslik || !cariTutar || !cariHesapId) {
+                toast.error("Başlık, tutar ve ödeme hesabı gerekli.");
+                return false;
+            }
+
+            const tutar = parseFloat(cariTutar);
+            if (isNaN(tutar) || tutar <= 0) {
+                toast.error("Geçerli bir tutar girin.");
+                return false;
+            }
+
+            const tarih = cariTarih ? new Date(cariTarih) : new Date();
+            const cariRef = doc(collection(db, "cari_islemleri"));
+            const batch = writeBatch(db);
+
+            batch.set(cariRef, {
+                uid: user.uid,
+                alanKodu,
+                baslik: cariBaslik,
+                kategori: cariKategori || "Şirket Harcaması",
+                tutar,
+                iadeAlinan: 0,
+                hesapId: cariHesapId,
+                not: cariNot || "",
+                durum: "bekliyor",
+                tarih,
+                olusturmaTarihi: new Date()
+            });
+
+            batch.set(doc(collection(db, "nakit_islemleri")), {
+                uid: user.uid,
+                alanKodu,
+                hesapId: cariHesapId,
+                islemTipi: "cari_harcama",
+                kategori: "Cari Alacak",
+                tutar,
+                aciklama: `${cariBaslik} (şirket adına)`,
+                cariId: cariRef.id,
+                tarih
+            });
+
+            batch.update(doc(db, "hesaplar", cariHesapId), { guncelBakiye: increment(-tutar) });
+            await batch.commit();
+
+            setCariBaslik(""); setCariTutar(""); setCariHesapId(""); setCariKategori("Şirket Harcaması"); setCariTarih(""); setCariNot("");
+            toast.success("Cari alacak kaydedildi.");
+            if (close) close();
+            return true;
+        } catch (err) {
+            console.error(err);
+            toast.error("Cari kayıt oluşturulamadı.");
+            return false;
+        }
+    };
+
+    const cariIadeAl = async (cari, odemeTutar, hesapId) => {
+        try {
+            const odeme = parseFloat(odemeTutar);
+            const toplam = parseFloat(cari?.tutar) || 0;
+            const alinan = parseFloat(cari?.iadeAlinan) || 0;
+            const kalan = Math.max(0, toplam - alinan);
+
+            if (isNaN(odeme) || odeme <= 0) {
+                toast.error("Geçerli bir iade tutarı girin.");
+                return false;
+            }
+            if (!hesapId) {
+                toast.error("İadenin girdiği hesabı seçin.");
+                return false;
+            }
+
+            const yeniAlinan = Math.min(toplam, alinan + odeme);
+            const batch = writeBatch(db);
+            batch.update(doc(db, "cari_islemleri", cari.id), {
+                iadeAlinan: yeniAlinan,
+                durum: yeniAlinan >= toplam ? "odendi" : "kismi",
+                sonIadeTarihi: new Date()
+            });
+            batch.set(doc(collection(db, "nakit_islemleri")), {
+                uid: user.uid,
+                alanKodu,
+                hesapId,
+                islemTipi: "cari_iade",
+                kategori: "Cari İade",
+                tutar: odeme,
+                aciklama: `${cari.baslik} iadesi`,
+                cariId: cari.id,
+                tarih: new Date()
+            });
+            batch.update(doc(db, "hesaplar", hesapId), { guncelBakiye: increment(odeme) });
+            await batch.commit();
+
+            if (odeme > kalan) {
+                toast.warning("İade kaydedildi; cari kalan tutardan fazla giriş toplam alacakla sınırlandı.");
+            } else {
+                toast.success("İade alındı.");
+            }
+            return true;
+        } catch (err) {
+            console.error(err);
+            toast.error("İade kaydedilemedi.");
+            return false;
+        }
+    };
+
+    const cariSil = async (cari) => {
+        if (!cari?.id) return false;
+        try {
+            const result = await Swal.fire({
+                title: 'Cari kayıt silinsin mi?',
+                text: 'Bağlı bakiye hareketleri de geri alınacak.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                confirmButtonText: 'Evet, Sil',
+                cancelButtonText: 'Vazgeç'
+            });
+            if (!result.isConfirmed) return false;
+
+            const q = query(collection(db, "nakit_islemleri"), where("cariId", "==", cari.id));
+            const snap = await getDocs(q);
+            const batch = writeBatch(db);
+
+            snap.docs.forEach(belge => {
+                const data = belge.data();
+                const tutar = parseFloat(data.tutar) || 0;
+                if (data.hesapId && tutar > 0) {
+                    const duzeltme = data.islemTipi === 'cari_harcama' ? tutar : -tutar;
+                    batch.update(doc(db, "hesaplar", data.hesapId), { guncelBakiye: increment(duzeltme) });
+                }
+                batch.delete(belge.ref);
+            });
+
+            batch.delete(doc(db, "cari_islemleri", cari.id));
+            await batch.commit();
+            toast.success("Cari kayıt silindi ve bakiyeler geri alındı.");
+            return true;
+        } catch (err) {
+            console.error(err);
+            toast.error("Cari kayıt silinemedi.");
+            return false;
+        }
+    };
+
+    const fillCariIadeForm = (v) => {
+        const kalan = (parseFloat(v?.tutar) || 0) - (parseFloat(v?.iadeAlinan) || 0);
+        setCariIadeTutar(kalan > 0 ? kalan.toFixed(2) : "");
+        setCariIadeHesapId("");
+    };
+
+    const fillCariForm = (v) => {
+        setCariBaslik(v.baslik || "");
+        setCariTutar(v.tutar || "");
+        setCariHesapId(v.hesapId || "");
+        setCariKategori(v.kategori || "Şirket Harcaması");
+        setCariNot(v.not || "");
+        if (v.tarih?.seconds) {
+            const d = new Date(v.tarih.seconds * 1000);
+            setCariTarih(d.toISOString().split('T')[0]);
+        } else {
+            setCariTarih(v.tarih || "");
+        }
+    };
+
+    const cariHarcamaDuzenle = async (e, cari, close) => {
+        if (e) e.preventDefault();
+        try {
+            if (!cari?.id || !cariBaslik || !cariTutar || !cariHesapId) {
+                toast.error("Başlık, tutar ve ödeme hesabı gerekli.");
+                return false;
+            }
+
+            const yeniTutar = parseFloat(cariTutar);
+            const eskiTutar = parseFloat(cari.tutar) || 0;
+            if (isNaN(yeniTutar) || yeniTutar <= 0) {
+                toast.error("Geçerli bir tutar girin.");
+                return false;
+            }
+
+            const eskiHesapId = cari.hesapId || "";
+            const yeniHesapId = cariHesapId;
+            const tarih = cariTarih ? new Date(cariTarih) : (cari.tarih || new Date());
+
+            const q = query(collection(db, "nakit_islemleri"), where("cariId", "==", cari.id), where("islemTipi", "==", "cari_harcama"));
+            const snap = await getDocs(q);
+            const batch = writeBatch(db);
+
+            if (eskiHesapId === yeniHesapId) {
+                const fark = yeniTutar - eskiTutar;
+                if (Math.abs(fark) > 0.0001) {
+                    batch.update(doc(db, "hesaplar", yeniHesapId), { guncelBakiye: increment(-fark) });
+                }
+            } else {
+                if (eskiHesapId) batch.update(doc(db, "hesaplar", eskiHesapId), { guncelBakiye: increment(eskiTutar) });
+                batch.update(doc(db, "hesaplar", yeniHesapId), { guncelBakiye: increment(-yeniTutar) });
+            }
+
+            batch.update(doc(db, "cari_islemleri", cari.id), {
+                baslik: cariBaslik,
+                kategori: cariKategori || "Şirket Harcaması",
+                tutar: yeniTutar,
+                hesapId: yeniHesapId,
+                not: cariNot || "",
+                tarih
+            });
+
+            snap.docs.forEach(belge => {
+                batch.update(belge.ref, {
+                    hesapId: yeniHesapId,
+                    tutar: yeniTutar,
+                    aciklama: `${cariBaslik} (şirket adına)`,
+                    tarih
+                });
+            });
+
+            await batch.commit();
+            toast.success("Cari kayıt güncellendi.");
+            if (close) close();
+            return true;
+        } catch (err) {
+            console.error(err);
+            toast.error("Cari kayıt güncellenemedi.");
+            return false;
+        }
+    };
 
     // --- FATURA ---
     // --- FATURA ---
@@ -718,15 +975,18 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
             const tanim = tanimliFaturalar.find(t => t.id === fatura.tanimId);
             const ad = tanim ? tanim.baslik : "Fatura";
 
+            const batch = writeBatch(db);
+
             // 1. İşlemi Kaydet (Gider)
-            await addDoc(collection(db, "nakit_islemleri"), { uid: user.uid, alanKodu, hesapId: hesapId, islemTipi: "gider", kategori: "Fatura", tutar: fatura.tutar, aciklama: `${ad} Ödeme (${fatura.aciklama || ''})`, tarih: new Date() });
+            batch.set(doc(collection(db, "nakit_islemleri")), { uid: user.uid, alanKodu, hesapId: hesapId, islemTipi: "gider", kategori: "Fatura", tutar: fatura.tutar, aciklama: `${ad} Ödeme (${fatura.aciklama || ''})`, tarih: new Date() });
 
             // 2. Bakiyeden Düş
-            await updateDoc(doc(db, "hesaplar", hesapId), { guncelBakiye: increment(-fatura.tutar) });
+            batch.update(doc(db, "hesaplar", hesapId), { guncelBakiye: increment(-fatura.tutar) });
 
             // 3. Bekleyen Listesinden Sil (Tek Seferlik Ödeme)
             // Kullanıcı her ay manuel girecek.
-            await deleteDoc(doc(db, "bekleyen_faturalar", fatura.id));
+            batch.delete(doc(db, "bekleyen_faturalar", fatura.id));
+            await batch.commit();
 
             toast.success("Fatura ödendi ve listeden kaldırıldı.");
 
@@ -756,7 +1016,8 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
         } catch (err) { console.error(err); return false; }
     }
 
-    const excelIndir = (islemler) => {
+    const excelIndir = async (islemler) => {
+        const XLSX = await import('xlsx');
         let veri = [];
         if (!islemler || islemler.length === 0) {
             // Boş Template
@@ -795,6 +1056,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
 
         const reader = new FileReader();
         reader.onload = async (evt) => {
+            const XLSX = await import('xlsx');
             const bstr = evt.target.result;
             const wb = XLSX.read(bstr, { type: 'binary' });
             const wsname = wb.SheetNames[0];
@@ -854,7 +1116,8 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
                 const tutarVal = parseFloat(row.Tutar);
 
                 try {
-                    await addDoc(collection(db, "nakit_islemleri"), {
+                    const batch = writeBatch(db);
+                    batch.set(doc(collection(db, "nakit_islemleri")), {
                         uid: user.uid,
                         alanKodu,
                         tarih: islemTarihi,
@@ -866,9 +1129,10 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
                     });
 
                     // Bakiyeyi güncelle
-                    await updateDoc(doc(db, "hesaplar", hedefHesap.id), {
+                    batch.update(doc(db, "hesaplar", hedefHesap.id), {
                         guncelBakiye: increment(-tutarVal)
                     });
+                    await batch.commit();
 
                     eklenenSayisi++;
                 } catch (error) {
@@ -965,6 +1229,8 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
         taksitBaslik, setTaksitBaslik, taksitToplamTutar, setTaksitToplamTutar, taksitSayisi, setTaksitSayisi, taksitHesapId, setTaksitHesapId, taksitKategori, setTaksitKategori, taksitAlisTarihi, setTaksitAlisTarihi,
         maasAd, setMaasAd, maasTutar, setMaasTutar, maasGun, setMaasGun, maasHesapId, setMaasHesapId,
         borcAd, setBorcAd, borcTutar, setBorcTutar, borcKalanTutar, setBorcKalanTutar, borcTarih, setBorcTarih, borcKategori, setBorcKategori,
+        cariBaslik, setCariBaslik, cariTutar, setCariTutar, cariHesapId, setCariHesapId, cariKategori, setCariKategori, cariTarih, setCariTarih, cariNot, setCariNot,
+        cariIadeTutar, setCariIadeTutar, cariIadeHesapId, setCariIadeHesapId,
         tanimBaslik, setTanimBaslik, tanimKurum, setTanimKurum, tanimAboneNo, setTanimAboneNo, secilenTanimId, setSecilenTanimId, faturaGirisTutar, setFaturaGirisTutar, faturaGirisTarih, setFaturaGirisTarih, faturaGirisAciklama, setFaturaGirisAciklama,
         kkOdemeKartId, setKkOdemeKartId, kkOdemeKaynakId, setKkOdemeKaynakId, kkOdemeTutar, setKkOdemeTutar,
         tasimaIslemiSuruyor, setTasimaIslemiSuruyor, yeniKodInput, setYeniKodInput,
@@ -977,10 +1243,11 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
         abonelikEkle, abonelikOde, abonelikDuzenle,
         maasEkle, maasYatir, maasDuzenle,
         borcEkle, borcDuzenle, borcOrderGuncelle, borcOde, borcSil,
+        cariHarcamaEkle, cariHarcamaDuzenle, cariIadeAl, cariSil,
         faturaTanimEkle, faturaGir, faturaOde, bekleyenFaturaDuzenle, faturaTanimDuzenle,
         excelIndir, excelYukle, verileriTasi,
 
         // Fillers
-        fillAccountForm, fillTransactionForm, fillSubscriptionForm, fillInstallmentForm, fillSalaryForm, fillBorcForm, resetBorcForm, fillBillForm, fillBillDefForm, fillCCForm
+        fillAccountForm, fillTransactionForm, fillSubscriptionForm, fillInstallmentForm, fillSalaryForm, fillBorcForm, resetBorcForm, fillCariForm, fillCariIadeForm, fillBillForm, fillBillDefForm, fillCCForm
     };
 };

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { collection, addDoc, doc, updateDoc, deleteDoc, increment, setDoc, getDoc } from 'firebase/firestore';
+import { collection, doc, updateDoc, deleteDoc, increment, setDoc, getDoc, writeBatch, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { toast } from 'react-toastify';
 
@@ -38,9 +38,10 @@ export const useInvestmentActions = (user, alanKodu) => {
 
             // Check Balance Logic could go here (optional but good)
 
-            await addDoc(collection(db, "portfoy"), { uid: user.uid, alanKodu, sembol: sembol.toUpperCase(), varlikTuru, adet: sAdet, alisFiyati: sFiyat, guncelFiyat: sFiyat, tarih: tarih });
-            await updateDoc(doc(db, "hesaplar", yatirimHesapId), { guncelBakiye: increment(-toplam) });
-            await addDoc(collection(db, "nakit_islemleri"), {
+            const batch = writeBatch(db);
+            batch.set(doc(collection(db, "portfoy")), { uid: user.uid, alanKodu, sembol: sembol.toUpperCase(), varlikTuru, adet: sAdet, alisFiyati: sFiyat, guncelFiyat: sFiyat, tarih: tarih });
+            batch.update(doc(db, "hesaplar", yatirimHesapId), { guncelBakiye: increment(-toplam) });
+            batch.set(doc(collection(db, "nakit_islemleri")), {
                 uid: user.uid,
                 alanKodu,
                 hesapId: yatirimHesapId,
@@ -53,6 +54,7 @@ export const useInvestmentActions = (user, alanKodu) => {
                 aciklama: `${sembol.toUpperCase()} Alış`,
                 tarih: tarih
             });
+            await batch.commit();
             toast.success(`${sembol.toUpperCase()} alındı!`);
             setSembol(""); setAdet(""); setAlisFiyati("");
             return true;
@@ -72,16 +74,17 @@ export const useInvestmentActions = (user, alanKodu) => {
         if (!secilenHesapId || !satisFiyati) return toast.error("Hesap ve Fiyat Girin");
         const toplam = parseFloat(satisFiyati) * seciliVeri.adet;
 
+        const batch = writeBatch(db);
+
         // Handle aggregated items (multiple IDs)
         if (seciliVeri.ids && Array.isArray(seciliVeri.ids)) {
-            const promises = seciliVeri.ids.map(id => deleteDoc(doc(db, "portfoy", id)));
-            await Promise.all(promises);
+            seciliVeri.ids.forEach(id => batch.delete(doc(db, "portfoy", id)));
         } else {
-            await deleteDoc(doc(db, "portfoy", seciliVeri.id));
+            batch.delete(doc(db, "portfoy", seciliVeri.id));
         }
 
-        await updateDoc(doc(db, "hesaplar", secilenHesapId), { guncelBakiye: increment(toplam) });
-        await addDoc(collection(db, "nakit_islemleri"), {
+        batch.update(doc(db, "hesaplar", secilenHesapId), { guncelBakiye: increment(toplam) });
+        batch.set(doc(collection(db, "nakit_islemleri")), {
             uid: user.uid,
             alanKodu,
             hesapId: secilenHesapId,
@@ -95,6 +98,7 @@ export const useInvestmentActions = (user, alanKodu) => {
             aciklama: `${seciliVeri.sembol} Satış`,
             tarih: new Date()
         });
+        await batch.commit();
         toast.success("Satış gerçekleşti!");
         return true;
     }
@@ -117,9 +121,10 @@ export const useInvestmentActions = (user, alanKodu) => {
             // Kullanıcı Satış Tarihi'ni kaldırmak istedi. Eğer Satış Fiyatı varsa, kapalı pozisyon olarak işlem yapılır.
             if (sSatisFiyat) {
                 const effectiveSatisDate = satisDate || alisDate; // Satış Tarihi yoksa Alış Tarihi varsayılan alınır
+                const batch = writeBatch(db);
 
                 // Geçmişe yönelik ALIŞ kaydı ekle
-                await addDoc(collection(db, "nakit_islemleri"), {
+                batch.set(doc(collection(db, "nakit_islemleri")), {
                     uid: user.uid,
                     alanKodu,
                     islemTipi: "yatirim_alis",
@@ -135,7 +140,7 @@ export const useInvestmentActions = (user, alanKodu) => {
                 });
 
                 // Geçmişe yönelik SATIŞ kaydı ekle
-                await addDoc(collection(db, "nakit_islemleri"), {
+                batch.set(doc(collection(db, "nakit_islemleri")), {
                     uid: user.uid,
                     alanKodu,
                     islemTipi: "yatirim_satis",
@@ -150,12 +155,14 @@ export const useInvestmentActions = (user, alanKodu) => {
                     isHistorical: true,
                     sembol: sembol.toUpperCase()
                 });
+                await batch.commit();
                 toast.success("Geçmiş işlem (Kapanmış) eklendi.");
             }
             // 2. AÇIK POZİSYON (Sadece Alış girilmiş)
             else {
+                const batch = writeBatch(db);
                 // Portföye Ekle (Aktif Varlık)
-                await addDoc(collection(db, "portfoy"), {
+                batch.set(doc(collection(db, "portfoy")), {
                     uid: user.uid,
                     alanKodu,
                     sembol: sembol.toUpperCase(),
@@ -168,7 +175,7 @@ export const useInvestmentActions = (user, alanKodu) => {
                 });
 
                 // Geçmişe yönelik ALIŞ kaydı ekle
-                await addDoc(collection(db, "nakit_islemleri"), {
+                batch.set(doc(collection(db, "nakit_islemleri")), {
                     uid: user.uid,
                     alanKodu,
                     islemTipi: "yatirim_alis",
@@ -182,6 +189,7 @@ export const useInvestmentActions = (user, alanKodu) => {
                     isHistorical: true,
                     sembol: sembol.toUpperCase()
                 });
+                await batch.commit();
                 toast.success("Geçmiş işlem (Açık Pozisyon) eklendi.");
             }
             return true;
@@ -445,7 +453,6 @@ export const useInvestmentActions = (user, alanKodu) => {
 
                 if (pData.tarih) {
                     try {
-                        const { query, where, getDocs } = await import('firebase/firestore'); // dynamic import or standard
                         const q = query(
                             collection(db, "nakit_islemleri"),
                             where("uid", "==", user.uid),
@@ -457,17 +464,19 @@ export const useInvestmentActions = (user, alanKodu) => {
                             // Match found!
                             const tDoc = qSnap.docs[0]; // Assume first match is the one (collision unlikely for single user ms)
                             const tData = tDoc.data();
+                            const batch = writeBatch(db);
 
                             // 1. Refund Balance
                             if (tData.hesapId && tData.tutar) {
-                                await updateDoc(doc(db, "hesaplar", tData.hesapId), {
+                                batch.update(doc(db, "hesaplar", tData.hesapId), {
                                     guncelBakiye: increment(tData.tutar) // Add back the money spent
                                 });
                                 console.log("Rollback: Bakiye iade edildi.", tData.tutar);
                             }
 
                             // 2. Delete Transaction
-                            await deleteDoc(tDoc.ref);
+                            batch.delete(tDoc.ref);
+                            await batch.commit();
                             refundSuccess = true;
                         }
                     } catch (e) {
@@ -507,9 +516,17 @@ export const useInvestmentActions = (user, alanKodu) => {
                 targetId = idOrIds[0];
                 // Delete others
                 const others = idOrIds.slice(1);
-                if (others.length > 0) {
-                    await Promise.all(others.map(id => deleteDoc(doc(db, "portfoy", id))));
-                }
+                const batch = writeBatch(db);
+                others.forEach(id => batch.delete(doc(db, "portfoy", id)));
+                batch.update(doc(db, "portfoy", targetId), {
+                    adet: parseFloat(yeniVeri.adet),
+                    alisFiyati: parseFloat(yeniVeri.alisFiyati),
+                    varlikTuru: yeniVeri.varlikTuru,
+                    guncelFiyat: parseFloat(yeniVeri.alisFiyati)
+                });
+                await batch.commit();
+                toast.success("Portföy güncellendi.");
+                return true;
             }
 
             // Update main doc
