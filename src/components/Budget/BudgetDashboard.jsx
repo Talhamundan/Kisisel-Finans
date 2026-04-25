@@ -292,7 +292,7 @@ const BudgetDashboard = ({
 
                     {/* TAKSİTLER */}
                     <div className="responsive-card" style={cardStyle}>
-                        <div className="card-title" style={{ marginBottom: '12px' }}>Taksitli Alışverişler</div>
+                        <div className="card-title" style={{ marginBottom: '12px' }}>Taksitler</div>
                         {taksitler.length === 0 ? <p style={{ fontSize: '13px', color: '#aaa' }}>Aktif taksit borcu yok.</p> :
                             <div style={{ marginBottom: '15px' }}>
                                 {(taksitler || []).map(t => {

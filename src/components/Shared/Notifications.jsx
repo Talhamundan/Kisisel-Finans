@@ -29,6 +29,7 @@ const Notifications = ({
                                 if (b.tip === 'taksit') taksitOde(b.data);
                                 if (b.tip === 'maas') maasYatir(b.data);
                                 if (b.tip === 'fatura') modalAc('fatura_ode', b.data);
+                                if (b.tip === 'borc_hatirlatma') modalAc('borc_ode', b.data);
                                 if (b.tip === 'bes_odeme') besOdemeYap();
                                 if (b.tip === 'alacak') modalAc('tahsilat_ekle', b.data);
                             }} style={{ background: (b.renk === 'green' || b.tip === 'alacak') ? '#48bb78' : '#c53030', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer', fontSize: '12px' }}>{b.tip === 'maas' ? 'Yatır' : b.tip === 'alacak' ? 'Ödeme Al' : 'Öde'}</button>}
