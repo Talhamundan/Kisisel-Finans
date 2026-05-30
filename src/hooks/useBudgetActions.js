@@ -163,18 +163,19 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
             }
 
             const tarih = (manualData && manualData.tarih) ? new Date(manualData.tarih) : (islemTarihi ? new Date(islemTarihi) : new Date());
-
-            const batch = writeBatch(db);
-            batch.set(doc(collection(db, "nakit_islemleri")), {
+            const yeniIslem = {
                 uid: user.uid,
                 alanKodu,
                 hesapId: hedefHesapId,
                 islemTipi: hedefTipi,
                 kategori: hedefKategori,
                 tutar,
-                aciklama: hedefAciklama || "", // Ensure not null
+                aciklama: hedefAciklama || "",
                 tarih
-            });
+            };
+
+            const batch = writeBatch(db);
+            batch.set(doc(collection(db, "nakit_islemleri")), yeniIslem);
 
             batch.update(doc(db, "hesaplar", hedefHesapId), {
                 guncelBakiye: increment(hedefTipi === 'gelir' ? tutar : -tutar)
@@ -1116,17 +1117,18 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
                 const tutarVal = parseFloat(row.Tutar);
 
                 try {
-                    const batch = writeBatch(db);
-                    batch.set(doc(collection(db, "nakit_islemleri")), {
+                    const yeniIslem = {
                         uid: user.uid,
                         alanKodu,
                         tarih: islemTarihi,
                         kategori: kategori,
                         aciklama: row['Açıklama'] || "Excel İçe Aktarım",
                         tutar: tutarVal,
-                        islemTipi: "gider", // Varsayılan Gider
+                        islemTipi: "gider",
                         hesapId: hedefHesap.id
-                    });
+                    };
+                    const batch = writeBatch(db);
+                    batch.set(doc(collection(db, "nakit_islemleri")), yeniIslem);
 
                     // Bakiyeyi güncelle
                     batch.update(doc(db, "hesaplar", hedefHesap.id), {

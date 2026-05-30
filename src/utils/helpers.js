@@ -49,6 +49,10 @@ export const ayIsmiGetir = (firebaseTarih) => {
     return date.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
 };
 
+export const sortTurkishText = (items = []) => {
+    return [...items].filter(Boolean).sort((a, b) => String(a).localeCompare(String(b), 'tr-TR', { sensitivity: 'base' }));
+};
+
 // --- STİL SABİTLERİ ---
 
 export const inputStyle = {
@@ -79,4 +83,3 @@ export const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#AF19FF', '#
 // RENK PALETLERİ
 export const COLORS_GENEL = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316', '#eab308']; // Indigo-Rose scale
 export const COLORS_PORTFOLIO = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4']; // Blue-Green-Amber scale
-

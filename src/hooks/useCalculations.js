@@ -3,11 +3,11 @@ import { ayIsmiGetir, toDateSafe } from '../utils/helpers';
 import { useNotifications } from './useNotifications';
 
 export const useCalculations = (
-    data, // { hesaplar, islemler, portfoy, abonelikler, taksitler, maaslar, bekleyenFaturalar, tanimliFaturalar, besVerisi, satislar, borclar, cariIslemler }
+    data, // { hesaplar, islemler, portfoy, abonelikler, taksitler, maaslar, bekleyenFaturalar, tanimliFaturalar, besVerisi, satislar, borclar }
     gizliMod,
     aylikLimit
 ) => {
-    const { hesaplar, islemler, portfoy, abonelikler, taksitler, maaslar, bekleyenFaturalar, tanimliFaturalar, besVerisi, satislar, borclar, cariIslemler = [] } = data;
+    const { hesaplar, islemler, portfoy, abonelikler, taksitler, maaslar, bekleyenFaturalar, tanimliFaturalar, besVerisi, satislar, borclar } = data;
 
     // --- FILTER STATES ---
     const [aktifAy, setAktifAy] = useState(new Date().toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' }));
@@ -30,7 +30,7 @@ export const useCalculations = (
             const besDegil = i.kategori !== "BES";
             const yatirimAlisDegil = i.islemTipi !== "yatirim_alis";
             const yatirimDegil = i.kategori !== "Yatırım";
-            const cariDegil = i.islemTipi !== "cari_harcama" && i.islemTipi !== "cari_iade";
+            const iadeDegil = i.islemTipi !== "cari_iade";
             const ayUyumu = aktifAy === "Tümü" ? true : ayIsmiGetir(i.tarih) === aktifAy;
             const aramaKucuk = aramaMetni.toLowerCase();
             const metinUyumu = !aramaMetni ? true : (
@@ -39,7 +39,7 @@ export const useCalculations = (
                 i.tutar.toString().includes(aramaMetni)
             );
             const kategoriUyumu = filtreKategori === "Tümü" ? true : i.kategori === filtreKategori;
-            return besDegil && yatirimAlisDegil && yatirimDegil && cariDegil && ayUyumu && metinUyumu && kategoriUyumu;
+            return besDegil && yatirimAlisDegil && yatirimDegil && iadeDegil && ayUyumu && metinUyumu && kategoriUyumu;
         });
     }, [islemler, aktifAy, aramaMetni, filtreKategori]);
 
@@ -157,8 +157,7 @@ export const useCalculations = (
     const toplamKalanTaksitBorcu = taksitler.reduce((acc, t) => acc + (t.toplamTutar - (t.aylikTutar * t.odenmisTaksit)), 0);
     const toplamSabitGider = abonelikler.reduce((acc, abo) => acc + abo.tutar, 0);
     const toplamNakitVarlik = hesaplar.reduce((acc, h) => acc + (parseFloat(h.guncelBakiye) || 0), 0);
-    const toplamCariAlacak = cariIslemler.reduce((acc, c) => acc + Math.max(0, (parseFloat(c.tutar) || 0) - (parseFloat(c.iadeAlinan) || 0)), 0);
-    const netVarlik = toplamNakitVarlik + portfoyGuncelDegeri + (besVerisi?.guncelTutar || 0) + toplamCariAlacak;
+    const netVarlik = toplamNakitVarlik + portfoyGuncelDegeri + (besVerisi?.guncelTutar || 0);
 
     // Helper for categorization
     const isAltinOrGumus = (p) => {
@@ -207,7 +206,7 @@ export const useCalculations = (
         genelToplamYatirimGucu, genelVarlikVerisi, toplamYatirimHesapNakiti,
         netVarlik, sadeceCuzdanNakiti, toplamKalanTaksitBorcu, toplamSabitGider,
         kartYatirimToplami, toplamDovizVarligi: displayDovizVarligi, toplamBesVarligi, kartNakitToplami, toplamBesYatirimi,
-        toplamKalanBorc, toplamCariAlacak,
+        toplamKalanBorc,
 
         // Others
         bildirimler,
