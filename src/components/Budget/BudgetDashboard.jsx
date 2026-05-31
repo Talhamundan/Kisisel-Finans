@@ -21,6 +21,7 @@ const BudgetDashboard = ({
     modalAc,
     normalSil,
     filtrelenmisIslemler,
+    tumIslemler,
     sadeceCuzdanNakiti,
     genelToplamYatirimGucu,
     netVarlik,
@@ -76,6 +77,7 @@ const BudgetDashboard = ({
 
     const [localLimit, setLocalLimit] = useState(aylikLimit);
     const [hoveredKategori, setHoveredKategori] = useState(null);
+    const [hareketHesabi, setHareketHesabi] = useState(null);
     useEffect(() => {
         setLocalLimit(aylikLimit);
     }, [aylikLimit]);
@@ -110,15 +112,112 @@ const BudgetDashboard = ({
         return `${tarihSadeceGunAyYil(baslangic)} - ${tarihSadeceGunAyYil(bitis)}`;
     };
 
+    const toplamAylikTaksitYuku = (taksitler || []).reduce((acc, t) => acc + (parseFloat(t.aylikTutar) || 0), 0);
+
+    const hesapHareketleri = hareketHesabi
+        ? (tumIslemler || []).filter(i => (
+            i.hesapId === hareketHesabi.id ||
+            i.kaynakId === hareketHesabi.id ||
+            i.hedefId === hareketHesabi.id
+        )).map(i => {
+            let etki = 0;
+            let tipEtiketi = i.islemTipi || "";
+            if (i.islemTipi === 'transfer') {
+                etki = i.kaynakId === hareketHesabi.id ? -(parseFloat(i.tutar) || 0) : (parseFloat(i.tutar) || 0);
+                tipEtiketi = i.kaynakId === hareketHesabi.id ? 'Transfer Çıkış' : 'Transfer Giriş';
+            } else if (i.islemTipi === 'gelir' || i.islemTipi === 'yatirim_satis' || i.islemTipi === 'cari_iade') {
+                etki = parseFloat(i.tutar) || 0;
+                tipEtiketi = i.islemTipi === 'gelir' ? 'Gelir' : tipEtiketi;
+            } else {
+                etki = -(parseFloat(i.tutar) || 0);
+                tipEtiketi = i.islemTipi === 'gider' ? 'Gider' : tipEtiketi;
+            }
+            return { ...i, hesapEtki: etki, tipEtiketi };
+        }).sort((a, b) => (toDateSafe(b.tarih)?.getTime() || 0) - (toDateSafe(a.tarih)?.getTime() || 0))
+        : [];
+
+    const hareketToplami = hesapHareketleri.reduce((sum, i) => sum + i.hesapEtki, 0);
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}> {/* Ana Container gap düzeltildi */}
+            {hareketHesabi && (
+                <div
+                    onClick={() => setHareketHesabi(null)}
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        zIndex: 1000,
+                        background: 'rgba(15, 23, 42, 0.38)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '20px'
+                    }}
+                >
+                    <div
+                        onClick={e => e.stopPropagation()}
+                        style={{
+                            width: 'min(920px, 96vw)',
+                            maxHeight: '82vh',
+                            overflow: 'hidden',
+                            background: '#ffffff',
+                            borderRadius: '16px',
+                            boxShadow: '0 25px 70px rgba(15, 23, 42, 0.28)',
+                            border: '1px solid #e2e8f0',
+                            display: 'flex',
+                            flexDirection: 'column'
+                        }}
+                    >
+                        <div style={{ padding: '18px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', gap: '14px', alignItems: 'center' }}>
+                            <div>
+                                <div style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>{hareketHesabi.hesapAdi}</div>
+                                <div style={{ fontSize: '12px', color: '#64748b', marginTop: '3px' }}>
+                                    {hesapHareketleri.length} hareket • Net etki: <b style={{ color: hareketToplami >= 0 ? '#16a34a' : '#dc2626' }}>{formatPara(hareketToplami)}</b>
+                                </div>
+                            </div>
+                            <button onClick={() => setHareketHesabi(null)} style={{ border: 'none', background: '#f1f5f9', color: '#0f172a', borderRadius: '999px', width: '34px', height: '34px', cursor: 'pointer', fontSize: '18px', fontWeight: 700 }}>×</button>
+                        </div>
+
+                        <div style={{ overflow: 'auto' }}>
+                            {hesapHareketleri.length === 0 ? (
+                                <div style={{ padding: '28px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>Bu hesap için hareket bulunamadı.</div>
+                            ) : (
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', color: '#334155', minWidth: '640px' }}>
+                                    <thead>
+                                        <tr style={{ textAlign: 'left', color: '#64748b', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                                            <th style={{ padding: '11px 14px' }}>Tarih</th>
+                                            <th style={{ padding: '11px 14px' }}>Tip</th>
+                                            <th style={{ padding: '11px 14px' }}>Kategori</th>
+                                            <th style={{ padding: '11px 14px' }}>Açıklama</th>
+                                            <th style={{ padding: '11px 14px', textAlign: 'right' }}>Etki</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {hesapHareketleri.map(i => (
+                                            <tr key={i.id} onClick={() => modalAc('duzenle_islem', i)} style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}>
+                                                <td style={{ padding: '11px 14px', whiteSpace: 'nowrap', color: '#64748b' }}>{tarihFormatla(i.tarih)}</td>
+                                                <td style={{ padding: '11px 14px', fontWeight: 700 }}>{i.tipEtiketi}</td>
+                                                <td style={{ padding: '11px 14px' }}>{i.kategori || '-'}</td>
+                                                <td style={{ padding: '11px 14px' }}>{i.aciklama || '-'}</td>
+                                                <td style={{ padding: '11px 14px', textAlign: 'right', fontWeight: 800, color: i.hesapEtki >= 0 ? '#16a34a' : '#dc2626', whiteSpace: 'nowrap' }}>
+                                                    {i.hesapEtki >= 0 ? '+' : ''}{formatPara(i.hesapEtki)}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* 1. ve 2. SATIR BİRLEŞİK GRID (Yedek.js ile birebir aynı yapı) */}
             <div className="responsive-grid-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '25px' }}>
 
                 {/* 1. SATIR: KARTLAR */}
                 <div className="responsive-card" style={{ ...cardStyle, borderLeft: '5px solid #48bb78' }}>
-                    <div className="card-title-sm responsive-title">TOPLAM GELİR ({aktifAy})</div>
+                    <div className="card-title-sm responsive-title">GELİR ({aktifAy})</div>
                     <div className="kpi-amount responsive-amount">{formatPara(toplamGelir)}</div>
                 </div>
                 <div className="responsive-card" style={{ ...cardStyle, borderLeft: '5px solid #F59E0B' }}>
@@ -311,6 +410,7 @@ const BudgetDashboard = ({
                                         <div>
                                             <b>{h.hesapAdi}</b> <small style={{ color: '#aaa' }}>({h.hesapTipi})</small>
                                             {h.hesapTipi === 'yatirim' && <span style={{ fontSize: '10px', marginLeft: '5px' }}>📈</span>}
+                                            <span onClick={() => setHareketHesabi(h)} title="Hesap hareketleri" style={{ fontSize: '11px', cursor: 'pointer', marginLeft: '5px', color: '#475569' }}>📜</span>
                                             <span onClick={() => modalAc('duzenle_hesap', h)} style={{ fontSize: '10px', cursor: 'pointer', marginLeft: '5px', color: 'blue' }}>✏️</span>
                                             {aktifAy !== "Tümü" && <div style={{ fontSize: '10px', color: '#aaa' }}>Bu ay: {aylikFark > 0 ? '+' : ''}{formatPara(aylikFark)}</div>}
                                         </div>
@@ -363,7 +463,8 @@ const BudgetDashboard = ({
                                 })}
                             </div>
                         }
-                        <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                        <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', fontSize: '13px' }}>
+                            <span style={{ color: '#718096' }}>Aylık Yük: <b style={{ color: '#2d3748' }}>{formatPara(toplamAylikTaksitYuku)}</b></span>
                             <span style={{ color: '#718096' }}>Kalan Toplam Borç: <b style={{ color: '#e53e3e' }}>{formatPara(toplamKalanTaksitBorcu)}</b></span>
                         </div>
                     </div>

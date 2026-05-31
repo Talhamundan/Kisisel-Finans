@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { collection, doc, updateDoc, deleteDoc, increment, setDoc, getDoc, writeBatch, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { toast } from 'react-toastify';
+import { normalizeAssetType } from '../utils/helpers';
 
 export const useInvestmentActions = (user, alanKodu) => {
     // Form States
@@ -262,14 +263,15 @@ export const useInvestmentActions = (user, alanKodu) => {
             const promises = portfoy.map(async (p) => {
                 let yeniFiyat = null;
                 const rawSymbol = p.sembol?.toUpperCase().trim();
+                const assetType = normalizeAssetType(p.varlikTuru);
 
                 // A. DOVIZ
-                if (p.varlikTuru === 'doviz') {
+                if (assetType === 'doviz') {
                     if (rawSymbol === 'USD') yeniFiyat = usdTry;
                     else if (rawSymbol === 'EUR') yeniFiyat = eurTry;
                 }
                 // B. ALTIN
-                else if (p.varlikTuru === 'altin') {
+                else if (assetType === 'altin') {
                     yeniFiyat = gramAltin;
                 }
                 // C. HISSE / FON (HYBRID LOGIC)

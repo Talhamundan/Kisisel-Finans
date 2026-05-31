@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { ayIsmiGetir, toDateSafe } from '../utils/helpers';
+import { ayIsmiGetir, normalizeAssetType, toDateSafe } from '../utils/helpers';
 import { useNotifications } from './useNotifications';
 
 export const useCalculations = (
@@ -161,14 +161,14 @@ export const useCalculations = (
 
     // Helper for categorization
     const isAltinOrGumus = (p) => {
-        const t = p.varlikTuru?.toLowerCase() || "";
+        const t = normalizeAssetType(p.varlikTuru);
         const s = p.sembol?.toUpperCase() || "";
         return t === 'altin' || t === 'gümüş' || t === 'gumus' || s === 'GAUTRY' || s === 'GMSTR' || s === 'GOLD' || s.includes('GLD') || s === 'ALTIN' || s === 'GUMUS';
     };
 
-    const portfoyYatirimDegeri = portfoy.filter(p => !['doviz', 'bes'].includes(p.varlikTuru?.toLowerCase()) && !isAltinOrGumus(p)).reduce((acc, p) => acc + (p.adet * (p.guncelFiyat || p.alisFiyati)), 0);
-    const toplamDovizVarligi = portfoy.filter(p => p.varlikTuru?.toLowerCase() === 'doviz').reduce((acc, p) => acc + (p.adet * (p.guncelFiyat || p.alisFiyati)), 0);
-    const toplamBesVarligi = (besVerisi?.guncelTutar || 0) + portfoy.filter(p => p.varlikTuru?.toLowerCase() === 'bes').reduce((acc, p) => acc + (p.adet * (p.guncelFiyat || p.alisFiyati)), 0);
+    const portfoyYatirimDegeri = portfoy.filter(p => !['doviz', 'bes'].includes(normalizeAssetType(p.varlikTuru)) && !isAltinOrGumus(p)).reduce((acc, p) => acc + (p.adet * (p.guncelFiyat || p.alisFiyati)), 0);
+    const toplamDovizVarligi = portfoy.filter(p => normalizeAssetType(p.varlikTuru) === 'doviz').reduce((acc, p) => acc + (p.adet * (p.guncelFiyat || p.alisFiyati)), 0);
+    const toplamBesVarligi = (besVerisi?.guncelTutar || 0) + portfoy.filter(p => normalizeAssetType(p.varlikTuru) === 'bes').reduce((acc, p) => acc + (p.adet * (p.guncelFiyat || p.alisFiyati)), 0);
     const toplamAltinVarligi = portfoy.filter(p => isAltinOrGumus(p)).reduce((acc, p) => acc + (p.adet * (p.guncelFiyat || p.alisFiyati)), 0);
     const toplamYatirimHesapNakiti = hesaplar.filter(h => h.hesapTipi === 'yatirim').reduce((acc, h) => acc + (parseFloat(h.guncelBakiye) || 0), 0);
     const toplamBesYatirimi = islemler.filter(i => i.kategori === 'BES' && i.islemTipi === 'gider').reduce((acc, i) => acc + i.tutar, 0);

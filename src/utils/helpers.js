@@ -53,6 +53,20 @@ export const sortTurkishText = (items = []) => {
     return [...items].filter(Boolean).sort((a, b) => String(a).localeCompare(String(b), 'tr-TR', { sensitivity: 'base' }));
 };
 
+export const normalizeAssetType = (value = "") => {
+    return String(value)
+        .trim()
+        .toLocaleLowerCase('tr-TR')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/ı/g, 'i')
+        .replace(/ğ/g, 'g')
+        .replace(/ü/g, 'u')
+        .replace(/ş/g, 's')
+        .replace(/ö/g, 'o')
+        .replace(/ç/g, 'c');
+};
+
 // --- STİL SABİTLERİ ---
 
 export const inputStyle = {

@@ -526,6 +526,7 @@ function App() {
                     maaslar={data.maaslar}
                     hesaplar={data.hesaplar}
                     filtrelenmisIslemler={calculations.filtrelenmisIslemler}
+                    tumIslemler={data.islemler}
                     sadeceCuzdanNakiti={calculations.sadeceCuzdanNakiti}
                     genelToplamYatirimGucu={calculations.genelToplamYatirimGucu}
                     netVarlik={calculations.netVarlik}
