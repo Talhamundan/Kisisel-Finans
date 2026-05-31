@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ResponsiveContainer, BarChart, CartesianGrid, XAxis, YAxis, Tooltip, Bar, PieChart, Pie, Cell } from 'recharts';
+import { Info, X } from 'lucide-react';
 import { cardStyle, inputStyle, formatCurrencyPlain, tarihFormatla, tarihSadeceGunAyYil, toDateSafe, COLORS, sortTurkishText } from '../../utils/helpers';
 
 const BudgetDashboard = ({
@@ -78,6 +79,7 @@ const BudgetDashboard = ({
     const [localLimit, setLocalLimit] = useState(aylikLimit);
     const [hoveredKategori, setHoveredKategori] = useState(null);
     const [hareketHesabi, setHareketHesabi] = useState(null);
+    const [hareketBilgi, setHareketBilgi] = useState(null);
     useEffect(() => {
         setLocalLimit(aylikLimit);
     }, [aylikLimit]);
@@ -112,8 +114,6 @@ const BudgetDashboard = ({
         return `${tarihSadeceGunAyYil(baslangic)} - ${tarihSadeceGunAyYil(bitis)}`;
     };
 
-    const toplamAylikTaksitYuku = (taksitler || []).reduce((acc, t) => acc + (parseFloat(t.aylikTutar) || 0), 0);
-
     const hesapHareketleri = hareketHesabi
         ? (tumIslemler || []).filter(i => (
             i.hesapId === hareketHesabi.id ||
@@ -127,22 +127,62 @@ const BudgetDashboard = ({
                 tipEtiketi = i.kaynakId === hareketHesabi.id ? 'Transfer Çıkış' : 'Transfer Giriş';
             } else if (i.islemTipi === 'gelir' || i.islemTipi === 'yatirim_satis' || i.islemTipi === 'cari_iade') {
                 etki = parseFloat(i.tutar) || 0;
-                tipEtiketi = i.islemTipi === 'gelir' ? 'Gelir' : tipEtiketi;
+                if (i.islemTipi === 'gelir') tipEtiketi = 'Gelir';
+                if (i.islemTipi === 'yatirim_satis') tipEtiketi = 'Yatırım Satış';
+                if (i.islemTipi === 'cari_iade') tipEtiketi = 'İade';
             } else {
                 etki = -(parseFloat(i.tutar) || 0);
-                tipEtiketi = i.islemTipi === 'gider' ? 'Gider' : tipEtiketi;
+                tipEtiketi = i.islemTipi === 'yatirim_alis' ? 'Yatırım Alış' : 'Gider';
             }
             return { ...i, hesapEtki: etki, tipEtiketi };
         }).sort((a, b) => (toDateSafe(b.tarih)?.getTime() || 0) - (toDateSafe(a.tarih)?.getTime() || 0))
         : [];
 
     const hareketToplami = hesapHareketleri.reduce((sum, i) => sum + i.hesapEtki, 0);
+    const hesapTipiMetni = (hesap) => {
+        if (hesap?.hesapTipi === 'krediKarti') return 'kredi kartınız';
+        if (hesap?.hesapTipi === 'yatirim') return 'yatırım hesabınız';
+        return 'vadesiz TL hesabınız';
+    };
+    const hareketDetayMetni = (hareket) => {
+        const tarih = tarihSadeceGunAyYil(hareket.tarih);
+        const tutar = formatPara(Math.abs(parseFloat(hareket.hesapEtki) || 0));
+        const bakiye = formatPara(hareket.islemSonrasiBakiye);
+        const hesapMetni = hesapTipiMetni(hareketHesabi);
+
+        if (hareket.islemTipi === 'transfer') {
+            const kaynak = hesaplar.find(h => h.id === hareket.kaynakId)?.hesapAdi || 'kaynak hesap';
+            const hedef = hesaplar.find(h => h.id === hareket.hedefId)?.hesapAdi || 'hedef hesap';
+            const yon = hareket.kaynakId === hareketHesabi.id
+                ? `${hedef} hesabına`
+                : `${kaynak} hesabından`;
+            const eylem = hareket.kaynakId === hareketHesabi.id ? 'para transferi yapıldı' : 'para transferi geldi';
+            return `${tarih} tarihinde ${hesapMetni} ${yon} ${tutar} tutarında ${eylem}. İşlem sonrası hesap bakiyeniz: ${bakiye}`;
+        }
+
+        if (hareket.hesapEtki >= 0) {
+            return `${tarih} tarihinde ${hesapMetni} ${hareket.aciklama || 'işlem'} sonucunda ${tutar} giriş oldu. İşlem sonrası hesap bakiyeniz: ${bakiye}`;
+        }
+
+        return `${tarih} tarihinde ${hesapMetni} ${hareket.aciklama || 'işlem'} için ${tutar} tutarında ödeme yapıldı. İşlem sonrası hesap bakiyeniz: ${bakiye}`;
+    };
+    const hesapHareketleriBakiyeli = hesapHareketleri.reduce((acc, hareket) => {
+        const islemSonrasiBakiye = acc.bakiye;
+        const hesapEtki = parseFloat(hareket.hesapEtki) || 0;
+        return {
+            bakiye: acc.bakiye - hesapEtki,
+            hareketler: [...acc.hareketler, { ...hareket, islemSonrasiBakiye }]
+        };
+    }, { bakiye: parseFloat(hareketHesabi?.guncelBakiye) || 0, hareketler: [] }).hareketler;
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}> {/* Ana Container gap düzeltildi */}
             {hareketHesabi && (
                 <div
-                    onClick={() => setHareketHesabi(null)}
+                    onClick={() => {
+                        setHareketHesabi(null);
+                        setHareketBilgi(null);
+                    }}
                     style={{
                         position: 'fixed',
                         inset: 0,
@@ -157,7 +197,7 @@ const BudgetDashboard = ({
                     <div
                         onClick={e => e.stopPropagation()}
                         style={{
-                            width: 'min(920px, 96vw)',
+                            width: 'min(1180px, 96vw)',
                             maxHeight: '82vh',
                             overflow: 'hidden',
                             background: '#ffffff',
@@ -175,32 +215,67 @@ const BudgetDashboard = ({
                                     {hesapHareketleri.length} hareket • Net etki: <b style={{ color: hareketToplami >= 0 ? '#16a34a' : '#dc2626' }}>{formatPara(hareketToplami)}</b>
                                 </div>
                             </div>
-                            <button onClick={() => setHareketHesabi(null)} style={{ border: 'none', background: '#f1f5f9', color: '#0f172a', borderRadius: '999px', width: '34px', height: '34px', cursor: 'pointer', fontSize: '18px', fontWeight: 700 }}>×</button>
+                            <button aria-label="Kapat" onClick={() => {
+                                setHareketHesabi(null);
+                                setHareketBilgi(null);
+                            }} style={{ border: 'none', background: 'transparent', color: '#0f172a', width: '42px', height: '42px', cursor: 'pointer', display: 'grid', placeItems: 'center', flex: '0 0 auto', padding: 0 }}>
+                                <X size={22} strokeWidth={3} />
+                            </button>
                         </div>
 
                         <div style={{ overflow: 'auto' }}>
                             {hesapHareketleri.length === 0 ? (
                                 <div style={{ padding: '28px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>Bu hesap için hareket bulunamadı.</div>
                             ) : (
-                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', color: '#334155', minWidth: '640px' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', color: '#334155', minWidth: '980px', tableLayout: 'fixed' }}>
                                     <thead>
                                         <tr style={{ textAlign: 'left', color: '#64748b', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                                            <th style={{ padding: '11px 14px' }}>Tarih</th>
-                                            <th style={{ padding: '11px 14px' }}>Tip</th>
-                                            <th style={{ padding: '11px 14px' }}>Kategori</th>
+                                            <th style={{ padding: '12px 18px', width: '150px' }}>Tarih</th>
+                                            <th style={{ padding: '12px 18px', width: '145px' }}>Tip</th>
+                                            <th style={{ padding: '12px 18px', width: '130px' }}>Kategori</th>
                                             <th style={{ padding: '11px 14px' }}>Açıklama</th>
-                                            <th style={{ padding: '11px 14px', textAlign: 'right' }}>Etki</th>
+                                            <th style={{ padding: '12px 18px', width: '135px', textAlign: 'right' }}>Hareket</th>
+                                            <th style={{ padding: '12px 18px', width: '135px', textAlign: 'right' }}>Bakiye</th>
+                                            <th style={{ padding: '12px 14px', width: '76px', textAlign: 'center' }}>Detay</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {hesapHareketleri.map(i => (
+                                        {hesapHareketleriBakiyeli.map(i => (
                                             <tr key={i.id} onClick={() => modalAc('duzenle_islem', i)} style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}>
-                                                <td style={{ padding: '11px 14px', whiteSpace: 'nowrap', color: '#64748b' }}>{tarihFormatla(i.tarih)}</td>
-                                                <td style={{ padding: '11px 14px', fontWeight: 700 }}>{i.tipEtiketi}</td>
-                                                <td style={{ padding: '11px 14px' }}>{i.kategori || '-'}</td>
-                                                <td style={{ padding: '11px 14px' }}>{i.aciklama || '-'}</td>
-                                                <td style={{ padding: '11px 14px', textAlign: 'right', fontWeight: 800, color: i.hesapEtki >= 0 ? '#16a34a' : '#dc2626', whiteSpace: 'nowrap' }}>
+                                                <td style={{ padding: '13px 18px', whiteSpace: 'nowrap', color: '#64748b' }}>{tarihFormatla(i.tarih)}</td>
+                                                <td style={{ padding: '13px 18px', fontWeight: 700, whiteSpace: 'nowrap' }}>{i.tipEtiketi}</td>
+                                                <td style={{ padding: '13px 18px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{i.kategori || '-'}</td>
+                                                <td style={{ padding: '13px 18px', lineHeight: 1.35 }}>{i.aciklama || '-'}</td>
+                                                <td style={{ padding: '13px 18px', textAlign: 'right', fontWeight: 800, color: i.hesapEtki >= 0 ? '#16a34a' : '#dc2626', whiteSpace: 'nowrap' }}>
                                                     {i.hesapEtki >= 0 ? '+' : ''}{formatPara(i.hesapEtki)}
+                                                </td>
+                                                <td style={{ padding: '13px 18px', textAlign: 'right', whiteSpace: 'nowrap', color: '#0f172a', fontWeight: 700 }}>
+                                                    {formatPara(i.islemSonrasiBakiye)}
+                                                </td>
+                                                <td style={{ padding: '13px 14px', textAlign: 'center' }}>
+                                                    <button
+                                                        type="button"
+                                                        aria-label="İşlem detayı"
+                                                        title="İşlem sonrası bakiye detayı"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setHareketBilgi(hareketDetayMetni(i));
+                                                        }}
+                                                        style={{
+                                                            width: '28px',
+                                                            height: '28px',
+                                                            border: 'none',
+                                                            background: 'transparent',
+                                                            color: '#334155',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-grid',
+                                                            placeItems: 'center',
+                                                            verticalAlign: 'middle',
+                                                            padding: 0
+                                                        }}
+                                                    >
+                                                        <Info size={18} strokeWidth={2.4} />
+                                                    </button>
                                                 </td>
                                             </tr>
                                         ))}
@@ -209,6 +284,48 @@ const BudgetDashboard = ({
                             )}
                         </div>
                     </div>
+                    {hareketBilgi && (
+                        <div
+                            onClick={(e) => e.stopPropagation()}
+                            style={{
+                                position: 'fixed',
+                                zIndex: 1010,
+                                left: '50%',
+                                top: '50%',
+                                transform: 'translate(-50%, -50%)',
+                                width: 'min(560px, calc(100vw - 42px))',
+                                background: '#ffffff',
+                                borderRadius: '16px',
+                                boxShadow: '0 22px 70px rgba(15, 23, 42, 0.32)',
+                                overflow: 'hidden',
+                                border: '1px solid #e2e8f0'
+                            }}
+                        >
+                            <div style={{ display: 'flex', gap: '18px', padding: '28px 30px', alignItems: 'flex-start' }}>
+                                <div style={{ width: '42px', height: '42px', borderRadius: '999px', background: '#84cc16', color: '#ffffff', display: 'grid', placeItems: 'center', flex: '0 0 auto' }}>
+                                    <Info size={24} strokeWidth={2.6} />
+                                </div>
+                                <div style={{ color: '#4b5563', fontSize: '18px', lineHeight: 1.45 }}>{hareketBilgi}</div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setHareketBilgi(null)}
+                                style={{
+                                    width: '100%',
+                                    border: 'none',
+                                    borderTop: '1px solid #e5e7eb',
+                                    background: '#ffffff',
+                                    color: '#0ea5e9',
+                                    padding: '18px',
+                                    cursor: 'pointer',
+                                    fontSize: '20px',
+                                    fontWeight: 800
+                                }}
+                            >
+                                Tamam
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -463,8 +580,7 @@ const BudgetDashboard = ({
                                 })}
                             </div>
                         }
-                        <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', fontSize: '13px' }}>
-                            <span style={{ color: '#718096' }}>Aylık Yük: <b style={{ color: '#2d3748' }}>{formatPara(toplamAylikTaksitYuku)}</b></span>
+                        <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
                             <span style={{ color: '#718096' }}>Kalan Toplam Borç: <b style={{ color: '#e53e3e' }}>{formatPara(toplamKalanTaksitBorcu)}</b></span>
                         </div>
                     </div>
