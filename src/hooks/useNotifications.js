@@ -18,6 +18,12 @@ export const useNotifications = ({
     useEffect(() => {
         if (islemler.length === 0 && abonelikler.length === 0 && taksitler.length === 0 && maaslar.length === 0 && hesaplar.length === 0 && bekleyenFaturalar.length === 0) return;
         const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        const addMonthsClamped = (date, monthCount) => {
+            const target = new Date(date.getFullYear(), date.getMonth() + monthCount, 1);
+            const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+            target.setDate(Math.min(date.getDate(), lastDay));
+            return target;
+        };
         const now = new Date();
         const mevcutAy = now.getMonth();
         const mevcutYil = now.getFullYear();
@@ -82,6 +88,30 @@ export const useNotifications = ({
                 });
                 if (!odendiMi) tempBildirimler.push({ id: abo.id, tip: 'abonelik', mesaj: `⚠️ ${abo.ad} ödenmedi! (${abo.gun}. gün)`, tutar: abo.tutar, data: abo, renk: 'red' });
             }
+        });
+
+        taksitler.forEach(taksit => {
+            const taksitSayisi = parseInt(taksit.taksitSayisi) || 0;
+            const odenmisTaksit = parseInt(taksit.odenmisTaksit) || 0;
+            if (taksitSayisi <= 0 || odenmisTaksit >= taksitSayisi) return;
+
+            const baslangic = toDateSafe(taksit.alisTarihi) || toDateSafe(taksit.olusturmaTarihi);
+            if (!baslangic) return;
+
+            const sonrakiVade = startOfDay(addMonthsClamped(baslangic, odenmisTaksit));
+            const kalanGun = Math.ceil((sonrakiVade - today0) / (1000 * 60 * 60 * 24));
+            if (kalanGun > 0) return;
+
+            const vadeGunu = sonrakiVade.getDate();
+
+            tempBildirimler.push({
+                id: `${taksit.id}_taksit_${odenmisTaksit + 1}`,
+                tip: 'taksit',
+                mesaj: `⚠️ ${taksit.baslik} taksiti ödenmedi! (${vadeGunu}. gün)`,
+                tutar: parseFloat(taksit.aylikTutar) || 0,
+                data: taksit,
+                renk: kalanGun < 0 ? 'red' : 'orange'
+            });
         });
 
         const siraliFaturalar = [...bekleyenFaturalar].sort((a, b) => new Date(a.sonOdemeTarihi) - new Date(b.sonOdemeTarihi));

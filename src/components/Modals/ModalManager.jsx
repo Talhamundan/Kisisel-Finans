@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import HighQualityModal from '../Shared/HighQualityModal';
+import DescriptionInput from '../Shared/DescriptionInput';
 import { formatCurrencyPlain, inputStyle, tarihSadeceGunAyYil, sortTurkishText } from '../../utils/helpers';
 import { toast } from 'react-toastify';
 import Swal from 'sweetalert2';
 
 // Sub-component to handle Portföy Düzenleme with own state
-const IslemEkleMobilModal = ({ close, islemEkle, hesaplar, kategoriListesi, inputStyle }) => {
+const IslemEkleMobilModal = ({ close, islemEkle, hesaplar, kategoriListesi, inputStyle, tumIslemler }) => {
     const [hesapId, setHesapId] = useState("");
     const [islemTipi, setIslemTipi] = useState("gider");
     const [kategori, setKategori] = useState(kategoriListesi && kategoriListesi[0] ? kategoriListesi[0] : "");
@@ -33,7 +34,7 @@ const IslemEkleMobilModal = ({ close, islemEkle, hesaplar, kategoriListesi, inpu
                 <div style={{ display: 'flex', gap: '10px' }}>
                     <select value={hesapId} onChange={e => setHesapId(e.target.value)} style={{ flex: 1, ...inputStyle }} required>
                         <option value="">Hangi Hesap?</option>
-                        {(hesaplar || []).map(h => <option key={h.id} value={h.id}>{h.hesapAdi} ({h.guncelBakiye}₺)</option>)}
+                        {(hesaplar || []).map(h => <option key={h.id} value={h.id}>{h.hesapAdi} ({formatCurrencyPlain(h.guncelBakiye)})</option>)}
                     </select>
                     <select value={islemTipi} onChange={e => setIslemTipi(e.target.value)} style={{ flex: 1, ...inputStyle }}>
                         <option value="gider">🔴 Gider</option>
@@ -44,7 +45,13 @@ const IslemEkleMobilModal = ({ close, islemEkle, hesaplar, kategoriListesi, inpu
                     {sortTurkishText(kategoriListesi || []).map(k => <option key={k} value={k}>{k}</option>)}
                 </select>
                 <div style={{ display: 'flex', gap: '10px' }}>
-                    <input placeholder="Açıklama" value={aciklama} onChange={e => setAciklama(e.target.value)} style={{ flex: 1, ...inputStyle }} />
+                    <DescriptionInput
+                        value={aciklama}
+                        onChange={e => setAciklama(e.target.value)}
+                        historyItems={tumIslemler}
+                        inputStyle={inputStyle}
+                        wrapperStyle={{ flex: 1 }}
+                    />
                     <input type="number" placeholder="Tutar (₺)" value={tutar} onChange={e => setTutar(e.target.value)} style={{ flex: 1, ...inputStyle }} required step="0.01" />
                 </div>
                 <input type="datetime-local" value={tarih} onChange={e => setTarih(e.target.value)} style={{ ...inputStyle }} required />
@@ -161,6 +168,7 @@ const ModalManager = ({
     aktifModal, setAktifModal,
     seciliVeri,
     hesaplar,
+    tumIslemler,
     hesapAdi, setHesapAdi,
     hesapTipi, setHesapTipi,
     baslangicBakiye, setBaslangicBakiye,
@@ -433,7 +441,7 @@ const ModalManager = ({
                 <div style={{ marginBottom: '20px', padding: '12px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}><b>{seciliVeri.sembol}</b> - {seciliVeri.adet} Adet</div>
                 <input type="number" value={islemTutar} onChange={e => setIslemTutar(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} placeholder="Birim Satış Fiyatı" />
                 <select value={secilenHesapId} onChange={e => setSecilenHesapId(e.target.value)} style={{ ...inputStyle, marginBottom: '20px' }} required><option value="">Para Hangi Hesaba Gitsin?</option>{hesaplar.map(h => <option key={h.id} value={h.id}>{h.hesapAdi}</option>)}</select>
-                <div style={{ marginBottom: '20px', fontSize: '14px', fontWeight: 'bold', color: '#334155' }}>Toplam Tutar: {islemTutar ? formatPara(parseFloat(islemTutar) * seciliVeri.adet) : '0 ₺'}</div>
+                <div style={{ marginBottom: '20px', fontSize: '14px', fontWeight: 'bold', color: '#334155' }}>Toplam Tutar: {islemTutar ? formatPara(parseFloat(islemTutar) * seciliVeri.adet) : formatPara(0)}</div>
                 <button type="submit" disabled={isProcessing} style={{ width: '100%', background: '#10b981', color: 'white', padding: '14px', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold', opacity: isProcessing ? 0.7 : 1 }}>{isProcessing ? 'İŞLENİYOR...' : 'ONAYLA'}</button>
             </form>
         );
@@ -501,7 +509,12 @@ const ModalManager = ({
             <form onSubmit={(e) => islemDuzenle(e, seciliVeri.id, seciliVeri).then(res => res && close())}>
                 <div style={{ marginBottom: '15px' }}>
                     <label style={{ display: 'block', fontSize: '12px', color: '#4a5568', fontWeight: 'bold', marginBottom: '5px' }}>İşlem Açıklaması</label>
-                    <input value={islemAciklama} onChange={e => setIslemAciklama(e.target.value)} style={{ ...inputStyle, padding: '12px 15px', fontSize: '14px' }} placeholder="Açıklama" />
+                    <DescriptionInput
+                        value={islemAciklama}
+                        onChange={e => setIslemAciklama(e.target.value)}
+                        historyItems={tumIslemler}
+                        inputStyle={{ ...inputStyle, padding: '12px 15px', fontSize: '14px' }}
+                    />
                 </div>
 
                 {/* CONDITIONAL RENDERING for Investment Fields */}
@@ -789,7 +802,7 @@ const ModalManager = ({
                 <input type="date" value={taksitAlisTarihi || ""} onChange={e => setTaksitAlisTarihi(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} />
                 <select value={taksitKategori} onChange={e => setTaksitKategori(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }}>{siraliKategoriListesi.map(k => <option key={k} value={k}>{k}</option>)}</select>
                 <select value={taksitHesapId} onChange={e => setTaksitHesapId(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }}><option value="">Hangi Karttan?</option>{hesaplar.map(h => <option key={h.id} value={h.id}>{h.hesapAdi}</option>)}</select>
-                <div style={{ marginBottom: '20px', fontSize: '14px', color: '#6366f1', fontWeight: 'bold' }}>Aylık: {taksitToplamTutar && taksitSayisi ? formatPara(taksitToplamTutar / taksitSayisi) : '0 ₺'}</div>
+                <div style={{ marginBottom: '20px', fontSize: '14px', color: '#6366f1', fontWeight: 'bold' }}>Aylık: {taksitToplamTutar && taksitSayisi ? formatPara(taksitToplamTutar / taksitSayisi) : formatPara(0)}</div>
                 <button type="submit" style={{ width: '100%', background: '#6366f1', color: 'white', padding: '14px', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold' }}>Kaydet</button>
             </form>
         );
@@ -814,14 +827,14 @@ const ModalManager = ({
 
                     <div style={{ display: 'flex', gap: '15px' }}>
                         <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px', cursor: 'pointer' }}>
-                            <input type="radio" name="odemeTipi" onChange={() => setKkOdemeTutar(borc)} checked={Math.abs(kkOdemeTutar - borc) < 1} />
+                            <input type="radio" name="odemeTipi" onChange={() => setKkOdemeTutar(borc.toFixed(2))} checked={Math.abs(kkOdemeTutar - borc) < 1} />
                             Tamamı ({formatPara(borc)})
                         </label>
                     </div>
 
                     <div style={{ display: 'flex', gap: '15px', marginTop: '5px' }}>
                         <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px', cursor: 'pointer' }}>
-                            <input type="radio" name="odemeTipi" onChange={() => setKkOdemeTutar(asgariBorc)} checked={Math.abs(kkOdemeTutar - asgariBorc) < 1} />
+                            <input type="radio" name="odemeTipi" onChange={() => setKkOdemeTutar(asgariBorc.toFixed(2))} checked={Math.abs(kkOdemeTutar - asgariBorc) < 1} />
                             Asgari (%20 - {formatPara(asgariBorc)})
                         </label>
                     </div>

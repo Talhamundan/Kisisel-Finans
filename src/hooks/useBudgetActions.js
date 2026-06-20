@@ -3,7 +3,7 @@ import { collection, addDoc, doc, updateDoc, deleteDoc, increment, getDoc, query
 import { db } from '../firebase';
 import { toast } from 'react-toastify';
 import Swal from 'sweetalert2';
-import { formatCurrencyPlain } from '../utils/helpers';
+import { formatCurrencyPlain, formatMoneyInputValue } from '../utils/helpers';
 
 export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tanimliFaturalar) => {
     // --- FORM STATES ---
@@ -1201,23 +1201,23 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
     }
 
     // Helpers to fill forms
-    const fillAccountForm = (v) => { setHesapAdi(v.hesapAdi); setHesapTipi(v.hesapTipi || "nakit"); setBaslangicBakiye(v.guncelBakiye); setHesapKesimGunu(v.kesimGunu || ""); }
+    const fillAccountForm = (v) => { setHesapAdi(v.hesapAdi); setHesapTipi(v.hesapTipi || "nakit"); setBaslangicBakiye(formatMoneyInputValue(v.guncelBakiye)); setHesapKesimGunu(v.kesimGunu || ""); }
     const fillTransactionForm = (v) => {
         setIslemAciklama(v.aciklama);
-        setIslemTutar(v.tutar);
+        setIslemTutar(formatMoneyInputValue(v.tutar));
         setSecilenHesapId(v.hesapId || "");
         setIslemAdet(v.adet || ""); // Fill Quantity
-        setIslemBirimFiyat(v.birimFiyat || ""); // Fill Unit Price
+        setIslemBirimFiyat(formatMoneyInputValue(v.birimFiyat)); // Fill Unit Price
         if (v.islemTipi?.includes('yatirim')) { setKategori(v.yatirimTuru || "Hisse"); }
         else { setKategori(v.kategori || ""); }
         if (v.tarih) { const date = new Date(v.tarih.seconds * 1000); const isoString = new Date(date.getTime() - (date.getTimezoneOffset() * 60000)).toISOString().slice(0, 16); setIslemTarihi(isoString); }
     }
-    const fillSubscriptionForm = (v) => { setAboAd(v.ad); setAboTutar(v.tutar); setAboGun(v.gun); setAboHesapId(v.hesapId); setAboKategori(v.kategori); }
-    const fillInstallmentForm = (v) => { setTaksitBaslik(v.baslik); setTaksitToplamTutar(v.toplamTutar); setTaksitSayisi(v.taksitSayisi); setTaksitHesapId(v.hesapId); setTaksitKategori(v.kategori); if (v.alisTarihi) { const d = new Date(v.alisTarihi.seconds * 1000); setTaksitAlisTarihi(d.toISOString().split('T')[0]); } }
-    const fillSalaryForm = (v) => { setMaasAd(v.ad); setMaasTutar(v.tutar); setMaasGun(v.gun); setMaasHesapId(v.hesapId); }
-    const fillBorcForm = (v) => { setBorcAd(v.ad); setBorcTutar(v.toplamTutar); setBorcKalanTutar(v.kalanTutar); setBorcTarih(v.sonOdemeTarihi || ""); setBorcKategori(v.kategori || (kategoriListesi && kategoriListesi[0] ? kategoriListesi[0] : "")); }
+    const fillSubscriptionForm = (v) => { setAboAd(v.ad); setAboTutar(formatMoneyInputValue(v.tutar)); setAboGun(v.gun); setAboHesapId(v.hesapId); setAboKategori(v.kategori); }
+    const fillInstallmentForm = (v) => { setTaksitBaslik(v.baslik); setTaksitToplamTutar(formatMoneyInputValue(v.toplamTutar)); setTaksitSayisi(v.taksitSayisi); setTaksitHesapId(v.hesapId); setTaksitKategori(v.kategori); if (v.alisTarihi) { const d = new Date(v.alisTarihi.seconds * 1000); setTaksitAlisTarihi(d.toISOString().split('T')[0]); } }
+    const fillSalaryForm = (v) => { setMaasAd(v.ad); setMaasTutar(formatMoneyInputValue(v.tutar)); setMaasGun(v.gun); setMaasHesapId(v.hesapId); }
+    const fillBorcForm = (v) => { setBorcAd(v.ad); setBorcTutar(formatMoneyInputValue(v.toplamTutar)); setBorcKalanTutar(formatMoneyInputValue(v.kalanTutar)); setBorcTarih(v.sonOdemeTarihi || ""); setBorcKategori(v.kategori || (kategoriListesi && kategoriListesi[0] ? kategoriListesi[0] : "")); }
     const resetBorcForm = () => { setBorcAd(""); setBorcTutar(""); setBorcKalanTutar(""); setBorcTarih(""); setBorcKategori(kategoriListesi && kategoriListesi[0] ? kategoriListesi[0] : ""); }
-    const fillBillForm = (v) => { setFaturaGirisTutar(v.tutar); setFaturaGirisTarih(v.sonOdemeTarihi); setFaturaGirisAciklama(v.aciklama || ""); }
+    const fillBillForm = (v) => { setFaturaGirisTutar(formatMoneyInputValue(v.tutar)); setFaturaGirisTarih(v.sonOdemeTarihi); setFaturaGirisAciklama(v.aciklama || ""); }
     const fillBillDefForm = (v) => { setTanimBaslik(v.baslik); setTanimKurum(v.kurum); setTanimAboneNo(v.aboneNo); }
     const fillCCForm = (v) => { setKkOdemeKartId(v.id); }
 

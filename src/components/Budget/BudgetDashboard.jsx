@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ResponsiveContainer, BarChart, CartesianGrid, XAxis, YAxis, Tooltip, Bar, PieChart, Pie, Cell } from 'recharts';
 import { Info, X } from 'lucide-react';
 import { cardStyle, inputStyle, formatCurrencyPlain, tarihFormatla, tarihSadeceGunAyYil, toDateSafe, COLORS, sortTurkishText } from '../../utils/helpers';
+import DescriptionInput from '../Shared/DescriptionInput';
 
 const BudgetDashboard = ({
     aktifAy,
@@ -75,6 +76,31 @@ const BudgetDashboard = ({
 
     const formatPara = (tutar) => gizliMod ? "**** ₺" : formatCurrencyPlain(tutar);
     const siraliKategoriListesi = sortTurkishText(kategoriListesi || []);
+    const siraliHesaplar = [...(hesaplar || [])].sort((a, b) =>
+        String(a?.hesapAdi || '').localeCompare(String(b?.hesapAdi || ''), 'tr-TR', { sensitivity: 'base' })
+    );
+    const toplamAylikTaksitYuku = (taksitler || []).reduce((acc, t) => {
+        const toplamTutar = parseFloat(t.toplamTutar) || 0;
+        const aylikTutar = parseFloat(t.aylikTutar) || 0;
+        const odenmisTaksit = parseInt(t.odenmisTaksit) || 0;
+        const taksitSayisi = parseInt(t.taksitSayisi) || 0;
+        if (taksitSayisi > 0 && odenmisTaksit >= taksitSayisi) return acc;
+
+        const kalanTutar = Math.max(0, toplamTutar - (aylikTutar * odenmisTaksit));
+        return acc + Math.min(aylikTutar, kalanTutar);
+    }, 0);
+    const siraliTaksitler = [...(taksitler || [])].sort((a, b) => {
+        const aTarih = toDateSafe(a.alisTarihi) || toDateSafe(a.olusturmaTarihi);
+        const bTarih = toDateSafe(b.alisTarihi) || toDateSafe(b.olusturmaTarihi);
+        const aGun = aTarih?.getDate() || 32;
+        const bGun = bTarih?.getDate() || 32;
+        if (aGun !== bGun) return aGun - bGun;
+
+        const tarihFark = (aTarih?.getTime() || 0) - (bTarih?.getTime() || 0);
+        if (tarihFark !== 0) return tarihFark;
+
+        return String(a.baslik || '').localeCompare(String(b.baslik || ''), 'tr-TR', { sensitivity: 'base' });
+    });
 
     const [localLimit, setLocalLimit] = useState(aylikLimit);
     const [hoveredKategori, setHoveredKategori] = useState(null);
@@ -507,7 +533,7 @@ const BudgetDashboard = ({
                             </button>
                         </div>
                         <div style={{ marginBottom: '15px' }}>
-                            {(hesaplar || []).map(h => {
+                            {siraliHesaplar.map(h => {
                                 let toplamBakiye = parseFloat(h.guncelBakiye);
                                 if (isNaN(toplamBakiye)) toplamBakiye = 0;
                                 let aylikFark = 0;
@@ -552,7 +578,7 @@ const BudgetDashboard = ({
                         <div className="card-title" style={{ marginBottom: '12px' }}>Taksitler</div>
                         {taksitler.length === 0 ? <p style={{ fontSize: '13px', color: '#aaa' }}>Aktif taksit borcu yok.</p> :
                             <div style={{ marginBottom: '15px' }}>
-                                {(taksitler || []).map(t => {
+                                {siraliTaksitler.map(t => {
                                     const yuzde = (t.odenmisTaksit / t.taksitSayisi) * 100;
                                     return (
                                         <div key={t.id} style={{ padding: '10px', borderBottom: '1px solid #f0f0f0', fontSize: '13px' }}>
@@ -580,7 +606,8 @@ const BudgetDashboard = ({
                                 })}
                             </div>
                         }
-                        <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                        <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', fontSize: '13px' }}>
+                            <span style={{ color: '#718096' }}>Toplam Aylık Yük: <b style={{ color: '#805ad5' }}>{formatPara(toplamAylikTaksitYuku)}</b></span>
                             <span style={{ color: '#718096' }}>Kalan Toplam Borç: <b style={{ color: '#e53e3e' }}>{formatPara(toplamKalanTaksitBorcu)}</b></span>
                         </div>
                     </div>
@@ -812,14 +839,20 @@ const BudgetDashboard = ({
                         {formTab === "islem" && (
                             <form onSubmit={islemEkle} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                                 <div style={{ display: 'flex', gap: '10px' }}>
-                                    <select value={secilenHesapId} onChange={e => setSecilenHesapId(e.target.value)} style={{ flex: 1, ...inputStyle, backgroundColor: '#f7fafc' }}><option value="">Hangi Hesaptan?</option>{(hesaplar || []).map(h => <option key={h.id} value={h.id}>{h.hesapAdi} ({h.guncelBakiye}₺)</option>)}</select>
+                                    <select value={secilenHesapId} onChange={e => setSecilenHesapId(e.target.value)} style={{ flex: 1, ...inputStyle, backgroundColor: '#f7fafc' }}><option value="">Hangi Hesaptan?</option>{siraliHesaplar.map(h => <option key={h.id} value={h.id}>{h.hesapAdi} ({formatPara(h.guncelBakiye)})</option>)}</select>
                                     <select value={islemTipi} onChange={e => setIslemTipi(e.target.value)} style={{ flex: 1, ...inputStyle }}><option value="gider">🔴 Gider</option><option value="gelir">🟢 Gelir</option></select>
                                 </div>
                                 <div style={{ display: 'flex', gap: '10px' }}>
                                     <select value={kategori || (siraliKategoriListesi && siraliKategoriListesi[0])} onChange={e => setKategori(e.target.value)} style={{ flex: 1, ...inputStyle }}>{siraliKategoriListesi.map(k => <option key={k} value={k}>{k}</option>)}</select>
                                 </div>
                                 <div style={{ display: 'flex', gap: '10px' }}>
-                                    <input placeholder="Açıklama" value={islemAciklama} onChange={e => setIslemAciklama(e.target.value)} style={{ flex: 1, ...inputStyle }} />
+                                    <DescriptionInput
+                                        value={islemAciklama}
+                                        onChange={e => setIslemAciklama(e.target.value)}
+                                        historyItems={tumIslemler}
+                                        inputStyle={inputStyle}
+                                        wrapperStyle={{ flex: 1 }}
+                                    />
                                     <input type="number" placeholder="Tutar (₺)" value={islemTutar} onChange={e => setIslemTutar(e.target.value)} style={{ flex: 1, ...inputStyle }} />
                                 </div>
                                 <input type="datetime-local" value={islemTarihi} onChange={e => setIslemTarihi(e.target.value)} style={{ ...inputStyle }} />
@@ -829,8 +862,8 @@ const BudgetDashboard = ({
 
                         {formTab === "transfer" && (
                             <form onSubmit={transferYap} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', background: '#ebf8ff', padding: '20px', borderRadius: '10px' }}>
-                                <div><label style={{ fontSize: '12px', color: '#2b6cb0' }}>Nereden?</label><select value={transferKaynakId} onChange={e => setTransferKaynakId(e.target.value)} style={{ ...inputStyle }}><option value="">Seçiniz...</option>{(hesaplar || []).map(h => <option key={h.id} value={h.id}>{h.hesapAdi} ({h.guncelBakiye}₺)</option>)}</select></div>
-                                <div><label style={{ fontSize: '12px', color: '#2b6cb0' }}>Nereye?</label><select value={transferHedefId} onChange={e => setTransferHedefId(e.target.value)} style={{ ...inputStyle }}><option value="">Seçiniz...</option>{(hesaplar || []).map(h => <option key={h.id} value={h.id}>{h.hesapAdi} ({h.guncelBakiye}₺)</option>)}</select></div>
+                                <div><label style={{ fontSize: '12px', color: '#2b6cb0' }}>Nereden?</label><select value={transferKaynakId} onChange={e => setTransferKaynakId(e.target.value)} style={{ ...inputStyle }}><option value="">Seçiniz...</option>{(hesaplar || []).map(h => <option key={h.id} value={h.id}>{h.hesapAdi} ({formatPara(h.guncelBakiye)})</option>)}</select></div>
+                                <div><label style={{ fontSize: '12px', color: '#2b6cb0' }}>Nereye?</label><select value={transferHedefId} onChange={e => setTransferHedefId(e.target.value)} style={{ ...inputStyle }}><option value="">Seçiniz...</option>{(hesaplar || []).map(h => <option key={h.id} value={h.id}>{h.hesapAdi} ({formatPara(h.guncelBakiye)})</option>)}</select></div>
 
                                 {/* 2. SATIR: İŞLEM TUTARI ve TRANSFER ÜCRETİ (YAN YANA) */}
                                 <input type="number" placeholder="İşlem Tutarı (₺)" value={transferTutar} onChange={e => setTransferTutar(e.target.value)} style={{ ...inputStyle }} />
@@ -896,7 +929,7 @@ const BudgetDashboard = ({
                     {/* 2. KART: GEÇMİŞ LİSTESİ VE TABLO */}
                     <div className="responsive-card" style={{ ...cardStyle, overflowX: 'auto' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '5px' }}>
-                            <h4 style={{ marginTop: 0, color: '#2c3e50', margin: 0 }}>📜 Harcama Geçmişi</h4>
+                            <h4 style={{ marginTop: 0, color: '#2c3e50', margin: 0 }}>📜 Hesap Hareketleri</h4>
                             <div className="no-scrollbar" style={{ display: 'flex', gap: '5px', alignItems: 'center', overflowX: 'auto', whiteSpace: 'nowrap', maxWidth: '300px' }}>
                                 {(mevcutAylar || []).map(ay => (
                                     <button key={ay} onClick={() => setAktifAy(ay)} style={{ flexShrink: 0, padding: '5px 10px', fontSize: '12px', borderRadius: '15px', border: 'none', cursor: 'pointer', background: aktifAy === ay ? '#2c3e50' : '#edf2f7', color: aktifAy === ay ? 'white' : '#4a5568', fontWeight: 'bold' }}>{ay}</button>
@@ -951,6 +984,13 @@ const BudgetDashboard = ({
                                         )
                                     })}
                                 </tbody>
+                                <tfoot>
+                                    <tr>
+                                        <td colSpan="7" style={{ padding: '12px 10px', textAlign: 'right', color: '#718096', fontSize: '13px', fontWeight: 700, borderTop: '2px solid #e2e8f0' }}>
+                                            Toplam {(filtrelenmisIslemler || []).length} hareket
+                                        </td>
+                                    </tr>
+                                </tfoot>
                             </table>
                         </div>
 

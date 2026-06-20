@@ -240,7 +240,7 @@ const InvestmentDashboard = ({
                                     </Pie>
                                     <Tooltip
                                         formatter={(value, name) => [
-                                            gizliMod ? '****' : `${value.toLocaleString('tr-TR')} ₺`,
+                                            gizliMod ? '****' : formatPara(value),
                                             name
                                         ]}
                                         contentStyle={{
@@ -295,7 +295,7 @@ const InvestmentDashboard = ({
                             <option value="">Ödeme Yapılacak Hesap Seç</option>
                             {(hesaplar || []).map(h => <option key={h.id} value={h.id}>{h.hesapAdi} ({formatPara(h.guncelBakiye)})</option>)}
                         </select>
-                        <div style={{ fontSize: '13px', fontWeight: '600', color: 'green' }}>Toplam: {adet && alisFiyati ? formatPara(adet * alisFiyati) : '0 ₺'}</div>
+                        <div style={{ fontSize: '13px', fontWeight: '600', color: 'green' }}>Toplam: {adet && alisFiyati ? formatPara(adet * alisFiyati) : formatPara(0)}</div>
                         <button type="submit" disabled={guncelleniyor} className="btn-ui btn-ui-success">
                             {guncelleniyor ? 'İşleniyor...' : 'Varlık Ekle'}
                         </button>
@@ -400,7 +400,7 @@ const InvestmentDashboard = ({
                                     color: isZero ? '#718096' : (isPositive ? '#38a169' : '#e53e3e')
                                 }}>
                                     {isZero ? (
-                                        <span>₺0</span>
+                                        <span>{formatPara(0)}</span>
                                     ) : (
                                         <span>
                                             {isPositive ? '+' : '-'}{formatPara(Math.abs(netFlow))}

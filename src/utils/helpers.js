@@ -9,6 +9,13 @@ export const formatCurrencyPlain = (amount) => {
     }).format(amount);
 };
 
+export const formatMoneyInputValue = (amount) => {
+    if (amount === "" || amount === null || amount === undefined) return "";
+    const normalized = typeof amount === 'string' ? amount.replace(',', '.') : amount;
+    const number = parseFloat(normalized);
+    return Number.isFinite(number) ? number.toFixed(2) : "";
+};
+
 // Firestore Timestamp / JS Date / string -> Date
 export const toDateSafe = (t) => {
     if (!t) return null;

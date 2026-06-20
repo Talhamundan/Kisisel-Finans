@@ -23,7 +23,7 @@ import Feedback from './components/Feedback';
 
 
 // Helpers
-import { inputStyle } from './utils/helpers';
+import { formatMoneyInputValue, inputStyle } from './utils/helpers';
 
 function App() {
     // 1. AUTH
@@ -129,9 +129,9 @@ function App() {
         if (tip === 'duzenle_bekleyen_fatura') budgetActions.fillBillForm(veri);
         if (tip === 'fatura_tanim_duzenle') budgetActions.fillBillDefForm(veri); // If exists
         if (tip === 'kredi_karti_ode') budgetActions.fillCCForm(veri);
-        if (tip === 'satis') budgetActions.setIslemTutar(veri.guncelFiyat || veri.alisFiyati);
+        if (tip === 'satis') budgetActions.setIslemTutar(formatMoneyInputValue(veri.guncelFiyat || veri.alisFiyati));
         if (tip === 'duzenle_portfoy') investmentActions.fillPortfolioForm(veri);
-        if (tip === 'tahsilat_ekle') investmentActions.setTahsilatTutar(veri.satisFiyati - veri.tahsilEdilen);
+        if (tip === 'tahsilat_ekle') investmentActions.setTahsilatTutar(formatMoneyInputValue(veri.satisFiyati - veri.tahsilEdilen));
         if (tip === 'duzenle_borc') budgetActions.fillBorcForm(veri);
         if (tip === 'borc_tanimla') budgetActions.resetBorcForm();
     }
@@ -389,6 +389,7 @@ function App() {
                 aktifModal={aktifModal} setAktifModal={setAktifModal}
                 seciliVeri={seciliVeri}
                 hesaplar={data.hesaplar}
+                tumIslemler={data.islemler}
                 // Budget Actions & State
                 hesapAdi={budgetActions.hesapAdi} setHesapAdi={budgetActions.setHesapAdi}
                 hesapTipi={budgetActions.hesapTipi} setHesapTipi={budgetActions.setHesapTipi}
@@ -493,7 +494,7 @@ function App() {
 
             <Notifications
                 bildirimler={calculations.bildirimler.filter(b => {
-                    if (anaSekme === 'butcem') return ['fatura', 'abonelik', 'maas', 'kk_hatirlatma', 'borc_hatirlatma'].includes(b.tip);
+                    if (anaSekme === 'butcem') return ['fatura', 'abonelik', 'maas', 'taksit', 'kk_hatirlatma', 'borc_hatirlatma'].includes(b.tip);
                     if (anaSekme === 'yatirimlar') return ['bes_odeme'].includes(b.tip);
                     if (anaSekme === 'hedefler') return ['alacak'].includes(b.tip);
                     return false;
