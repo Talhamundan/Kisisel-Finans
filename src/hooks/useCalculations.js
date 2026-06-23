@@ -109,7 +109,7 @@ export const useCalculations = (
 
     const toplamGelir = filtrelenmisIslemler.filter(i => i.islemTipi === 'gelir').reduce((acc, i) => acc + i.tutar, 0);
     const toplamGider = filtrelenmisIslemler.filter(i => i.islemTipi === 'gider').reduce((acc, i) => acc + i.tutar, 0);
-    const harcananLimit = filtrelenmisIslemler.filter(i => i.islemTipi === 'gider' && i.kategori !== 'Transfer' && i.kategori !== 'Kira' && i.kategori !== 'Kira/Aidat' && i.kategori !== 'Yatırım').reduce((acc, i) => acc + i.tutar, 0);
+    const harcananLimit = filtrelenmisIslemler.filter(i => i.islemTipi === 'gider' && i.kategori !== 'Transfer' && i.kategori !== 'Kira' && i.kategori !== 'Kira/Aidat' && i.kategori !== 'Yatırım' && i.kategori !== 'Şirket').reduce((acc, i) => acc + i.tutar, 0);
     const safeLimit = Math.max(0, parseFloat(aylikLimit) || 0);
     const limitYuzdesi = safeLimit > 0 ? Math.min((harcananLimit / safeLimit) * 100, 100) : 0;
     const limitRenk = limitYuzdesi > 90 ? '#e53e3e' : limitYuzdesi > 75 ? '#dd6b20' : '#48bb78';
