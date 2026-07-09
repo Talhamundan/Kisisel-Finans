@@ -73,6 +73,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
     const [tanimBaslik, setTanimBaslik] = useState("");
     const [tanimKurum, setTanimKurum] = useState("");
     const [tanimAboneNo, setTanimAboneNo] = useState("");
+    const [tanimHesapId, setTanimHesapId] = useState("");
     const [secilenTanimId, setSecilenTanimId] = useState("");
     const [faturaGirisTutar, setFaturaGirisTutar] = useState("");
     const [faturaGirisTarih, setFaturaGirisTarih] = useState("");
@@ -942,9 +943,9 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
                 toast.warning("Başlık giriniz");
                 return false;
             }
-            await addDoc(collection(db, "fatura_tanimlari"), { uid: user.uid, alanKodu, baslik: tanimBaslik, kurum: tanimKurum, aboneNo: tanimAboneNo });
+            await addDoc(collection(db, "fatura_tanimlari"), { uid: user.uid, alanKodu, baslik: tanimBaslik, kurum: tanimKurum, aboneNo: tanimAboneNo, hesapId: tanimHesapId });
             toast.success("Fatura/Abone Tanımlandı!");
-            setTanimBaslik(""); setTanimKurum(""); setTanimAboneNo("");
+            setTanimBaslik(""); setTanimKurum(""); setTanimAboneNo(""); setTanimHesapId("");
             return true;
         } catch (err) {
             console.error(err); return false;
@@ -1010,8 +1011,8 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
     const faturaTanimDuzenle = async (e, id) => {
         if (e) e.preventDefault();
         try {
-            await updateDoc(doc(db, "fatura_tanimlari", id), { baslik: tanimBaslik, kurum: tanimKurum, aboneNo: tanimAboneNo });
-            setTanimBaslik(""); setTanimKurum(""); setTanimAboneNo("");
+            await updateDoc(doc(db, "fatura_tanimlari", id), { baslik: tanimBaslik, kurum: tanimKurum, aboneNo: tanimAboneNo, hesapId: tanimHesapId });
+            setTanimBaslik(""); setTanimKurum(""); setTanimAboneNo(""); setTanimHesapId("");
             toast.success("Tanım güncellendi");
             return true;
         } catch (err) { console.error(err); return false; }
@@ -1218,7 +1219,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
     const fillBorcForm = (v) => { setBorcAd(v.ad); setBorcTutar(formatMoneyInputValue(v.toplamTutar)); setBorcKalanTutar(formatMoneyInputValue(v.kalanTutar)); setBorcTarih(v.sonOdemeTarihi || ""); setBorcKategori(v.kategori || (kategoriListesi && kategoriListesi[0] ? kategoriListesi[0] : "")); }
     const resetBorcForm = () => { setBorcAd(""); setBorcTutar(""); setBorcKalanTutar(""); setBorcTarih(""); setBorcKategori(kategoriListesi && kategoriListesi[0] ? kategoriListesi[0] : ""); }
     const fillBillForm = (v) => { setFaturaGirisTutar(formatMoneyInputValue(v.tutar)); setFaturaGirisTarih(v.sonOdemeTarihi); setFaturaGirisAciklama(v.aciklama || ""); }
-    const fillBillDefForm = (v) => { setTanimBaslik(v.baslik); setTanimKurum(v.kurum); setTanimAboneNo(v.aboneNo); }
+    const fillBillDefForm = (v) => { setTanimBaslik(v.baslik); setTanimKurum(v.kurum); setTanimAboneNo(v.aboneNo); setTanimHesapId(v.hesapId || ""); }
     const fillCCForm = (v) => { setKkOdemeKartId(v.id); }
 
     return {
@@ -1233,7 +1234,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
         borcAd, setBorcAd, borcTutar, setBorcTutar, borcKalanTutar, setBorcKalanTutar, borcTarih, setBorcTarih, borcKategori, setBorcKategori,
         cariBaslik, setCariBaslik, cariTutar, setCariTutar, cariHesapId, setCariHesapId, cariKategori, setCariKategori, cariTarih, setCariTarih, cariNot, setCariNot,
         cariIadeTutar, setCariIadeTutar, cariIadeHesapId, setCariIadeHesapId,
-        tanimBaslik, setTanimBaslik, tanimKurum, setTanimKurum, tanimAboneNo, setTanimAboneNo, secilenTanimId, setSecilenTanimId, faturaGirisTutar, setFaturaGirisTutar, faturaGirisTarih, setFaturaGirisTarih, faturaGirisAciklama, setFaturaGirisAciklama,
+        tanimBaslik, setTanimBaslik, tanimKurum, setTanimKurum, tanimAboneNo, setTanimAboneNo, tanimHesapId, setTanimHesapId, secilenTanimId, setSecilenTanimId, faturaGirisTutar, setFaturaGirisTutar, faturaGirisTarih, setFaturaGirisTarih, faturaGirisAciklama, setFaturaGirisAciklama,
         kkOdemeKartId, setKkOdemeKartId, kkOdemeKaynakId, setKkOdemeKaynakId, kkOdemeTutar, setKkOdemeTutar,
         tasimaIslemiSuruyor, setTasimaIslemiSuruyor, yeniKodInput, setYeniKodInput,
 

@@ -1,4 +1,5 @@
 import React from 'react';
+import { MONTH_NAMES } from '../../utils/period';
 
 const Header = ({
     anaSekme,
@@ -8,8 +9,15 @@ const Header = ({
     user,
     setAktifModal,
     koddanCikis,
-    cikisYap
+    cikisYap,
+    selectedPeriod,
+    setSelectedPeriod,
+    availablePeriods,
+    showPeriodFilter = true
 }) => {
+    const years = availablePeriods?.years?.length ? availablePeriods.years : [selectedPeriod.year];
+    const availableMonths = availablePeriods?.monthsByYear?.[selectedPeriod.year] || [];
+
     return (
         <div className="app-header" style={{
             position: 'fixed',
@@ -89,10 +97,63 @@ const Header = ({
                     }}>
                     🎯 Hedef/Envanter
                 </button>
+                <button
+                    onClick={() => setAnaSekme("takvim")}
+                    style={{
+                        padding: '8px 20px',
+                        borderRadius: '10px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontWeight: 'bold',
+                        fontSize: '14px',
+                        transition: 'all 0.2s',
+                        outline: 'none',
+                        background: anaSekme === "takvim" ? '#ffffff' : 'transparent',
+                        color: anaSekme === "takvim" ? '#6366f1' : '#718096',
+                        boxShadow: anaSekme === "takvim" ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                    }}>
+                    📅 Finans Takvimi
+                </button>
             </div>
 
             {/* SAĞ: KULLANICI KONTROLLERİ */}
             <div className="app-header-right" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                {showPeriodFilter && (
+                    <div className="period-filter" aria-label="Dönem filtresi">
+                        <select
+                            className="period-filter__select period-filter__select--month"
+                            value={selectedPeriod.month}
+                            onChange={(event) => {
+                                const value = event.target.value;
+                                setSelectedPeriod((prev) => ({ ...prev, month: value === 'all' ? 'all' : Number(value) }));
+                            }}
+                            aria-label="Ay seç"
+                        >
+                            <option value="all">Tümü</option>
+                            {availableMonths.map((month) => (
+                                <option key={month} value={month}>{MONTH_NAMES[month - 1]}</option>
+                            ))}
+                        </select>
+                        <select
+                            className="period-filter__select period-filter__select--year"
+                            value={selectedPeriod.year}
+                            onChange={(event) => {
+                                const year = Number(event.target.value);
+                                const months = availablePeriods?.monthsByYear?.[year] || [];
+                                setSelectedPeriod((prev) => ({
+                                    year,
+                                    month: prev.month === 'all' || months.includes(prev.month) ? prev.month : (months[0] || 'all'),
+                                }));
+                            }}
+                            aria-label="Yıl seç"
+                        >
+                            {years.map((year) => (
+                                <option key={year} value={year}>{year}</option>
+                            ))}
+                        </select>
+                    </div>
+                )}
+
                 <button onClick={() => setGizliMod(!gizliMod)} style={{ background: 'transparent', border: 'none', fontSize: '20px', cursor: 'pointer', padding: '5px', outline: 'none' }}>
                     {gizliMod ? '🙈' : '👁️'}
                 </button>

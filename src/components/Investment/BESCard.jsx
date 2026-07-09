@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { cardStyle, formatCurrencyPlain, COLORS_GENEL, inputStyle } from '../../utils/helpers';
+import { cardStyle, formatCurrencyPlain, inputStyle } from '../../utils/helpers';
 import HighQualityModal from '../Shared/HighQualityModal';
+import { isDateInPeriod } from '../../utils/period';
+import PremiumDonutChart from '../Shared/PremiumDonutChart';
 
 const BESCard = ({
     besVerisi,
@@ -13,6 +14,7 @@ const BESCard = ({
     islemEkle,
     modalAc,
     aktifYatirimAy,
+    selectedPeriod,
     yatirimIslemleri,
     gizliMod
 }) => {
@@ -55,35 +57,25 @@ const BESCard = ({
     const netAnaPara = toplamBesYatirimi - toplamKesinti;
     const netGetiri = guncelTutar - netAnaPara;
 
-    // Helper for date filtering
-    const getAyYil = (dateInput) => {
-        if (!dateInput) return "";
-        let d;
-        if (dateInput.seconds) d = new Date(dateInput.seconds * 1000);
-        else d = new Date(dateInput);
-        if (isNaN(d.getTime())) return "";
-        return d.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
-    };
-
     let seciliAyYatirilan = 0;
     let seciliAyKesinti = 0;
-    const ayFiltresiVar = aktifYatirimAy && aktifYatirimAy !== 'Tümü';
+    const ayFiltresiVar = Boolean(selectedPeriod);
 
     if (ayFiltresiVar) {
         if (yatirimIslemleri) {
             seciliAyYatirilan = yatirimIslemleri
-                .filter(islem => islem.kategori === 'BES' && getAyYil(islem.tarih) === aktifYatirimAy)
+                .filter(islem => islem.kategori === 'BES' && isDateInPeriod(islem.tarih, selectedPeriod))
                 .reduce((acc, curr) => acc + (parseFloat(curr.tutar) || 0), 0);
         }
         seciliAyKesinti = kesintiler
-            .filter(k => getAyYil(k.tarih) === aktifYatirimAy)
+            .filter(k => isDateInPeriod(k.tarih, selectedPeriod))
             .reduce((acc, k) => acc + (parseFloat(k.tutar) || 0), 0);
     }
     const seciliAyNetYatirim = seciliAyYatirilan - seciliAyKesinti;
 
-    const fonDagilimi = veri.fonlar && veri.fonlar.length > 0 ? veri.fonlar : [
-        { name: 'GMF', value: 25 }, { name: 'AGA', value: 25 }, { name: 'FEO', value: 25 }, { name: 'CHN', value: 25 },
-    ];
+    const fonDagilimi = veri.fonlar && veri.fonlar.length > 0 ? veri.fonlar : [];
+    const fonDagilimiToplam = fonDagilimi.reduce((sum, item) => sum + (parseFloat(item.value) || 0), 0);
+    const fonDagilimiVar = fonDagilimiToplam > 0;
 
     // --- HANDLERS ---
     const closeModal = () => setModalState({ type: null });
@@ -206,7 +198,7 @@ const BESCard = ({
                 <div onClick={openAyarlar} style={{ cursor: 'pointer', fontSize: '20px', color: '#a0aec0' }} title="Ayarlar">⚙️</div>
             </div>
 
-            <div className="bes-layout" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: '30px', alignItems: 'center' }}>
+            <div className="bes-layout" style={{ display: 'grid', gridTemplateColumns: fonDagilimiVar ? '1.2fr 1fr 1fr' : '1.2fr 1fr', gap: '30px', alignItems: 'center' }}>
 
                 {/* SOL: Özet Rakamlar */}
                 <div className="bes-summary-col" style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
@@ -236,11 +228,11 @@ const BESCard = ({
                         </div>
                     </div>
 
-                    {/* Alt Kısım: Seçili Ay Detayı */}
+                    {/* Alt Kısım: Dönem Detayı */}
                     <div style={{ paddingTop: '10px', borderTop: '1px solid #edf2f7' }}>
                         {ayFiltresiVar ? (
                             <div className="bes-monthly-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '13px' }}>
-                                <span style={{ fontWeight: '600', color: '#718096' }}>Seçili Ay ({aktifYatirimAy}):</span>
+                                <span style={{ fontWeight: '600', color: '#718096' }}>Dönem:</span>
                                 <div className="bes-monthly-values" style={{ display: 'flex', gap: '15px' }}>
                                     <span style={{ color: '#48bb78' }}>Yatırılan: <b>{formatPara(seciliAyYatirilan)}</b></span>
                                     <span style={{ color: '#c53030' }}>Kesinti: <b>{formatPara(seciliAyKesinti)}</b></span>
@@ -257,56 +249,25 @@ const BESCard = ({
                     </div>
                 </div>
 
-                {/* ORTA: Fon Dağılımı */}
-                <div className="bes-fon-col" style={{ height: '200px', display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
+                {fonDagilimiVar && (
+                    <div className="bes-fon-col" style={{ minHeight: '160px', display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
 
-                    <div style={{ fontSize: '12px', color: '#718096', marginBottom: '5px', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        Fon Dağılımı
-                        <span onClick={openFonDuzenle} style={{ cursor: 'pointer', fontSize: '14px' }} title="Fonları Düzenle">✏️</span>
-                    </div>
+                        <div style={{ fontSize: '12px', color: '#718096', marginBottom: '5px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            Fon Dağılımı
+                            <span onClick={openFonDuzenle} style={{ cursor: 'pointer', fontSize: '14px' }} title="Fonları Düzenle">✏️</span>
+                        </div>
 
-                    <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                            <Pie
-                                data={fonDagilimi}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={38}
-                                outerRadius={60}
-                                startAngle={90}
-                                endAngle={-270}
-                                paddingAngle={3}
-                                cornerRadius={8}
-                                dataKey="value"
-                            >
-                                {fonDagilimi.map((entry, index) => (
-                                    <Cell
-                                        key={`cell-${index}`}
-                                        fill={COLORS_GENEL[index % COLORS_GENEL.length]}
-                                        stroke="#f9fafb"
-                                        strokeWidth={2}
-                                    />
-                                ))}
-                            </Pie>
-                            <Tooltip
-                                formatter={(val, name) => [`% ${val}`, name]}
-                                contentStyle={{
-                                    borderRadius: 12,
-                                    border: 'none',
-                                    boxShadow: '0 10px 25px rgba(15,23,42,0.15)',
-                                    fontSize: 12
-                                }}
-                            />
-                        </PieChart>
-                    </ResponsiveContainer>
-                    <div style={{ display: 'flex', gap: '10px', fontSize: '10px', color: '#718096', flexWrap: 'wrap', justifyContent: 'center' }}>
-                        {fonDagilimi.map((f, index) => (
-                            <span key={f.name} style={{ color: COLORS_GENEL[index % COLORS_GENEL.length], fontWeight: 'bold' }}>
-                                {f.name} (%{f.value})
-                            </span>
-                        ))}
+                        <PremiumDonutChart
+                            data={fonDagilimi}
+                            centerValue="%100"
+                            centerLabel="Fon"
+                            formatValue={(value) => `%${value}`}
+                            height={132}
+                            innerRadius={38}
+                            outerRadius={54}
+                        />
                     </div>
-                </div>
+                )}
 
                 {/* SAĞ: Aksiyonlar */}
                 <div className="bes-actions" style={{ display: 'flex', flexDirection: 'column', gap: '15px', justifyContent: 'center' }}>

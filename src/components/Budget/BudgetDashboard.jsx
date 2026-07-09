@@ -1,8 +1,80 @@
-import React, { useState, useEffect } from 'react';
-import { ResponsiveContainer, BarChart, CartesianGrid, XAxis, YAxis, Tooltip, Bar, PieChart, Pie, Cell } from 'recharts';
+import React, { useState } from 'react';
+import { ResponsiveContainer, AreaChart, CartesianGrid, XAxis, YAxis, Tooltip, Area } from 'recharts';
 import { Info, X } from 'lucide-react';
-import { cardStyle, inputStyle, formatCurrencyPlain, tarihFormatla, tarihSadeceGunAyYil, toDateSafe, COLORS, sortTurkishText } from '../../utils/helpers';
+import { cardStyle, inputStyle, formatCurrencyPlain, tarihFormatla, tarihSadeceGunAyYil, toDateSafe, sortTurkishText } from '../../utils/helpers';
+import { isDateInPeriod } from '../../utils/period';
 import DescriptionInput from '../Shared/DescriptionInput';
+import PremiumDonutChart from '../Shared/PremiumDonutChart';
+
+const TrendTooltip = ({ active, payload }) => {
+    if (!active || !payload?.length) return null;
+    const item = payload[0]?.payload;
+    const value = payload[0]?.value || 0;
+    return (
+        <div style={{
+            background: '#ffffff',
+            border: '1px solid rgba(15, 23, 42, 0.08)',
+            borderRadius: '10px',
+            boxShadow: '0 12px 30px rgba(15, 23, 42, 0.12)',
+            padding: '10px 12px'
+        }}>
+            <div style={{ color: '#64748b', fontSize: '12px', fontWeight: 700, marginBottom: 4 }}>{item.tooltipLabel}</div>
+            <div style={{ color: '#4f46e5', fontSize: '14px', fontWeight: 900 }}>{new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(value)}</div>
+        </div>
+    );
+};
+
+const BudgetUsageTooltip = ({ visible, used, limit, percent }) => {
+    if (!visible) return null;
+
+    return (
+        <div
+            style={{
+                position: 'absolute',
+                left: '50%',
+                bottom: '24px',
+                transform: 'translateX(-50%) translateY(-4px)',
+                background: '#ffffff',
+                border: '1px solid rgba(148, 163, 184, 0.28)',
+                borderRadius: 12,
+                padding: '10px 12px',
+                minWidth: 148,
+                boxShadow: '0 12px 30px rgba(15, 23, 42, 0.12)',
+                zIndex: 1200,
+                pointerEvents: 'none',
+                opacity: 1,
+                transition: 'opacity 180ms ease, transform 180ms ease',
+                fontFamily: 'inherit',
+            }}
+        >
+            <div style={{ color: '#64748b', fontSize: 12, fontWeight: 800, marginBottom: 6, lineHeight: 1.2 }}>
+                Bütçe Kullanımı
+            </div>
+            <div style={{ color: '#0f172a', fontSize: 14, fontWeight: 900, lineHeight: 1.1, marginBottom: 4 }}>
+                {used} / {limit}
+            </div>
+            <div style={{ color: '#94a3b8', fontSize: 12, fontWeight: 800, lineHeight: 1.2 }}>
+                %{percent} kullanıldı
+            </div>
+        </div>
+    );
+};
+
+const TrendXAxisTick = ({ x, y, payload, data = [] }) => {
+    const item = data[payload?.index] || data.find((entry) => String(entry.name) === String(payload?.value));
+    return (
+        <text
+            x={x}
+            y={y + 14}
+            textAnchor="middle"
+            fill="#64748b"
+            fontSize={12}
+            fontWeight={item?.isToday ? 800 : 500}
+        >
+            {payload?.value}
+        </text>
+    );
+};
 
 const BudgetDashboard = ({
     aktifAy,
@@ -14,16 +86,13 @@ const BudgetDashboard = ({
     kategoriVerisi,
     gizliMod,
     aylikLimit,
-    onLimitChange,
-    harcananLimit,
-    limitYuzdesi,
-    limitRenk,
     maaslar,
     hesaplar,
     modalAc,
     normalSil,
     filtrelenmisIslemler,
     tumIslemler,
+    selectedPeriod,
     sadeceCuzdanNakiti,
     genelToplamYatirimGucu,
     netVarlik,
@@ -102,13 +171,8 @@ const BudgetDashboard = ({
         return String(a.baslik || '').localeCompare(String(b.baslik || ''), 'tr-TR', { sensitivity: 'base' });
     });
 
-    const [localLimit, setLocalLimit] = useState(aylikLimit);
-    const [hoveredKategori, setHoveredKategori] = useState(null);
     const [hareketHesabi, setHareketHesabi] = useState(null);
     const [hareketBilgi, setHareketBilgi] = useState(null);
-    useEffect(() => {
-        setLocalLimit(aylikLimit);
-    }, [aylikLimit]);
 
     const siraliBorclar = [...(borclar || [])]
         .sort((a, b) => {
@@ -125,10 +189,27 @@ const BudgetDashboard = ({
         .sort((a, b) => b.value - a.value)
         .map((item, index) => ({
             ...item,
-            color: COLORS[index % COLORS.length],
             yuzde: toplamKategoriGideri > 0 ? Math.round((item.value / toplamKategoriGideri) * 100) : 0
         }));
-    const merkezAyMetni = aktifAy === "Tümü" ? "Tüm Dönem" : aktifAy;
+    const kategoriDonutVar = toplamKategoriGideri > 0 && pieData.length > 0;
+    const trendTitle = selectedPeriod?.month === 'all'
+        ? `${selectedPeriod?.year} Yıllık Harcama Trendi`
+        : `${aktifAy} Harcama Trendi`;
+    const averageLabel = selectedPeriod?.month === 'all'
+        ? 'Aylık ortalama harcamanız'
+        : 'Günlük ortalama harcamanız';
+    const safeAylikLimit = Math.max(0, parseFloat(aylikLimit) || 0);
+    const budgetUsagePercent = safeAylikLimit > 0 ? (toplamGider / safeAylikLimit) * 100 : 0;
+    const budgetUsageDisplay = Math.round(budgetUsagePercent);
+    const budgetUsageWidth = Math.min(100, Math.max(0, budgetUsagePercent));
+    const budgetUsageColor = budgetUsagePercent >= 95
+        ? '#b91c1c'
+        : budgetUsagePercent >= 80
+            ? '#dc2626'
+            : budgetUsagePercent >= 60
+                ? '#f59e0b'
+                : '#22c55e';
+    const [budgetTooltipVisible, setBudgetTooltipVisible] = useState(false);
 
     const taksitTarihAraligi = (taksit) => {
         const baslangic = toDateSafe(taksit.alisTarihi) || toDateSafe(taksit.olusturmaTarihi);
@@ -145,7 +226,7 @@ const BudgetDashboard = ({
             i.hesapId === hareketHesabi.id ||
             i.kaynakId === hareketHesabi.id ||
             i.hedefId === hareketHesabi.id
-        )).map(i => {
+        )).filter(i => isDateInPeriod(i.tarih, selectedPeriod)).map(i => {
             let etki = 0;
             let tipEtiketi = i.islemTipi || "";
             if (i.islemTipi === 'transfer') {
@@ -359,121 +440,119 @@ const BudgetDashboard = ({
             <div className="responsive-grid-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '25px' }}>
 
                 {/* 1. SATIR: KARTLAR */}
-                <div className="responsive-card" style={{ ...cardStyle, borderLeft: '5px solid #48bb78' }}>
-                    <div className="card-title-sm responsive-title">GELİR ({aktifAy})</div>
+                <div className="responsive-card" style={{ ...cardStyle, borderLeft: '5px solid #48bb78', minHeight: '132px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
+                    <div className="card-title-sm responsive-title">GELİR</div>
                     <div className="kpi-amount responsive-amount">{formatPara(toplamGelir)}</div>
                 </div>
-                <div className="responsive-card" style={{ ...cardStyle, borderLeft: '5px solid #F59E0B' }}>
+                <div className="responsive-card" style={{ ...cardStyle, borderLeft: '5px solid #F59E0B', minHeight: '132px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
                     <div className="card-title-sm responsive-title">BUGÜN HARCANAN</div>
                     <div className="kpi-amount responsive-amount">{formatPara(bugunGider)}</div>
                 </div>
-                <div className="responsive-card" style={{ ...cardStyle, borderLeft: '5px solid #f56565' }}>
-                    <div className="card-title-sm responsive-title">GİDER ({aktifAy})</div>
+                <div
+                    className="responsive-card"
+                    style={{
+                        ...cardStyle,
+                        borderLeft: '5px solid #f56565',
+                        minHeight: '132px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'flex-start',
+                        position: 'relative',
+                        paddingBottom: '42px',
+                    }}
+                    onMouseEnter={() => setBudgetTooltipVisible(true)}
+                    onMouseLeave={() => setBudgetTooltipVisible(false)}
+                >
+                    <div className="card-title-sm responsive-title">GİDER</div>
                     <div className="kpi-amount-sm responsive-amount">{formatPara(toplamGider)}</div>
+                    <div
+                        style={{
+                            position: 'absolute',
+                            left: '20px',
+                            right: '20px',
+                            bottom: '16px',
+                            height: '4px',
+                            background: '#eef2f7',
+                            borderRadius: '999px',
+                            overflow: 'visible',
+                            cursor: 'default',
+                        }}
+                    >
+                        <div
+                            style={{
+                                width: `${budgetUsageWidth}%`,
+                                height: '100%',
+                                background: budgetUsageColor,
+                                borderRadius: '999px',
+                                transition: 'width 220ms ease, background-color 220ms ease',
+                            }}
+                        />
+                    </div>
+                    <BudgetUsageTooltip
+                        visible={budgetTooltipVisible}
+                        used={formatCurrencyPlain(toplamGider)}
+                        limit={formatCurrencyPlain(safeAylikLimit)}
+                        percent={budgetUsageDisplay}
+                    />
                 </div>
 
                 {/* 2. SATIR: GRAFİK (2 Sütun) ve PASTA (1 Sütun) */}
-                <div style={{ ...cardStyle, gridColumn: 'span 2', minHeight: '300px' }}>
-                    <div className="card-title" style={{ marginBottom: '16px' }}>Günlük Harcama Trendi ({aktifAy})</div>
+                <div style={{ ...cardStyle, gridColumn: kategoriDonutVar ? 'span 2' : 'span 3', minHeight: '300px' }}>
+                    <div className="card-title" style={{ marginBottom: '16px' }}>{trendTitle}</div>
                     <ResponsiveContainer width="100%" height={250}>
-                        <BarChart data={gunlukVeri || []}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                            <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                        <AreaChart data={gunlukVeri || []} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                            <defs>
+                                <linearGradient id="spendingTrendFill" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#7c3aed" stopOpacity={0.22} />
+                                    <stop offset="95%" stopColor="#7c3aed" stopOpacity={0.02} />
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(148, 163, 184, 0.22)" />
+                            <XAxis
+                                dataKey="name"
+                                tick={(props) => <TrendXAxisTick {...props} data={gunlukVeri || []} />}
+                            />
                             <YAxis tick={{ fontSize: 12 }} />
-                            <Tooltip formatter={(val) => `${val} ₺`} />
-                            <Bar dataKey="value" fill="#8884d8" radius={[5, 5, 0, 0]} />
-                        </BarChart>
+                            <Tooltip content={<TrendTooltip />} />
+                            <Area
+                                type="monotone"
+                                dataKey="value"
+                                stroke="#6d28d9"
+                                strokeWidth={3}
+                                fill="url(#spendingTrendFill)"
+                                dot={{ r: 3, strokeWidth: 2, stroke: '#6d28d9', fill: '#ffffff' }}
+                                activeDot={{ r: 5, strokeWidth: 2, stroke: '#ffffff', fill: '#6d28d9' }}
+                            />
+                        </AreaChart>
                     </ResponsiveContainer>
-                    {aktifAy !== "Tümü" && (
-                        <div style={{ textAlign: 'center', marginTop: '10px', fontSize: '13px', color: '#718096', fontStyle: 'italic' }}>
-                            ✨ Bu ay günlük ortalama harcamanız: <span style={{ fontWeight: 'bold', color: '#2d3748' }}>{formatPara(gunlukOrtalama)}</span>
-                        </div>
-                    )}
+                    <div style={{ textAlign: 'center', marginTop: '10px', fontSize: '13px', color: '#718096', fontStyle: 'italic' }}>
+                        ✨ {averageLabel}: <span style={{ fontWeight: 'bold', color: '#2d3748' }}>{formatPara(gunlukOrtalama)}</span>
+                    </div>
                 </div>
 
-                <div className="responsive-card" style={{ ...cardStyle, gridColumn: 'span 1', paddingTop: '18px' }}>
-                    <ResponsiveContainer width="100%" height={270}>
-                        <PieChart>
-                            <Pie
-                                data={pieData}
-                                cx="50%"
-                                cy="45%"
-                                innerRadius={58}
-                                outerRadius={90}
-                                startAngle={90}
-                                endAngle={-270}
-                                paddingAngle={4}
-                                cornerRadius={9}
-                                dataKey="value"
-                            >
-                                {pieData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={entry.color} stroke="#f9fafb" strokeWidth={5} />
-                                ))}
-                            </Pie>
-                            <text x="50%" y="43%" textAnchor="middle" fill="#64748b" style={{ fontSize: 11, fontWeight: 700 }}>
-                                Toplam Gider
-                            </text>
-                            <text x="50%" y="52.5%" textAnchor="middle" fill="#0f172a" style={{ fontSize: 18, fontWeight: 800 }}>
-                                {formatPara(toplamKategoriGideri)}
-                            </text>
-                            <text x="50%" y="60.5%" textAnchor="middle" fill="#94a3b8" style={{ fontSize: 11, fontWeight: 700 }}>
-                                {merkezAyMetni}
-                            </text>
-                            <Tooltip
-                                formatter={(value, name) => [formatPara(value), name]}
-                                contentStyle={{
-                                    borderRadius: 12,
-                                    border: 'none',
-                                    boxShadow: '0 10px 25px rgba(15,23,42,0.15)',
-                                    fontSize: 12
-                                }}
-                            />
-                        </PieChart>
-                    </ResponsiveContainer>
-                    {pieData.length === 0 ? (
-                        <div style={{ marginTop: '4px', color: '#94a3b8', fontSize: '11px', textAlign: 'center' }}>
-                            Bu ay için kategori verisi yok.
-                        </div>
-                    ) : (
-                        <div style={{ marginTop: '-10px', display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
-                            {pieData.map((item, index) => (
-                                <div
-                                    key={`${item.name}-${index}`}
-                                    onMouseEnter={() => setHoveredKategori(`${item.name}-${index}`)}
-                                    onMouseLeave={() => setHoveredKategori(null)}
-                                    onFocus={() => setHoveredKategori(`${item.name}-${index}`)}
-                                    onBlur={() => setHoveredKategori(null)}
-                                    tabIndex={0}
-                                    style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: '7px', border: '1px solid #cbd5e1', borderRadius: '999px', padding: '6px 11px', background: '#ffffff', cursor: 'default', outline: 'none' }}
-                                >
-                                    {hoveredKategori === `${item.name}-${index}` && (
-                                        <span style={{
-                                            position: 'absolute',
-                                            left: '50%',
-                                            bottom: 'calc(100% + 8px)',
-                                            transform: 'translateX(-50%)',
-                                            zIndex: 20,
-                                            whiteSpace: 'nowrap',
-                                            background: '#f8fafc',
-                                            color: '#334155',
-                                            border: '1px solid #cbd5e1',
-                                            borderRadius: '8px',
-                                            padding: '6px 10px',
-                                            boxShadow: '0 8px 20px rgba(15,23,42,0.16)',
-                                            fontSize: '12px',
-                                            fontWeight: 700
-                                        }}>
-                                            {item.name}: {formatPara(item.value)}
-                                        </span>
-                                    )}
-                                    <span style={{ width: '9px', height: '9px', borderRadius: '50%', background: item.color, flexShrink: 0 }} />
-                                    <span style={{ color: '#334155', fontSize: '9px', fontWeight: 700 }}>{item.name}</span>
-                                    <span style={{ color: '#94a3b8', fontSize: '9px', fontWeight: 700 }}>%{item.yuzde}</span>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
+                {kategoriDonutVar && (
+                    <div
+                        className="responsive-card"
+                        style={{
+                            ...cardStyle,
+                            gridColumn: 'span 1',
+                            padding: '18px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                        }}
+                    >
+                        <PremiumDonutChart
+                            data={pieData}
+                            centerValue={formatPara(toplamKategoriGideri)}
+                            centerLabel="Toplam Gider"
+                            formatValue={formatPara}
+                            height={280}
+                            innerRadius={82}
+                            outerRadius={110}
+                        />
+                    </div>
+                )}
             </div>
 
             {/* --- ALT BÖLÜM (FORMLAR VE LİSTE) --- */}
@@ -481,23 +560,6 @@ const BudgetDashboard = ({
 
                 {/* SOL SÜTUN */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
-                    {/* LİMİT */}
-                    <div className="responsive-card" style={cardStyle}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                            <div className="card-title">Aylık Bütçe Limiti</div>
-                            <div style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '5px' }}><input type="number" value={localLimit} onChange={(e) => setLocalLimit(e.target.value)} onBlur={(e) => onLimitChange(parseInt(e.target.value) || 0)} style={{ width: '70px', border: '1px solid #ddd', borderRadius: '5px', padding: '2px', background: 'white', color: '#333' }} /></div>
-                        </div>
-                        <div style={{ marginBottom: '10px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '5px', fontWeight: 'bold' }}><span style={{ color: limitRenk }}>Harcanan: {formatPara(harcananLimit)}</span><span>{Math.round(limitYuzdesi)}%</span></div>
-                            <div style={{ width: '100%', height: '15px', background: '#edf2f7', borderRadius: '10px', overflow: 'hidden', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)' }}><div style={{ width: `${Math.min(limitYuzdesi, 100)}%`, height: '100%', background: limitRenk, transition: 'width 0.5s', borderRadius: '10px' }}></div></div>
-                            {harcananLimit > aylikLimit && (
-                                <div style={{ fontSize: '11px', color: '#a0aec0', textAlign: 'left', marginTop: '5px' }}>
-                                    Bütçe %{Math.round(((harcananLimit - aylikLimit) / aylikLimit) * 100)} aşıldı
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
                     {/* MAAŞ MODÜLÜ */}
                     <div className="responsive-card" style={{ ...cardStyle, height: 'fit-content' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
@@ -555,7 +617,7 @@ const BudgetDashboard = ({
                                             {h.hesapTipi === 'yatirim' && <span style={{ fontSize: '10px', marginLeft: '5px' }}>📈</span>}
                                             <span onClick={() => setHareketHesabi(h)} title="Hesap hareketleri" style={{ fontSize: '11px', cursor: 'pointer', marginLeft: '5px', color: '#475569' }}>📜</span>
                                             <span onClick={() => modalAc('duzenle_hesap', h)} style={{ fontSize: '10px', cursor: 'pointer', marginLeft: '5px', color: 'blue' }}>✏️</span>
-                                            {aktifAy !== "Tümü" && <div style={{ fontSize: '10px', color: '#aaa' }}>Bu ay: {aylikFark > 0 ? '+' : ''}{formatPara(aylikFark)}</div>}
+                                            <div style={{ fontSize: '10px', color: '#aaa' }}>Dönem: {aylikFark > 0 ? '+' : ''}{formatPara(aylikFark)}</div>
                                         </div>
                                         <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
                                             <span style={{ color: toplamBakiye < 0 ? 'red' : 'green', fontWeight: '600', fontSize: '15px' }}>{formatPara(toplamBakiye)}</span>
@@ -623,6 +685,7 @@ const BudgetDashboard = ({
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                             {/* Faturalar */}
                             {(tanimliFaturalar || []).map(tanim => {
+                                const tanimHesap = hesaplar.find(h => h.id === tanim.hesapId);
                                 const bekleyenler = bekleyenFaturalar
                                     .filter(f => f.tanimId === tanim.id)
                                     .sort((a, b) => new Date(a.sonOdemeTarihi) - new Date(b.sonOdemeTarihi));
@@ -634,6 +697,11 @@ const BudgetDashboard = ({
                                                 <div style={{ fontSize: '10px', color: '#718096' }}>
                                                     {tanim.kurum} {tanim.aboneNo ? `• ${tanim.aboneNo}` : ''}
                                                 </div>
+                                                {tanimHesap && (
+                                                    <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>
+                                                        {tanimHesap.hesapAdi}
+                                                    </div>
+                                                )}
                                             </div>
                                             <div style={{ display: 'flex', gap: '5px' }}>
                                                 <span onClick={() => modalAc('duzenle_fatura_tanim', tanim)} style={{ cursor: 'pointer', fontSize: '12px' }}>✏️</span>
@@ -930,11 +998,6 @@ const BudgetDashboard = ({
                     <div className="responsive-card" style={{ ...cardStyle, overflowX: 'auto' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '5px' }}>
                             <h4 style={{ marginTop: 0, color: '#2c3e50', margin: 0 }}>📜 Hesap Hareketleri</h4>
-                            <div className="no-scrollbar" style={{ display: 'flex', gap: '5px', alignItems: 'center', overflowX: 'auto', whiteSpace: 'nowrap', maxWidth: '300px' }}>
-                                {(mevcutAylar || []).map(ay => (
-                                    <button key={ay} onClick={() => setAktifAy(ay)} style={{ flexShrink: 0, padding: '5px 10px', fontSize: '12px', borderRadius: '15px', border: 'none', cursor: 'pointer', background: aktifAy === ay ? '#2c3e50' : '#edf2f7', color: aktifAy === ay ? 'white' : '#4a5568', fontWeight: 'bold' }}>{ay}</button>
-                                ))}
-                            </div>
                         </div>
 
                         {/* YENİ FİLTRE ALANI */}
@@ -995,7 +1058,7 @@ const BudgetDashboard = ({
                         </div>
 
                         <div style={{ marginTop: '20px', paddingTop: '15px', borderTop: '2px solid #f0f0f0', textAlign: 'right', color: '#2d3748', fontSize: '16px', fontWeight: 'bold' }}>
-                            Net Nakit Akışı ({aktifAy}): <span style={{ color: (toplamGelir - toplamGider) >= 0 ? 'green' : '#e53e3e' }}>{formatPara(toplamGelir - toplamGider)}</span>
+                            Net Nakit Akışı: <span style={{ color: (toplamGelir - toplamGider) >= 0 ? 'green' : '#e53e3e' }}>{formatPara(toplamGelir - toplamGider)}</span>
                         </div>
 
                         <footer style={{ textAlign: 'center', marginTop: '30px', padding: '10px', color: '#a0aec0', fontSize: '12px' }}>

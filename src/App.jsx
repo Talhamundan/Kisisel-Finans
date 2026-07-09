@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { db } from './firebase'
 import { doc, setDoc } from 'firebase/firestore'
 import { ToastContainer } from 'react-toastify';
@@ -10,6 +10,7 @@ import Notifications from './components/Shared/Notifications';
 import BudgetDashboard from './components/Budget/BudgetDashboard';
 import InvestmentDashboard from './components/Investment/InvestmentDashboard';
 import GoalsInventory from './components/Budget/GoalsInventory';
+import FinanceCalendarDashboard from './components/Calendar/FinanceCalendarDashboard';
 import ModalManager from './components/Modals/ModalManager';
 import MobileNav from './components/Layout/MobileNav';
 
@@ -24,6 +25,7 @@ import Feedback from './components/Feedback';
 
 // Helpers
 import { formatMoneyInputValue, inputStyle } from './utils/helpers';
+import { buildAvailablePeriods, getDefaultPeriod, getLatestAvailablePeriod, isDateInPeriod, isPeriodAvailable, readInitialPeriod } from './utils/period';
 
 function App() {
     // 1. AUTH
@@ -35,6 +37,7 @@ function App() {
     const [aktifModal, setAktifModal] = useState(null);
     const [seciliVeri, setSeciliVeri] = useState(null);
     const [formTab, setFormTab] = useState("islem");
+    const [selectedPeriod, setSelectedPeriod] = useState(readInitialPeriod);
 
     // Login / Code Login
     const [alanKodu, setAlanKodu] = useState(localStorage.getItem("alan_kodu") || "");
@@ -42,9 +45,32 @@ function App() {
 
     // 3. HOOKS initialization
     const data = useDataListeners(user, alanKodu);
-    const calculations = useCalculations(data, gizliMod, data.aylikLimit);
+    const calculations = useCalculations(data, gizliMod, data.aylikLimit, selectedPeriod);
     const budgetActions = useBudgetActions(user, alanKodu, data.hesaplar, data.kategoriListesi, data.tanimliFaturalar);
     const investmentActions = useInvestmentActions(user, alanKodu);
+
+    const availablePeriods = useMemo(() => {
+        const dates = data.islemler.map((item) => item.tarih);
+        const periods = buildAvailablePeriods(dates);
+        if (periods.years.length > 0) return periods;
+
+        const fallback = getDefaultPeriod();
+        return {
+            years: [fallback.year],
+            monthsByYear: { [fallback.year]: [fallback.month] },
+        };
+    }, [data.islemler]);
+
+    useEffect(() => {
+        if (!availablePeriods.years.length) return;
+        if (isPeriodAvailable(selectedPeriod, availablePeriods)) return;
+
+        const current = getDefaultPeriod();
+        const nextPeriod = isPeriodAvailable(current, availablePeriods)
+            ? current
+            : getLatestAvailablePeriod(availablePeriods);
+        setSelectedPeriod(nextPeriod);
+    }, [availablePeriods, selectedPeriod]);
 
 
 
@@ -69,10 +95,29 @@ function App() {
     // 3.2 URL TEMİZLİK (Soru işaretini kaldır)
     useEffect(() => {
         if (window.location.search) {
-            const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
-            window.history.replaceState({}, document.title, newUrl);
+            const params = new URLSearchParams(window.location.search);
+            if (!params.has('year') && !params.has('month')) {
+                const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+                window.history.replaceState({}, document.title, newUrl);
+            }
         }
     }, []);
+
+    useEffect(() => {
+        localStorage.setItem('tm_finance_period', JSON.stringify(selectedPeriod));
+        const url = new URL(window.location.href);
+        url.searchParams.set('year', String(selectedPeriod.year));
+        url.searchParams.set('month', selectedPeriod.month === 'all' ? 'all' : String(selectedPeriod.month));
+        window.history.replaceState({}, document.title, `${url.pathname}?${url.searchParams.toString()}`);
+    }, [selectedPeriod]);
+
+    const filteredPendingBills = data.bekleyenFaturalar.filter((bill) => (
+        isDateInPeriod(bill.sonOdemeTarihi, selectedPeriod)
+    ));
+
+    const filteredDebts = data.borclar.filter((debt) => (
+        debt.sonOdemeTarihi ? isDateInPeriod(debt.sonOdemeTarihi, selectedPeriod) : true
+    ));
 
     // Sekme değişince sayfayı en üste al (scroll container: #root)
     useEffect(() => {
@@ -127,7 +172,11 @@ function App() {
         if (tip === 'duzenle_taksit') budgetActions.fillInstallmentForm(veri);
         if (tip === 'duzenle_maas') budgetActions.fillSalaryForm(veri);
         if (tip === 'duzenle_bekleyen_fatura') budgetActions.fillBillForm(veri);
-        if (tip === 'fatura_tanim_duzenle') budgetActions.fillBillDefForm(veri); // If exists
+        if (tip === 'duzenle_fatura_tanim' || tip === 'fatura_tanim_duzenle') budgetActions.fillBillDefForm(veri); // If exists
+        if (tip === 'fatura_ode') {
+            const tanim = data.tanimliFaturalar.find(t => t.id === veri?.tanimId);
+            budgetActions.setSecilenHesapId(tanim?.hesapId || "");
+        }
         if (tip === 'kredi_karti_ode') budgetActions.fillCCForm(veri);
         if (tip === 'satis') budgetActions.setIslemTutar(formatMoneyInputValue(veri.guncelFiyat || veri.alisFiyati));
         if (tip === 'duzenle_portfoy') investmentActions.fillPortfolioForm(veri);
@@ -437,6 +486,7 @@ function App() {
                 tanimBaslik={budgetActions.tanimBaslik} setTanimBaslik={budgetActions.setTanimBaslik}
                 tanimKurum={budgetActions.tanimKurum} setTanimKurum={budgetActions.setTanimKurum}
                 tanimAboneNo={budgetActions.tanimAboneNo} setTanimAboneNo={budgetActions.setTanimAboneNo}
+                tanimHesapId={budgetActions.tanimHesapId} setTanimHesapId={budgetActions.setTanimHesapId}
                 faturaTanimDuzenle={budgetActions.faturaTanimDuzenle}
                 alanKodu={alanKodu}
                 verileriTasi={budgetActions.verileriTasi}
@@ -446,6 +496,8 @@ function App() {
                 secilenHesapId={budgetActions.secilenHesapId} setSecilenHesapId={budgetActions.setSecilenHesapId}
                 onKategoriUpdate={onKategoriUpdate}
                 onYatirimTuruUpdate={onYatirimTuruUpdate}
+                aylikLimit={data.aylikLimit}
+                onLimitChange={onLimitChange}
                 gizliMod={gizliMod}
                 besKesintiEkle={investmentActions.besKesintiEkle}
                 besKesintiSil={investmentActions.besKesintiSil}
@@ -490,6 +542,10 @@ function App() {
                 setAktifModal={setAktifModal}
                 koddanCikis={koddanCikis}
                 cikisYap={cikisYap}
+                selectedPeriod={selectedPeriod}
+                setSelectedPeriod={setSelectedPeriod}
+                availablePeriods={availablePeriods}
+                showPeriodFilter={anaSekme !== 'hedefler'}
             />
 
             <Notifications
@@ -520,19 +576,16 @@ function App() {
                     kategoriVerisi={calculations.kategoriVerisi}
                     gizliMod={gizliMod}
                     aylikLimit={data.aylikLimit}
-                    onLimitChange={onLimitChange}
-                    harcananLimit={calculations.harcananLimit}
-                    limitYuzdesi={calculations.limitYuzdesi}
-                    limitRenk={calculations.limitRenk}
                     maaslar={data.maaslar}
                     hesaplar={data.hesaplar}
                     filtrelenmisIslemler={calculations.filtrelenmisIslemler}
                     tumIslemler={data.islemler}
+                    selectedPeriod={selectedPeriod}
                     sadeceCuzdanNakiti={calculations.sadeceCuzdanNakiti}
                     genelToplamYatirimGucu={calculations.genelToplamYatirimGucu}
                     netVarlik={calculations.netVarlik}
                     tanimliFaturalar={data.tanimliFaturalar}
-                    bekleyenFaturalar={data.bekleyenFaturalar}
+                    bekleyenFaturalar={filteredPendingBills}
                     taksitler={data.taksitler}
                     toplamKalanTaksitBorcu={calculations.toplamKalanTaksitBorcu}
                     abonelikler={data.abonelikler}
@@ -600,7 +653,7 @@ function App() {
                     faturaGirisTarih={budgetActions.faturaGirisTarih} setFaturaGirisTarih={budgetActions.setFaturaGirisTarih}
                     faturaGirisAciklama={budgetActions.faturaGirisAciklama} setFaturaGirisAciklama={budgetActions.setFaturaGirisAciklama}
 
-                    borclar={data.borclar}
+                    borclar={filteredDebts}
                     toplamKalanBorc={calculations.toplamKalanBorc}
                     borcOde={budgetActions.borcOde}
                     borcDuzenle={budgetActions.borcDuzenle}
@@ -642,6 +695,7 @@ function App() {
                     tumIslemler={data.islemler} // NEW: Pass all transactions for All-Time Analysis
                     yatirimArama={calculations.yatirimArama} setYatirimArama={calculations.setYatirimArama}
                     aktifYatirimAy={calculations.aktifYatirimAy} setAktifYatirimAy={calculations.setAktifYatirimAy}
+                    selectedPeriod={selectedPeriod}
                     filtreYatirimTuru={calculations.filtreYatirimTuru} setFiltreYatirimTuru={calculations.setFiltreYatirimTuru}
                     mevcutAylar={calculations.mevcutAylar}
                     islemSil={budgetActions.islemSil}
@@ -667,6 +721,29 @@ function App() {
                     satislar={data.satislar}
                     actions={investmentActions}
                     genelToplamYatirimGucu={calculations.genelToplamYatirimGucu}
+                />
+            )}
+
+            {/* FİNANS TAKVİMİ */}
+            {anaSekme === "takvim" && (
+                <FinanceCalendarDashboard
+                    user={user}
+                    alanKodu={alanKodu}
+                    gizliMod={gizliMod}
+                    selectedYear={selectedPeriod.year}
+                    selectedMonth={selectedPeriod.month}
+                    setSelectedPeriod={setSelectedPeriod}
+                    availablePeriods={availablePeriods}
+                    sourceData={{
+                        accounts: data.hesaplar,
+                        subscriptions: data.abonelikler,
+                        installments: data.taksitler,
+                        bills: data.bekleyenFaturalar,
+                        billDefinitions: data.tanimliFaturalar,
+                        salaries: data.maaslar,
+                        goals: data.hedefler,
+                        inventory: data.envanter,
+                    }}
                 />
             )}
 

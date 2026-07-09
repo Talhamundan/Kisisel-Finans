@@ -214,6 +214,7 @@ const ModalManager = ({
     tanimBaslik, setTanimBaslik,
     tanimKurum, setTanimKurum,
     tanimAboneNo, setTanimAboneNo,
+    tanimHesapId, setTanimHesapId,
     faturaTanimDuzenle,
     alanKodu,
     verileriTasi,
@@ -227,6 +228,8 @@ const ModalManager = ({
     // yeniYatirimTuruAdi, setYeniYatirimTuruAdi, -> MOVED TO LOCAL STATE
     onKategoriUpdate, // Replaces inline setDoc
     onYatirimTuruUpdate, // Replaces inline setDoc
+    aylikLimit,
+    onLimitChange,
     gizliMod,
     besKesintiEkle,
     besKesintiSil,
@@ -261,6 +264,11 @@ const ModalManager = ({
     const [silinecekObje, setSilinecekObje] = useState(null); // Local state for delete confirmation
     const [borcOdemeTutarState, setBorcOdemeTutarState] = useState("");
     const [borcSecilenHesapIdState, setBorcSecilenHesapIdState] = useState("");
+    const [butceLimitInput, setButceLimitInput] = useState(aylikLimit || "");
+
+    useEffect(() => {
+        setButceLimitInput(aylikLimit || "");
+    }, [aylikLimit]);
 
     useEffect(() => {
         if (aktifModal === 'borc_ode') {
@@ -340,10 +348,14 @@ const ModalManager = ({
                 setIsProcessing(false);
                 if (success) close();
             }}>
-                <input placeholder="Başlık (Ev İnternet)" value={tanimBaslik} onChange={e => setTanimBaslik(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} required />
+                <input placeholder="Ad" value={tanimBaslik} onChange={e => setTanimBaslik(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} required />
                 <input placeholder="Kurum" value={tanimKurum} onChange={e => setTanimKurum(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} />
-                <input placeholder="Abone No" value={tanimAboneNo} onChange={e => setTanimAboneNo(e.target.value)} style={{ ...inputStyle, marginBottom: '20px' }} />
-                <button type="submit" disabled={isProcessing} style={{ width: '100%', background: '#4a5568', color: 'white', padding: '14px', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold', opacity: isProcessing ? 0.7 : 1 }}>{isProcessing ? 'KAYDEDİLİYOR...' : 'KAYDET'}</button>
+                <input placeholder="Abone No" value={tanimAboneNo} onChange={e => setTanimAboneNo(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} />
+                <select value={tanimHesapId} onChange={e => setTanimHesapId(e.target.value)} style={{ ...inputStyle, marginBottom: '20px' }}>
+                    <option value="">Hangi Hesaptan?</option>
+                    {hesaplar.map(h => <option key={h.id} value={h.id}>{h.hesapAdi}</option>)}
+                </select>
+                <button type="submit" disabled={isProcessing} style={{ width: '100%', background: '#805ad5', color: 'white', padding: '14px', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold', opacity: isProcessing ? 0.7 : 1 }}>{isProcessing ? 'KAYDEDİLİYOR...' : 'KAYDET'}</button>
             </form>
         );
     }
@@ -385,10 +397,14 @@ const ModalManager = ({
         title = "Fatura Tanımı Düzenle";
         content = (
             <form onSubmit={(e) => faturaTanimDuzenle(e, seciliVeri.id).then(res => res && close())}>
-                <input placeholder="Başlık" value={tanimBaslik} onChange={e => setTanimBaslik(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} required />
+                <input placeholder="Ad" value={tanimBaslik} onChange={e => setTanimBaslik(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} required />
                 <input placeholder="Kurum" value={tanimKurum} onChange={e => setTanimKurum(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} />
-                <input placeholder="Abone No" value={tanimAboneNo} onChange={e => setTanimAboneNo(e.target.value)} style={{ ...inputStyle, marginBottom: '20px' }} />
-                <button type="submit" style={{ width: '100%', background: '#4a5568', color: 'white', padding: '14px', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold' }}>GÜNCELLE</button>
+                <input placeholder="Abone No" value={tanimAboneNo} onChange={e => setTanimAboneNo(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} />
+                <select value={tanimHesapId} onChange={e => setTanimHesapId(e.target.value)} style={{ ...inputStyle, marginBottom: '20px' }}>
+                    <option value="">Hangi Hesaptan?</option>
+                    {hesaplar.map(h => <option key={h.id} value={h.id}>{h.hesapAdi}</option>)}
+                </select>
+                <button type="submit" style={{ width: '100%', background: '#805ad5', color: 'white', padding: '14px', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold' }}>GÜNCELLE</button>
             </form>
         );
     }
@@ -748,6 +764,35 @@ const ModalManager = ({
                         </div>
                     </div>
                 )}
+
+                {/* 1. BÜTÇE AYARLARI */}
+                <div style={{ padding: '14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', marginBottom: '20px' }}>
+                    <h4 style={{ margin: '0 0 12px 0', color: '#334155', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}>🎯 Bütçe Ayarları</h4>
+                    <form onSubmit={(e) => {
+                        e.preventDefault();
+                        const nextLimit = Math.max(0, parseFloat(butceLimitInput) || 0);
+                        onLimitChange(nextLimit);
+                        toast.success("Bütçe limiti kaydedildi");
+                    }} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        <label style={{ color: '#64748b', fontSize: '11px', fontWeight: 800 }}>
+                            Aylık bütçe limiti (₺)
+                        </label>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <input
+                                type="number"
+                                min="0"
+                                step="1"
+                                value={butceLimitInput}
+                                onChange={e => setButceLimitInput(e.target.value)}
+                                placeholder="40000"
+                                style={{ ...inputStyle, background: '#ffffff', border: '1px solid #dbe3ef', fontSize: '12px', padding: '9px', flex: 1 }}
+                            />
+                            <button type="submit" style={{ padding: '0 16px', borderRadius: '8px', border: 'none', background: '#0f172a', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>
+                                Kaydet
+                            </button>
+                        </div>
+                    </form>
+                </div>
 
                 {/* 1. KATEGORİLER */}
                 <h4 style={{ margin: '0 0 10px 0', color: '#4a5568', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px' }}>📂 Kategoriler</h4>

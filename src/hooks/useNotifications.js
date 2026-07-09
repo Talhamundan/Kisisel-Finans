@@ -16,7 +16,10 @@ export const useNotifications = ({
     const [bildirimler, setBildirimler] = useState([]);
 
     useEffect(() => {
-        if (islemler.length === 0 && abonelikler.length === 0 && taksitler.length === 0 && maaslar.length === 0 && hesaplar.length === 0 && bekleyenFaturalar.length === 0) return;
+        if (islemler.length === 0 && abonelikler.length === 0 && taksitler.length === 0 && maaslar.length === 0 && hesaplar.length === 0 && bekleyenFaturalar.length === 0) {
+            setBildirimler([]);
+            return;
+        }
         const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
         const addMonthsClamped = (date, monthCount) => {
             const target = new Date(date.getFullYear(), date.getMonth() + monthCount, 1);

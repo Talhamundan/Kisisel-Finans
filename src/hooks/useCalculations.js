@@ -1,23 +1,27 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { ayIsmiGetir, normalizeAssetType, toDateSafe } from '../utils/helpers';
 import { useNotifications } from './useNotifications';
+import { isDateInPeriod, MONTH_NAMES, periodLabel } from '../utils/period';
 
 export const useCalculations = (
     data, // { hesaplar, islemler, portfoy, abonelikler, taksitler, maaslar, bekleyenFaturalar, tanimliFaturalar, besVerisi, satislar, borclar }
     gizliMod,
-    aylikLimit
+    aylikLimit,
+    selectedPeriod
 ) => {
     const { hesaplar, islemler, portfoy, abonelikler, taksitler, maaslar, bekleyenFaturalar, tanimliFaturalar, besVerisi, satislar, borclar } = data;
 
     // --- FILTER STATES ---
-    const [aktifAy, setAktifAy] = useState(new Date().toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' }));
     const [aramaMetni, setAramaMetni] = useState("");
     const [filtreKategori, setFiltreKategori] = useState("Tümü");
 
     // Yatırım Filtreleri
     const [yatirimArama, setYatirimArama] = useState("");
-    const [aktifYatirimAy, setAktifYatirimAy] = useState(new Date().toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' }));
     const [filtreYatirimTuru, setFiltreYatirimTuru] = useState("Tümü");
+    const aktifAy = periodLabel(selectedPeriod);
+    const aktifYatirimAy = aktifAy;
+    const setAktifAy = () => {};
+    const setAktifYatirimAy = () => {};
 
     const bildirimler = useNotifications({ hesaplar, islemler, abonelikler, taksitler, maaslar, bekleyenFaturalar, tanimliFaturalar, besVerisi, satislar, borclar });
 
@@ -31,7 +35,7 @@ export const useCalculations = (
             const yatirimAlisDegil = i.islemTipi !== "yatirim_alis";
             const yatirimDegil = i.kategori !== "Yatırım";
             const iadeDegil = i.islemTipi !== "cari_iade";
-            const ayUyumu = aktifAy === "Tümü" ? true : ayIsmiGetir(i.tarih) === aktifAy;
+            const ayUyumu = isDateInPeriod(i.tarih, selectedPeriod);
             const aramaKucuk = aramaMetni.toLowerCase();
             const metinUyumu = !aramaMetni ? true : (
                 (i.aciklama && i.aciklama.toLowerCase().includes(aramaKucuk)) ||
@@ -41,13 +45,13 @@ export const useCalculations = (
             const kategoriUyumu = filtreKategori === "Tümü" ? true : i.kategori === filtreKategori;
             return besDegil && yatirimAlisDegil && yatirimDegil && iadeDegil && ayUyumu && metinUyumu && kategoriUyumu;
         });
-    }, [islemler, aktifAy, aramaMetni, filtreKategori]);
+    }, [islemler, selectedPeriod, aramaMetni, filtreKategori]);
 
     // 2. Yatırım Islemleri
     const yatirimIslemleri = useMemo(() => {
         return islemler.filter(i => {
             const yatirimMi = i.kategori === "Yatırım" || i.kategori === "BES" || i.islemTipi === "yatirim_alis" || i.islemTipi === "yatirim_satis";
-            const ayUyumu = aktifYatirimAy === "Tümü" ? true : ayIsmiGetir(i.tarih) === aktifYatirimAy;
+            const ayUyumu = isDateInPeriod(i.tarih, selectedPeriod);
             const aramaKucuk = yatirimArama.toLowerCase();
             const metinUyumu = !yatirimArama ? true : (
                 (i.aciklama && i.aciklama.toLowerCase().includes(aramaKucuk)) ||
@@ -56,11 +60,11 @@ export const useCalculations = (
             const turUyumu = filtreYatirimTuru === "Tümü" ? true : i.yatirimTuru === filtreYatirimTuru;
             return yatirimMi && ayUyumu && metinUyumu && turUyumu;
         });
-    }, [islemler, aktifYatirimAy, yatirimArama, filtreYatirimTuru]);
+    }, [islemler, selectedPeriod, yatirimArama, filtreYatirimTuru]);
 
     // 3. Tarih Filtresi Aylarının Dinamik Hesaplanması
     const mevcutAylar = useMemo(() => {
-        if (!islemler || islemler.length === 0) return ["Tümü"];
+        if (!islemler || islemler.length === 0) return [aktifAy];
 
         const benzersizAylarMap = new Map();
 
@@ -81,22 +85,14 @@ export const useCalculations = (
         // Sort descending (newest month first)
         const sortedKeys = Array.from(benzersizAylarMap.keys()).sort((a, b) => b - a);
 
-        const aylarListesi = ["Tümü"];
+        const aylarListesi = [];
         sortedKeys.forEach(key => {
             aylarListesi.push(benzersizAylarMap.get(key));
         });
+        if (!aylarListesi.includes(aktifAy)) aylarListesi.unshift(aktifAy);
 
         return aylarListesi;
-    }, [islemler]);
-
-    // Sayfa açıldığında veya veriler güncellendiğinde eğer mevcut seçili ay boşsa (veri yoksa),
-    // otomatik olarak verisi bulunan en güncel aya (index 1) geçiş yapmasını sağlar.
-    useEffect(() => {
-        if (mevcutAylar.length > 1) {
-            setAktifAy(prev => (prev !== "Tümü" && !mevcutAylar.includes(prev)) ? mevcutAylar[1] : prev);
-            setAktifYatirimAy(prev => (prev !== "Tümü" && !mevcutAylar.includes(prev)) ? mevcutAylar[1] : prev);
-        }
-    }, [mevcutAylar]);
+    }, [islemler, aktifAy]);
     // Totals
     const bugunGider = filtrelenmisIslemler.filter(i => {
         const d = toDateSafe(i.tarih);
@@ -116,34 +112,66 @@ export const useCalculations = (
 
     // Charts
     const kategoriVerisi = filtrelenmisIslemler.filter(i => i.islemTipi === 'gider' && i.kategori !== 'Transfer').reduce((acc, curr) => { const mevcut = acc.find(item => item.name === curr.kategori); if (mevcut) { mevcut.value += curr.tutar; } else { acc.push({ name: curr.kategori, value: curr.tutar }); } return acc; }, []);
-    const gunlukVeri = filtrelenmisIslemler
-        .filter(i => i.islemTipi === 'gider')
-        .reduce((acc, curr) => {
-            const d = toDateSafe(curr.tarih);
-            if (!d) return acc;
-            const gun = d.getDate();
-            const mevcut = acc.find(item => item.name === gun);
-            if (mevcut) mevcut.value += curr.tutar;
-            else acc.push({ name: gun, value: curr.tutar });
-            return acc;
-        }, [])
-        .sort((a, b) => a.name - b.name);
+    const gunlukVeri = (() => {
+        const today = new Date();
+        const isCurrentYear = selectedPeriod.year === today.getFullYear();
+        const isFutureYear = selectedPeriod.year > today.getFullYear();
+        const visibleMonthCount = selectedPeriod.month === 'all'
+            ? isFutureYear
+                ? 0
+                : isCurrentYear
+                    ? today.getMonth() + 1
+                    : 12
+            : 0;
+        const isCurrentMonth = selectedPeriod.month !== 'all' &&
+            selectedPeriod.year === today.getFullYear() &&
+            selectedPeriod.month === today.getMonth() + 1;
+        const isFutureMonth = selectedPeriod.month !== 'all' &&
+            new Date(selectedPeriod.year, selectedPeriod.month - 1, 1) > new Date(today.getFullYear(), today.getMonth(), 1);
+        const visibleDayCount = selectedPeriod.month === 'all'
+            ? visibleMonthCount
+            : isFutureMonth
+                ? 0
+                : isCurrentMonth
+                    ? today.getDate()
+                    : new Date(selectedPeriod.year, selectedPeriod.month, 0).getDate();
+
+        const buckets = selectedPeriod.month === 'all'
+            ? Array.from({ length: visibleMonthCount }, (_, index) => ({
+                name: MONTH_NAMES[index],
+                value: 0,
+                tooltipLabel: `${MONTH_NAMES[index]} ${selectedPeriod.year}`,
+                isToday: isCurrentYear && index === today.getMonth(),
+            }))
+            : Array.from({ length: visibleDayCount }, (_, index) => {
+                const day = index + 1;
+                return {
+                    name: day,
+                    value: 0,
+                    tooltipLabel: `${day} ${MONTH_NAMES[selectedPeriod.month - 1]} ${selectedPeriod.year}`,
+                    isToday: isCurrentMonth && day === today.getDate(),
+                };
+            });
+
+        filtrelenmisIslemler
+            .filter(i => i.islemTipi === 'gider')
+            .forEach((curr) => {
+                const d = toDateSafe(curr.tarih);
+                if (!d) return;
+                const index = selectedPeriod.month === 'all' ? d.getMonth() : d.getDate() - 1;
+                if (buckets[index]) buckets[index].value += curr.tutar;
+            });
+
+        return buckets;
+    })();
 
     let gunlukOrtalama = 0;
-    if (aktifAy !== "Tümü") {
-        const parcalar = aktifAy.split(" ");
-        const ayIsmi = parcalar[0];
-        const yil = parseInt(parcalar[1]);
-        const aylar = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
-        const ayIndex = aylar.indexOf(ayIsmi);
-        if (ayIndex > -1 && !isNaN(yil)) {
-            const simdi = new Date();
-            let gunSayisi = 1;
-            if (simdi.getMonth() === ayIndex && simdi.getFullYear() === yil) {
-                gunSayisi = Math.max(1, simdi.getDate());
-            } else {
-                gunSayisi = new Date(yil, ayIndex + 1, 0).getDate();
-            }
+    {
+        if (selectedPeriod.month === 'all') {
+            const veriBulunanAySayisi = gunlukVeri.filter((item) => item.value > 0).length || 1;
+            gunlukOrtalama = toplamGider / veriBulunanAySayisi;
+        } else {
+            const gunSayisi = Math.max(1, gunlukVeri.length || 1);
             gunlukOrtalama = toplamGider / gunSayisi;
         }
     }
@@ -153,7 +181,9 @@ export const useCalculations = (
     const toplamKarZarar = portfoyGuncelDegeri - portfoy.reduce((acc, p) => acc + (p.adet * p.alisFiyati), 0);
     const portfoyVerisi = portfoy.reduce((acc, curr) => { const guncelTutar = curr.adet * (curr.guncelFiyat || curr.alisFiyati); const mevcut = acc.find(item => item.name === curr.sembol); if (mevcut) { mevcut.value += guncelTutar; } else { acc.push({ name: curr.sembol, value: guncelTutar }); } return acc; }, []);
 
-    const toplamKalanBorc = borclar ? borclar.reduce((sum, b) => sum + (b.kalanTutar || 0), 0) : 0;
+    const toplamKalanBorc = borclar ? borclar
+        .filter((b) => b.sonOdemeTarihi ? isDateInPeriod(b.sonOdemeTarihi, selectedPeriod) : true)
+        .reduce((sum, b) => sum + (b.kalanTutar || 0), 0) : 0;
     const toplamKalanTaksitBorcu = taksitler.reduce((acc, t) => acc + (t.toplamTutar - (t.aylikTutar * t.odenmisTaksit)), 0);
     const toplamSabitGider = abonelikler.reduce((acc, abo) => acc + abo.tutar, 0);
     const toplamNakitVarlik = hesaplar.reduce((acc, h) => acc + (parseFloat(h.guncelBakiye) || 0), 0);
@@ -171,7 +201,7 @@ export const useCalculations = (
     const toplamBesVarligi = (besVerisi?.guncelTutar || 0) + portfoy.filter(p => normalizeAssetType(p.varlikTuru) === 'bes').reduce((acc, p) => acc + (p.adet * (p.guncelFiyat || p.alisFiyati)), 0);
     const toplamAltinVarligi = portfoy.filter(p => isAltinOrGumus(p)).reduce((acc, p) => acc + (p.adet * (p.guncelFiyat || p.alisFiyati)), 0);
     const toplamYatirimHesapNakiti = hesaplar.filter(h => h.hesapTipi === 'yatirim').reduce((acc, h) => acc + (parseFloat(h.guncelBakiye) || 0), 0);
-    const toplamBesYatirimi = islemler.filter(i => i.kategori === 'BES' && i.islemTipi === 'gider').reduce((acc, i) => acc + i.tutar, 0);
+    const toplamBesYatirimi = islemler.filter(i => i.kategori === 'BES' && i.islemTipi === 'gider' && isDateInPeriod(i.tarih, selectedPeriod)).reduce((acc, i) => acc + i.tutar, 0);
 
     // Net nakit (cüzdan)
     const sadeceCuzdanNakiti = toplamNakitVarlik - toplamYatirimHesapNakiti;

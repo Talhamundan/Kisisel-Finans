@@ -1,7 +1,8 @@
 import React from 'react';
-import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
 import BESCard from './BESCard';
-import { inputStyle, formatCurrencyPlain, tarihFormatla, COLORS_GENEL, COLORS_PORTFOLIO } from '../../utils/helpers';
+import { inputStyle, formatCurrencyPlain, tarihFormatla } from '../../utils/helpers';
+import { isDateInPeriod } from '../../utils/period';
+import PremiumDonutChart, { DONUT_PALETTE } from '../Shared/PremiumDonutChart';
 
 const InvestmentDashboard = ({
     gizliMod,
@@ -29,8 +30,8 @@ const InvestmentDashboard = ({
     hesaplar,
     yatirimIslemleri,
     yatirimArama, setYatirimArama,
-    aktifYatirimAy, setAktifYatirimAy,
-    mevcutAylar,
+    aktifYatirimAy,
+    selectedPeriod,
     // Actions
     islemSil, fiyatGuncelle,
     // BES
@@ -44,17 +45,6 @@ const InvestmentDashboard = ({
     tumIslemler, // NEW PROP
     pozisyonSil // NEW PROP
 }) => {
-    const [isMobile, setIsMobile] = React.useState(() => {
-        if (typeof window === 'undefined') return false;
-        return window.innerWidth <= 767;
-    });
-
-    React.useEffect(() => {
-        const onResize = () => setIsMobile(window.innerWidth <= 767);
-        window.addEventListener('resize', onResize);
-        return () => window.removeEventListener('resize', onResize);
-    }, []);
-
     const cardStyle = {
         background: 'white',
         borderRadius: '20px',
@@ -65,11 +55,23 @@ const InvestmentDashboard = ({
     const formatPara = (tutar) => gizliMod ? "**** ₺" : formatCurrencyPlain(tutar);
 
     const COLORS_MAP = {
-        'Hisse': '#3182ce',
-        'Döviz': '#38a169',
-        'BES': '#805ad5',
-        'Nakit': '#dd6b20'
+        'Hisse': '#5B8DEF',
+        'Döviz': '#34D399',
+        'BES': '#8B7CF6',
+        'Nakit': '#F59E72'
     };
+
+    const genelVarlikChartData = (genelVarlikVerisi || []).map((entry, index) => ({
+        ...entry,
+        color: COLORS_MAP[entry.name] || DONUT_PALETTE[index % DONUT_PALETTE.length],
+    }));
+    const genelVarlikChartTotal = genelVarlikChartData.reduce((sum, item) => sum + (parseFloat(item.value) || 0), 0);
+
+    const portfoyChartData = (portfoyVerisi || []).map((entry, index) => ({
+        ...entry,
+        color: DONUT_PALETTE[index % DONUT_PALETTE.length],
+    }));
+    const portfoyChartTotal = portfoyChartData.reduce((sum, item) => sum + (parseFloat(item.value) || 0), 0);
 
     const aggregatedPortfoy = React.useMemo(() => {
         const groups = {};
@@ -102,13 +104,10 @@ const InvestmentDashboard = ({
     return (
         <div>
             {/* 1. SATIR: ÖZET + GENEL DAĞILIM */}
-            <div className="responsive-grid-2 investment-grid-top" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '25px', marginBottom: '30px' }}>
+            <div className="responsive-grid-2 investment-grid-top" style={{ display: 'grid', gridTemplateColumns: genelVarlikChartTotal > 0 ? '2fr 1fr' : '1fr', gap: '25px', marginBottom: '30px' }}>
                 {/* SOL KART: TOPLAM ÖZET */}
                 <div className="responsive-card investment-card" style={{ ...cardStyle, padding: '30px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                     <div className="card-title-sm">TOPLAM YATIRIM VARLIĞI</div>
-                    <div className="text-muted" style={{ fontSize: '13px', marginTop: '4px' }}>
-                        Portföy + yatırım hesap bakiyesi
-                    </div>
 
                     <div className="kpi-amount" style={{ fontSize: '32px', marginTop: '18px' }}>
                         {formatPara(genelToplamYatirimGucu)}
@@ -134,39 +133,24 @@ const InvestmentDashboard = ({
                     </div>
                 </div>
 
-                {/* SAĞ KART: GENEL DAĞILIM PASTA GRAFİĞİ */}
-                <div className="responsive-card investment-card" style={{ ...cardStyle, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '280px' }}>
-                    {genelToplamYatirimGucu > 0 ? (
-                        <ResponsiveContainer width="100%" height={220}>
-                            <PieChart>
-                                <Pie
-                                    data={genelVarlikVerisi || []}
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius={45}
-                                    outerRadius={80}
-                                    paddingAngle={5}
-                                    dataKey="value"
-                                    label={isMobile ? false : ({ name }) => name}
-                                >
-                                    {(genelVarlikVerisi || []).map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS_MAP[entry.name] || COLORS_GENEL[index % COLORS_GENEL.length]} />
-                                    ))}
-                                </Pie>
-                                <Tooltip
-                                    formatter={(value) => gizliMod ? "****" : formatPara(value)}
-                                    contentStyle={{ borderRadius: '10px', border: 'none', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}
-                                />
-                            </PieChart>
-                        </ResponsiveContainer>
-                    ) : (
-                        <div style={{ color: '#cbd5e0', fontSize: '13px' }}>Veri Yok</div>
-                    )}
-                </div>
+                {genelVarlikChartTotal > 0 && (
+                    <div className="responsive-card investment-card" style={{ ...cardStyle, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '220px' }}>
+                        <PremiumDonutChart
+                            data={genelVarlikChartData}
+                            title="Yatırım Varlığı Dağılımı"
+                            centerValue={formatPara(genelToplamYatirimGucu)}
+                            centerLabel="Toplam Varlık"
+                            formatValue={formatPara}
+                            height={176}
+                            innerRadius={54}
+                            outerRadius={74}
+                        />
+                    </div>
+                )}
             </div>
 
             {/* 2. SATIR: PORTFÖY TABLOSU VE VARLIK DAĞILIMI */}
-            <div className="responsive-grid-2 investment-grid-middle" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '25px', marginBottom: '30px' }}>
+            <div className="responsive-grid-2 investment-grid-middle" style={{ display: 'grid', gridTemplateColumns: portfoyChartTotal > 0 ? '2fr 1fr' : '1fr', gap: '25px', marginBottom: '30px' }}>
 
                 {/* SOL: PORTFÖY TABLOSU */}
                 <div className="responsive-card investment-card" style={cardStyle}>
@@ -211,55 +195,20 @@ const InvestmentDashboard = ({
                 </div>
 
                 {/* SAĞ: VARLIK DAĞILIMI */}
-                <div className="responsive-card investment-card" style={{ ...cardStyle, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                    {(portfoy || []).length > 0 ? (
-                        <>
-                            <div className="card-title-sm" style={{ marginBottom: 8 }}>Portföy Dağılımı</div>
-                            <ResponsiveContainer width="100%" height={260}>
-                                <PieChart>
-                                    <Pie
-                                        data={portfoyVerisi || []}
-                                        cx="50%"
-                                        cy="50%"
-                                        innerRadius={68}
-                                        outerRadius={100}
-                                        startAngle={90}
-                                        endAngle={-270}
-                                        paddingAngle={3}
-                                        cornerRadius={8}
-                                        dataKey="value"
-                                    >
-                                        {(portfoyVerisi || []).map((entry, index) => (
-                                            <Cell
-                                                key={`cell-${index}`}
-                                                fill={COLORS_PORTFOLIO[index % COLORS_PORTFOLIO.length]}
-                                                stroke="#f9fafb"
-                                                strokeWidth={2}
-                                            />
-                                        ))}
-                                    </Pie>
-                                    <Tooltip
-                                        formatter={(value, name) => [
-                                            gizliMod ? '****' : formatPara(value),
-                                            name
-                                        ]}
-                                        contentStyle={{
-                                            borderRadius: 12,
-                                            border: 'none',
-                                            boxShadow: '0 10px 25px rgba(15,23,42,0.15)',
-                                            fontSize: 12
-                                        }}
-                                    />
-                                </PieChart>
-                            </ResponsiveContainer>
-                            <div style={{ marginTop: 4, fontSize: 18, fontWeight: 'bold', color: '#2d3748' }}>
-                                {formatPara(portfoyGuncelDegeri)}
-                            </div>
-                        </>
-                    ) : (
-                        <p style={{ fontSize: '12px', color: '#aaa' }}>Henüz varlık yok.</p>
-                    )}
-                </div>
+                {portfoyChartTotal > 0 && (
+                    <div className="responsive-card investment-card" style={{ ...cardStyle, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                        <PremiumDonutChart
+                            data={portfoyChartData}
+                            title="Portföy Dağılımı"
+                            centerValue={formatPara(portfoyGuncelDegeri)}
+                            centerLabel="Portföy Değeri"
+                            formatValue={formatPara}
+                            height={182}
+                            innerRadius={56}
+                            outerRadius={76}
+                        />
+                    </div>
+                )}
             </div>
 
             {/* BES MODÜLÜ */}
@@ -273,6 +222,7 @@ const InvestmentDashboard = ({
                 besOdemeIsle={besOdemeIsle}
                 modalAc={modalAc}
                 aktifYatirimAy={aktifYatirimAy}
+                selectedPeriod={selectedPeriod}
                 yatirimIslemleri={yatirimIslemleri}
                 gizliMod={gizliMod}
             />
@@ -307,11 +257,6 @@ const InvestmentDashboard = ({
                     {/* ÜST BÖLÜM: AYLAR */}
                     <div className="investment-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '10px' }}>
                         <div className="card-title">Yatırım İşlem Geçmişi</div>
-                        <div className="no-scrollbar" style={{ display: 'flex', gap: '5px', alignItems: 'center', overflowX: 'auto', paddingBottom: '5px', maxWidth: '100%', whiteSpace: 'nowrap' }}>
-                            {(mevcutAylar || []).map(ay => (
-                                <button key={ay} onClick={() => setAktifYatirimAy(ay)} style={{ padding: '5px 10px', fontSize: '12px', borderRadius: '15px', border: 'none', cursor: 'pointer', background: aktifYatirimAy === ay ? '#2c3e50' : '#edf2f7', color: aktifYatirimAy === ay ? 'white' : '#4a5568', fontWeight: 'bold', flexShrink: 0 }}>{ay}</button>
-                            ))}
-                        </div>
                     </div>
 
                     {/* GELİŞMİŞ FİLTRELEME ALANI */}
@@ -332,7 +277,7 @@ const InvestmentDashboard = ({
                     {/* LİSTE */}
                     <div className="custom-scrollbar investment-history-scroll" style={{ flex: 1, overflowY: 'auto', paddingRight: '5px' }}>
                         {(yatirimIslemleri || []).length === 0 ? (
-                            <div style={{ textAlign: 'center', color: '#a0aec0', marginTop: '50px', fontStyle: 'italic' }}>Bu ay için işlem bulunamadı.</div>
+                            <div style={{ textAlign: 'center', color: '#a0aec0', marginTop: '50px', fontStyle: 'italic' }}>Seçili dönem için işlem bulunamadı.</div>
                         ) : (
                             <table className="investment-history-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', minWidth: '640px' }}>
                                 <thead style={{ position: 'sticky', top: 0, background: 'white', zIndex: 1, boxShadow: '0 2px 5px rgba(0,0,0,0.05)' }}>
@@ -373,7 +318,7 @@ const InvestmentDashboard = ({
                     {/* ÖZET: YATIRIM NAKİT AKIŞI */}
                     <div className="investment-flow-summary" style={{ marginTop: 'auto', paddingTop: '15px', borderTop: '2px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div style={{ color: '#718096', fontSize: '14px', fontWeight: 'bold' }}>
-                            Aylık Yatırım Nakit Akışı ({aktifYatirimAy})
+                            Yatırım Nakit Akışı
                         </div>
                         {(() => {
                             // STRICT CALCULATION RULE:
@@ -414,8 +359,8 @@ const InvestmentDashboard = ({
 
             </div>
 
-            {/* PORTFOLIO ANALYSIS TABLE (ALL TIME) */}
-            <PortfolioAnalysisTable tumIslemler={tumIslemler} formatPara={formatPara} modalAc={modalAc} pozisyonSil={pozisyonSil} portfoy={portfoy} islemSil={islemSil} />
+            {/* PORTFOLIO ANALYSIS TABLE */}
+            <PortfolioAnalysisTable tumIslemler={tumIslemler} selectedPeriod={selectedPeriod} formatPara={formatPara} modalAc={modalAc} pozisyonSil={pozisyonSil} portfoy={portfoy} islemSil={islemSil} />
 
 
             <footer style={{ textAlign: 'center', marginTop: '30px', padding: '10px', color: '#a0aec0', fontSize: '12px' }}>
@@ -428,7 +373,7 @@ const InvestmentDashboard = ({
 // Safe rendering helper
 const safeVal = (val, suffix = "") => val ? val + suffix : "";
 
-const PortfolioAnalysisTable = ({ tumIslemler, formatPara, modalAc, portfoy }) => {
+const PortfolioAnalysisTable = ({ tumIslemler, selectedPeriod, formatPara, modalAc, portfoy }) => {
     const [hoverIndex, setHoverIndex] = React.useState(-1); // For hover effect
 
     // Create Price Map for Real-time valuations
@@ -447,6 +392,7 @@ const PortfolioAnalysisTable = ({ tumIslemler, formatPara, modalAc, portfoy }) =
 
         // 1. Filter and Sort Chronologically (Oldest First) for FIFO
         const allTransactions = (tumIslemler || []).filter(i =>
+            isDateInPeriod(i.tarih, selectedPeriod) &&
             !i.analizdenGizle && ( // Filter out items hidden from analysis
                 i.kategori === 'Yatırım' ||
                 i.islemTipi === 'yatirim_alis' ||
@@ -581,7 +527,7 @@ const PortfolioAnalysisTable = ({ tumIslemler, formatPara, modalAc, portfoy }) =
 
         return { rows: displayRows.reverse(), totalRealizedProfit };
 
-    }, [tumIslemler, priceMap]);
+    }, [tumIslemler, selectedPeriod, priceMap]);
 
     return (
         <div className="responsive-card investment-card investment-analysis-card" style={{ background: 'white', borderRadius: '20px', padding: '25px', boxShadow: '0 10px 30px rgba(0,0,0,0.06)', border: '1px solid rgba(255,255,255,0.8)', marginTop: '30px' }}>

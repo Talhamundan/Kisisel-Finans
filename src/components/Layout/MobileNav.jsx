@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Briefcase, Target } from 'lucide-react';
+import { Home, Briefcase, Target, CalendarDays } from 'lucide-react';
 
 const MobileNav = ({ anaSekme, setAnaSekme }) => {
     return (
@@ -71,6 +71,24 @@ const MobileNav = ({ anaSekme, setAnaSekme }) => {
             >
                 <Target size={22} strokeWidth={anaSekme === 'hedefler' ? 3 : 2} />
                 <span style={{ fontSize: 10, fontWeight: anaSekme === 'hedefler' ? 'bold' : 'normal' }}>Envanter</span>
+            </button>
+
+            <button
+                onClick={() => setAnaSekme('takvim')}
+                style={{
+                    background: 'transparent',
+                    border: 'none',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 4,
+                    color: anaSekme === 'takvim' ? '#805ad5' : '#a0aec0',
+                    padding: 0,
+                    flex: 1
+                }}
+            >
+                <CalendarDays size={22} strokeWidth={anaSekme === 'takvim' ? 3 : 2} />
+                <span style={{ fontSize: 10, fontWeight: anaSekme === 'takvim' ? 'bold' : 'normal' }}>Takvim</span>
             </button>
         </div>
     );
