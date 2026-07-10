@@ -120,6 +120,12 @@
     margin-bottom: 12px;
 }
 
+.cal-grid-header__center {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+
 .cal-grid-header__title {
     margin: 0;
     font-size: 18px;
@@ -145,6 +151,24 @@
 
 .cal-nav-btn:hover {
     background: rgba(99, 102, 241, 0.06);
+}
+
+.cal-today-btn {
+    height: 32px;
+    border: 1px solid var(--cal-border);
+    border-radius: 999px;
+    background: rgba(99, 102, 241, 0.07);
+    color: var(--cal-accent);
+    padding: 0 12px !important;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.15s;
+}
+
+.cal-today-btn:hover {
+    background: rgba(99, 102, 241, 0.12);
+    transform: translateY(-1px);
 }
 
 .cal-weekdays {
@@ -361,6 +385,10 @@
 
 .cal-day-panel__summary--expense .cal-day-panel__summary-value {
     color: #dc2626;
+}
+
+.cal-day-panel__summary--neutral .cal-day-panel__summary-value {
+    color: #64748b;
 }
 
 .cal-event-list__actions {

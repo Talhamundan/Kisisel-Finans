@@ -10,6 +10,7 @@ const CalendarGrid = ({
     onSelectDate,
     onPrevMonth,
     onNextMonth,
+    onToday,
     monthLabel,
 }) => {
     const cells = buildMonthGrid(year, month);
@@ -20,7 +21,10 @@ const CalendarGrid = ({
                 <button type="button" className="cal-nav-btn" onClick={onPrevMonth} aria-label="Önceki ay">
                     <ChevronLeft size={20} />
                 </button>
-                <h2 className="cal-grid-header__title">{monthLabel}</h2>
+                <div className="cal-grid-header__center">
+                    <h2 className="cal-grid-header__title">{monthLabel}</h2>
+                    <button type="button" className="cal-today-btn" onClick={onToday}>Bugün</button>
+                </div>
                 <button type="button" className="cal-nav-btn" onClick={onNextMonth} aria-label="Sonraki ay">
                     <ChevronRight size={20} />
                 </button>

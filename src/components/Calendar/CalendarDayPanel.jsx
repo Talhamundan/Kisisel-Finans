@@ -72,10 +72,13 @@ const CalendarDayPanel = ({
                             return (
                                 <li key={`${ev.id}-${ev.occurrenceDate}-${i}`} className="cal-event-list__item">
                                     <FinanceEventCard
+                                        badge={meta.label}
                                         title={ev.title}
                                         amount={amountStr}
                                         amountTone={amountTone}
                                         accentColor={meta.color}
+                                        metaLabel={ev.status === 'planned' ? 'Planlandı' : ev.status === 'paid' ? 'Ödendi' : 'Durum'}
+                                        metaValue={ev.description || 'Yaklaşan kayıt'}
                                     />
                                 </li>
                             );

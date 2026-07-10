@@ -1,8 +1,182 @@
 import React from 'react';
 import BESCard from './BESCard';
-import { inputStyle, formatCurrencyPlain, tarihFormatla } from '../../utils/helpers';
-import { isDateInPeriod } from '../../utils/period';
-import PremiumDonutChart, { DONUT_PALETTE } from '../Shared/PremiumDonutChart';
+import { inputStyle, formatCurrencyPlain, tarihFormatla, toDateSafe } from '../../utils/helpers';
+import { isDateInPeriod, MONTH_NAMES } from '../../utils/period';
+import FinancialTrendChart from '../Shared/FinancialTrendChart';
+import PremiumDonutChart from '../Shared/PremiumDonutChart';
+import { DONUT_PALETTE } from '../Shared/chartPalettes';
+
+const parseAmount = (value) => parseFloat(value) || 0;
+
+const getFinancialTone = (value) => {
+    const amount = parseAmount(value);
+    if (amount > 0) return 'success';
+    if (amount < 0) return 'danger';
+    return 'neutral';
+};
+
+const formatSignedCurrency = (value, formatPara) => {
+    const amount = parseAmount(value);
+    if (amount === 0) return formatPara(0);
+    return `${amount > 0 ? '+' : '-'}${formatPara(Math.abs(amount))}`;
+};
+
+const getVisibleInvestmentRange = (selectedPeriod) => {
+    const today = new Date();
+    if (selectedPeriod?.month === 'all') {
+        const visibleMonthCount = selectedPeriod.year === today.getFullYear()
+            ? today.getMonth() + 1
+            : selectedPeriod.year > today.getFullYear()
+                ? 0
+                : 12;
+
+        return Array.from({ length: visibleMonthCount }, (_, index) => ({
+            key: `${selectedPeriod.year}-${index + 1}`,
+            name: MONTH_NAMES[index],
+            tooltipLabel: `${MONTH_NAMES[index]} ${selectedPeriod.year}`,
+            profit: 0,
+            loss: 0,
+            net: 0,
+        }));
+    }
+
+    const isFutureMonth = new Date(selectedPeriod.year, selectedPeriod.month - 1, 1) >
+        new Date(today.getFullYear(), today.getMonth(), 1);
+    const isCurrentMonth = selectedPeriod.year === today.getFullYear() &&
+        selectedPeriod.month === today.getMonth() + 1;
+    const visibleDayCount = isFutureMonth
+        ? 0
+        : isCurrentMonth
+            ? today.getDate()
+            : new Date(selectedPeriod.year, selectedPeriod.month, 0).getDate();
+
+    return Array.from({ length: visibleDayCount }, (_, index) => {
+        const day = index + 1;
+        return {
+            key: `${selectedPeriod.year}-${selectedPeriod.month}-${day}`,
+            name: day,
+            tooltipLabel: `${day} ${MONTH_NAMES[selectedPeriod.month - 1]} ${selectedPeriod.year}`,
+            profit: 0,
+            loss: 0,
+            net: 0,
+        };
+    });
+};
+
+const getInvestmentDateKey = (date, selectedPeriod) => {
+    if (!date) return null;
+    return selectedPeriod?.month === 'all'
+        ? `${date.getFullYear()}-${date.getMonth() + 1}`
+        : `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+};
+
+const buildInvestmentAnalysis = ({ tumIslemler, selectedPeriod, priceMap = {} }) => {
+    if (!tumIslemler) return { rows: [], totalRealizedProfit: 0 };
+
+    const allTransactions = (tumIslemler || []).filter(i =>
+        isDateInPeriod(i.tarih, selectedPeriod) &&
+        !i.analizdenGizle && (
+            i.kategori === 'Yatırım' ||
+            i.islemTipi === 'yatirim_alis' ||
+            i.islemTipi === 'yatirim_satis'
+        )
+    ).map(i => ({
+        ...i,
+        adet: i.analiz_adet !== undefined ? i.analiz_adet : i.adet,
+        birimFiyat: i.analiz_birimFiyat !== undefined ? i.analiz_birimFiyat : i.birimFiyat,
+        tutar: i.analiz_tutar !== undefined ? i.analiz_tutar : i.tutar,
+        tarih: i.analiz_tarih ? i.analiz_tarih : i.tarih
+    }))
+        .sort((a, b) => (toDateSafe(a.tarih)?.getTime() || 0) - (toDateSafe(b.tarih)?.getTime() || 0));
+
+    const transactionsBySymbol = {};
+    allTransactions.forEach(t => {
+        const rawSembol = (t.aciklama || "").replace(" Alış", "").replace(" Satış", "").trim().toUpperCase();
+        const sembol = t.sembol || rawSembol;
+        if (!transactionsBySymbol[sembol]) transactionsBySymbol[sembol] = [];
+        transactionsBySymbol[sembol].push(t);
+    });
+
+    let totalRealizedProfit = 0;
+    const displayRows = [];
+
+    Object.keys(transactionsBySymbol).forEach(sembol => {
+        const transactions = transactionsBySymbol[sembol];
+        const buyQueue = [];
+
+        transactions.forEach(t => {
+            const isSell = t.islemTipi === 'yatirim_satis';
+            const isBuy = t.islemTipi === 'yatirim_alis';
+            const qty = parseAmount(t.adet);
+            const price = parseAmount(t.birimFiyat);
+
+            if (isBuy) {
+                buyQueue.push({
+                    id: t.id,
+                    sembol,
+                    tarihObj: toDateSafe(t.tarih)?.getTime() || 0,
+                    tarihStr: tarihFormatla(t.tarih),
+                    alisFiyati: price,
+                    originalQty: qty,
+                    remainingQty: qty,
+                    originalTx: t
+                });
+            } else if (isSell) {
+                let qtyToSell = qty;
+                while (qtyToSell > 0 && buyQueue.length > 0) {
+                    const currentLot = buyQueue[0];
+                    const soldQty = Math.min(currentLot.remainingQty, qtyToSell);
+                    const kar = (price - currentLot.alisFiyati) * soldQty;
+                    const closedChunk = {
+                        id: `${t.id}_closed_${currentLot.id}_${soldQty}`,
+                        sembol,
+                        tarihStr: currentLot.tarihStr,
+                        saleDate: toDateSafe(t.tarih),
+                        type: 'Satış',
+                        adet: soldQty,
+                        alisFiyati: currentLot.alisFiyati,
+                        satisFiyati: price,
+                        kar,
+                        margin: currentLot.alisFiyati > 0 ? ((price / currentLot.alisFiyati) - 1) * 100 : 0,
+                        isClosed: true,
+                        buyContext: currentLot.originalTx,
+                        sellContext: t
+                    };
+
+                    totalRealizedProfit += closedChunk.kar;
+                    displayRows.push(closedChunk);
+                    currentLot.remainingQty -= soldQty;
+                    qtyToSell -= soldQty;
+                    if (currentLot.remainingQty <= 0.0001) buyQueue.shift();
+                }
+            }
+        });
+
+        buyQueue.forEach(lot => {
+            if (lot.remainingQty > 0.0001) {
+                const currentPrice = priceMap[sembol.toUpperCase()] || 0;
+                const kar = currentPrice > 0 ? (currentPrice - lot.alisFiyati) * lot.remainingQty : 0;
+                const margin = currentPrice > 0 && lot.alisFiyati > 0 ? ((currentPrice / lot.alisFiyati) - 1) * 100 : 0;
+
+                displayRows.push({
+                    id: lot.id + '_open',
+                    sembol,
+                    tarihStr: lot.tarihStr,
+                    type: 'Alış',
+                    adet: lot.remainingQty,
+                    alisFiyati: lot.alisFiyati,
+                    satisFiyati: currentPrice,
+                    kar,
+                    margin,
+                    isClosed: false,
+                    buyContext: lot.originalTx
+                });
+            }
+        });
+    });
+
+    return { rows: displayRows.reverse(), totalRealizedProfit };
+};
 
 const InvestmentDashboard = ({
     gizliMod,
@@ -72,6 +246,44 @@ const InvestmentDashboard = ({
         color: DONUT_PALETTE[index % DONUT_PALETTE.length],
     }));
     const portfoyChartTotal = portfoyChartData.reduce((sum, item) => sum + (parseFloat(item.value) || 0), 0);
+
+    const priceMap = React.useMemo(() => {
+        const map = {};
+        (portfoy || []).forEach(p => {
+            if (p.sembol && p.guncelFiyat) {
+                map[p.sembol.toUpperCase()] = p.guncelFiyat;
+            }
+        });
+        return map;
+    }, [portfoy]);
+
+    const investmentAnalysisData = React.useMemo(() => (
+        buildInvestmentAnalysis({ tumIslemler, selectedPeriod, priceMap })
+    ), [tumIslemler, selectedPeriod, priceMap]);
+
+    const profitTrendData = React.useMemo(() => {
+        const buckets = getVisibleInvestmentRange(selectedPeriod || {});
+        const bucketMap = new Map(buckets.map((item) => [item.key, item]));
+
+        investmentAnalysisData.rows
+            .filter((row) => row.isClosed)
+            .forEach((row) => {
+                const key = getInvestmentDateKey(row.saleDate, selectedPeriod);
+                const bucket = bucketMap.get(key);
+                if (!bucket) return;
+                const amount = parseAmount(row.kar);
+                if (amount > 0) bucket.profit += amount;
+                if (amount < 0) bucket.loss += Math.abs(amount);
+                bucket.net += amount;
+            });
+
+        return buckets;
+    }, [investmentAnalysisData.rows, selectedPeriod]);
+
+    const realizedNetProfit = profitTrendData.reduce((sum, item) => sum + parseAmount(item.net), 0);
+    const profitSubtitle = selectedPeriod?.month === 'all'
+        ? `${selectedPeriod?.year} yatırım performansı`
+        : `${aktifYatirimAy} yatırım performansı`;
 
     const aggregatedPortfoy = React.useMemo(() => {
         const groups = {};
@@ -149,6 +361,39 @@ const InvestmentDashboard = ({
                 )}
             </div>
 
+            <div className="investment-profit-chart-wrap">
+                <FinancialTrendChart
+                    title="Kâr Analizi"
+                    subtitle={profitSubtitle || 'Seçili dönemde yatırım performansı'}
+                    data={profitTrendData}
+                    series={[
+                        { key: 'profit', label: 'Kâr', tone: 'success', color: '#16a36a' },
+                        { key: 'loss', label: 'Zarar', tone: 'danger', color: '#e25555', fillOpacity: 0.14, fillOpacityEnd: 0.01 },
+                        {
+                            key: 'net',
+                            label: 'Net',
+                            legendLabel: gizliMod ? 'Net **** ₺' : `Net ${formatSignedCurrency(realizedNetProfit, formatPara)}`,
+                            tone: getFinancialTone(realizedNetProfit),
+                            color: realizedNetProfit >= 0 ? '#16a36a' : '#e25555',
+                            fillOpacity: 0.08,
+                            fillOpacityEnd: 0,
+                        },
+                    ]}
+                    valueFormatter={(value) => gizliMod ? '****' : formatPara(value)}
+                    yTickFormatter={(value) => gizliMod ? '****' : `${new Intl.NumberFormat('tr-TR', { notation: 'compact', maximumFractionDigits: 1 }).format(value)} ₺`}
+                    tooltipRows={(item, formatter) => {
+                        const net = parseAmount(item?.net);
+                        return [
+                            { label: 'Kâr', value: formatter(parseAmount(item?.profit)), tone: 'success' },
+                            { label: 'Zarar', value: formatter(parseAmount(item?.loss)), tone: 'danger' },
+                            { label: 'Net', value: gizliMod ? '****' : formatSignedCurrency(net, formatPara), tone: getFinancialTone(net) },
+                        ];
+                    }}
+                    emptyTitle="Bu dönemde kâr/zarar verisi bulunmuyor."
+                    emptyDescription="Yatırım alım-satım işlemleri oluştuğunda analiz burada görünecek."
+                />
+            </div>
+
             {/* 2. SATIR: PORTFÖY TABLOSU VE VARLIK DAĞILIMI */}
             <div className="responsive-grid-2 investment-grid-middle" style={{ display: 'grid', gridTemplateColumns: portfoyChartTotal > 0 ? '2fr 1fr' : '1fr', gap: '25px', marginBottom: '30px' }}>
 
@@ -157,7 +402,7 @@ const InvestmentDashboard = ({
                     <div className="investment-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                             <div className="card-title">Portföy Detayları</div>
-                            <span style={{ fontSize: '11px', color: toplamKarZarar >= 0 ? 'green' : 'red', fontWeight: 'bold', background: toplamKarZarar >= 0 ? '#f0fff4' : '#fff5f5', padding: '2px 8px', borderRadius: '999px' }}>
+                            <span style={{ fontSize: '11px', color: toplamKarZarar > 0 ? '#16a36a' : toplamKarZarar < 0 ? '#e25555' : '#94a3b8', fontWeight: 'bold', background: toplamKarZarar > 0 ? '#e9f8f0' : toplamKarZarar < 0 ? '#fff0f0' : '#f3f4f7', padding: '2px 8px', borderRadius: '999px' }}>
                                 K/Z: {toplamKarZarar > 0 ? '+' : ''}{formatPara(toplamKarZarar)}
                             </span>
                         </div>
@@ -177,7 +422,7 @@ const InvestmentDashboard = ({
                                     <td>{formatPara(p.alisFiyati)}</td>
                                     <td style={{ padding: '5px' }}><input key={p.guncelFiyat} type="number" defaultValue={p.guncelFiyat} onBlur={(e) => p.ids.forEach(id => fiyatGuncelle(id, e.target.value))} style={{ ...inputStyle, width: '80px', padding: '5px', background: '#f7fafc' }} disabled={gizliMod} /></td>
                                     <td style={{ fontWeight: 'bold' }}>{formatPara(guncel)}</td>
-                                    <td style={{ color: kar >= 0 ? 'green' : 'red' }}>{gizliMod ? '***' : <>{formatPara(kar)}</>}</td>
+                                    <td style={{ color: kar > 0 ? '#16a36a' : kar < 0 ? '#e25555' : '#94a3b8' }}>{gizliMod ? '***' : <>{formatPara(kar)}</>}</td>
                                     <td>
                                         <button onClick={() => modalAc('satis', p)} style={{ background: '#edf2f7', color: '#333', border: 'none', borderRadius: '5px', fontSize: '12px', padding: '5px 10px', cursor: 'pointer', fontWeight: 'bold' }}>Sat</button>
                                         <span onClick={() => modalAc('duzenle_portfoy', p)} style={{ cursor: 'pointer', marginLeft: '5px' }}>✏️</span>
@@ -245,7 +490,7 @@ const InvestmentDashboard = ({
                             <option value="">Ödeme Yapılacak Hesap Seç</option>
                             {(hesaplar || []).map(h => <option key={h.id} value={h.id}>{h.hesapAdi} ({formatPara(h.guncelBakiye)})</option>)}
                         </select>
-                        <div style={{ fontSize: '13px', fontWeight: '600', color: 'green' }}>Toplam: {adet && alisFiyati ? formatPara(adet * alisFiyati) : formatPara(0)}</div>
+                        <div style={{ fontSize: '13px', fontWeight: '600', color: '#16a36a' }}>Toplam: {adet && alisFiyati ? formatPara(adet * alisFiyati) : formatPara(0)}</div>
                         <button type="submit" disabled={guncelleniyor} className="btn-ui btn-ui-success">
                             {guncelleniyor ? 'İşleniyor...' : 'Varlık Ekle'}
                         </button>
@@ -305,7 +550,7 @@ const InvestmentDashboard = ({
                                                 <td style={{ padding: '10px' }}>{i.adet ? i.adet : '-'}</td>
                                                 <td style={{ padding: '10px' }}>{i.birimFiyat ? formatPara(i.birimFiyat) : '-'}</td>
                                                 <td style={{ padding: '10px' }}>{i.aciklama}</td>
-                                                <td style={{ padding: '10px', fontWeight: 'bold', color: i.islemTipi === 'yatirim_alis' ? 'red' : 'green' }}>{formatPara(i.tutar)}</td>
+                                                <td style={{ padding: '10px', fontWeight: 'bold', color: i.islemTipi === 'yatirim_alis' ? '#e25555' : '#16a36a' }}>{formatPara(i.tutar)}</td>
                                                 <td><span onClick={() => modalAc('duzenle_islem', i)} style={{ cursor: 'pointer' }}>✏️</span></td>
                                                 <td><span onClick={() => islemSil(i.id)} style={{ cursor: 'pointer' }}>🗑️</span></td>
                                             </tr>
@@ -342,7 +587,7 @@ const InvestmentDashboard = ({
                                 <div style={{
                                     fontSize: '18px', // text-lg equivalent
                                     fontWeight: 'bold',
-                                    color: isZero ? '#718096' : (isPositive ? '#38a169' : '#e53e3e')
+                                    color: isZero ? '#94a3b8' : (isPositive ? '#16a36a' : '#e25555')
                                 }}>
                                     {isZero ? (
                                         <span>{formatPara(0)}</span>
@@ -387,147 +632,9 @@ const PortfolioAnalysisTable = ({ tumIslemler, selectedPeriod, formatPara, modal
         return map;
     }, [portfoy]);
 
-    const analysisData = React.useMemo(() => {
-        if (!tumIslemler) return { rows: [], totalRealizedProfit: 0 };
-
-        // 1. Filter and Sort Chronologically (Oldest First) for FIFO
-        const allTransactions = (tumIslemler || []).filter(i =>
-            isDateInPeriod(i.tarih, selectedPeriod) &&
-            !i.analizdenGizle && ( // Filter out items hidden from analysis
-                i.kategori === 'Yatırım' ||
-                i.islemTipi === 'yatirim_alis' ||
-                i.islemTipi === 'yatirim_satis'
-            )
-        ).map(i => ({
-            ...i,
-            // USE ANALYSIS OVERRIDES IF PRESENT
-            adet: i.analiz_adet !== undefined ? i.analiz_adet : i.adet,
-            birimFiyat: i.analiz_birimFiyat !== undefined ? i.analiz_birimFiyat : i.birimFiyat,
-            tutar: i.analiz_tutar !== undefined ? i.analiz_tutar : i.tutar,
-            // Date override if needed? Usually date is less critical to override but let's allow it
-            tarih: i.analiz_tarih ? i.analiz_tarih : i.tarih
-        }))
-            .sort((a, b) => {
-                const dA = a.tarih?.seconds || 0;
-                const dB = b.tarih?.seconds || 0;
-                return dA - dB; // ASCENDING for FIFO processing
-            });
-
-        // 2. Group by Symbol
-        const transactionsBySymbol = {};
-        allTransactions.forEach(t => {
-            const rawSembol = (t.aciklama || "").replace(" Alış", "").replace(" Satış", "").trim().toUpperCase();
-            // Fallback to 'sembol' field if exists, or parse from description
-            const sembol = t.sembol || rawSembol;
-            if (!transactionsBySymbol[sembol]) transactionsBySymbol[sembol] = [];
-            transactionsBySymbol[sembol].push(t);
-        });
-
-        let totalRealizedProfit = 0;
-        const displayRows = [];
-
-        // 3. Process FIFO per Symbol
-        Object.keys(transactionsBySymbol).forEach(sembol => {
-            const transactions = transactionsBySymbol[sembol];
-            const buyQueue = []; // Holds open buy lots
-
-            transactions.forEach(t => {
-                const isSell = t.islemTipi === 'yatirim_satis';
-                const isBuy = t.islemTipi === 'yatirim_alis';
-                const qty = parseFloat(t.adet) || 0;
-                const price = parseFloat(t.birimFiyat) || 0;
-
-                if (isBuy) {
-                    buyQueue.push({
-                        id: t.id,
-                        sembol,
-                        tarihObj: t.tarih?.seconds,
-                        tarihStr: t.tarih?.seconds ? new Date(t.tarih.seconds * 1000).toLocaleDateString('tr-TR') : '-',
-                        alisFiyati: price,
-                        originalQty: qty,
-                        remainingQty: qty,
-                        originalTx: t
-                    });
-                } else if (isSell) {
-                    let qtyToSell = qty;
-                    while (qtyToSell > 0 && buyQueue.length > 0) {
-                        const currentLot = buyQueue[0];
-                        if (currentLot.remainingQty > qtyToSell) {
-                            const soldQty = qtyToSell;
-                            const closedChunk = {
-                                id: t.id + '_closed_' + currentLot.id,
-                                sembol,
-                                historyDateStr: t.tarih?.seconds ? new Date(t.tarih.seconds * 1000).toLocaleDateString('tr-TR') : '-', // Use SELL date in history? Or keep buy date?
-                                // Actually user might want to see when it was sold or bought. 
-                                // Standard is usually open date. 
-                                tarihStr: currentLot.tarihStr, // Keep open date
-                                type: 'Satış',
-                                adet: soldQty,
-                                alisFiyati: currentLot.alisFiyati,
-                                satisFiyati: price,
-                                kar: (price - currentLot.alisFiyati) * soldQty,
-                                margin: ((price / currentLot.alisFiyati) - 1) * 100,
-                                isClosed: true,
-                                buyContext: currentLot.originalTx,
-                                sellContext: t
-                            };
-                            totalRealizedProfit += closedChunk.kar;
-                            displayRows.push(closedChunk);
-                            currentLot.remainingQty -= soldQty;
-                            qtyToSell = 0;
-                        } else {
-                            const soldQty = currentLot.remainingQty;
-                            const closedChunk = {
-                                id: t.id + '_closed_' + currentLot.id,
-                                sembol,
-                                tarihStr: currentLot.tarihStr,
-                                type: 'Satış',
-                                adet: soldQty,
-                                alisFiyati: currentLot.alisFiyati,
-                                satisFiyati: price,
-                                kar: (price - currentLot.alisFiyati) * soldQty,
-                                margin: ((price / currentLot.alisFiyati) - 1) * 100,
-                                isClosed: true,
-                                buyContext: currentLot.originalTx,
-                                sellContext: t
-                            };
-                            totalRealizedProfit += closedChunk.kar;
-                            displayRows.push(closedChunk);
-                            qtyToSell -= soldQty;
-                            currentLot.remainingQty = 0;
-                            buyQueue.shift();
-                        }
-                    }
-                }
-            });
-
-            buyQueue.forEach(lot => {
-                if (lot.remainingQty > 0.0001) {
-                    // REAL-TIME P/L CALCULATION FOR OPEN POSITIONS
-                    const currentPrice = priceMap[sembol.toUpperCase()] || 0;
-                    const kar = currentPrice > 0 ? (currentPrice - lot.alisFiyati) * lot.remainingQty : 0;
-                    const margin = currentPrice > 0 ? ((currentPrice / lot.alisFiyati) - 1) * 100 : 0;
-
-                    displayRows.push({
-                        id: lot.id + '_open',
-                        sembol,
-                        tarihStr: lot.tarihStr,
-                        type: 'Alış',
-                        adet: lot.remainingQty,
-                        alisFiyati: lot.alisFiyati,
-                        satisFiyati: currentPrice, // SHOW CURRENT PRICE IF OPEN
-                        kar: kar, // POTENTIAL PROFIT
-                        margin: margin,
-                        isClosed: false,
-                        buyContext: lot.originalTx
-                    });
-                }
-            });
-        });
-
-        return { rows: displayRows.reverse(), totalRealizedProfit };
-
-    }, [tumIslemler, selectedPeriod, priceMap]);
+    const analysisData = React.useMemo(() => (
+        buildInvestmentAnalysis({ tumIslemler, selectedPeriod, priceMap })
+    ), [tumIslemler, selectedPeriod, priceMap]);
 
     return (
         <div className="responsive-card investment-card investment-analysis-card" style={{ background: 'white', borderRadius: '20px', padding: '25px', boxShadow: '0 10px 30px rgba(0,0,0,0.06)', border: '1px solid rgba(255,255,255,0.8)', marginTop: '30px' }}>
@@ -552,9 +659,9 @@ const PortfolioAnalysisTable = ({ tumIslemler, selectedPeriod, formatPara, modal
                     >
                         <span style={{ fontSize: '16px', lineHeight: '1' }}>+</span> Geçmiş İşlem Ekle
                     </button>
-                    <div style={{ background: analysisData.totalRealizedProfit >= 0 ? '#f0fff4' : '#fff5f5', padding: '10px 20px', borderRadius: '10px', border: `1px solid ${analysisData.totalRealizedProfit >= 0 ? '#c6f6d5' : '#fed7d7'}` }}>
+                    <div style={{ background: analysisData.totalRealizedProfit > 0 ? '#e9f8f0' : analysisData.totalRealizedProfit < 0 ? '#fff0f0' : '#f3f4f7', padding: '10px 20px', borderRadius: '10px', border: `1px solid ${analysisData.totalRealizedProfit > 0 ? '#c8efda' : analysisData.totalRealizedProfit < 0 ? '#ffd6d6' : '#e6e8ee'}` }}>
                         <div style={{ fontSize: '12px', color: '#718096', fontWeight: 'bold' }}>TOPLAM REALİZE KAR</div>
-                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: analysisData.totalRealizedProfit >= 0 ? 'green' : '#e53e3e' }}>
+                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: analysisData.totalRealizedProfit > 0 ? '#16a36a' : analysisData.totalRealizedProfit < 0 ? '#e25555' : '#94a3b8' }}>
                             {analysisData.totalRealizedProfit > 0 ? '+' : ''}{formatPara(analysisData.totalRealizedProfit)}
                         </div>
                     </div>
@@ -583,7 +690,7 @@ const PortfolioAnalysisTable = ({ tumIslemler, selectedPeriod, formatPara, modal
                             analysisData.rows.map((row, index) => {
                                 let rowBg = 'transparent';
                                 if (row.isClosed) {
-                                    rowBg = row.kar >= 0 ? '#f0fff4' : '#fff5f5';
+                                    rowBg = row.kar > 0 ? '#e9f8f0' : row.kar < 0 ? '#fff0f0' : '#f3f4f7';
                                 }
 
                                 const isHovered = hoverIndex === index;
@@ -595,10 +702,10 @@ const PortfolioAnalysisTable = ({ tumIslemler, selectedPeriod, formatPara, modal
                                         <td style={{ padding: '12px' }}>{Math.round(parseFloat(row.adet || 0))}</td>
                                         <td style={{ padding: '12px' }}>{formatPara(row.alisFiyati)}</td>
                                         <td style={{ padding: '12px' }}>{row.isClosed ? formatPara(row.satisFiyati) : '-'}</td>
-                                        <td style={{ padding: '12px', fontWeight: 'bold', color: row.isClosed ? (row.kar >= 0 ? 'green' : 'red') : '#a0aec0' }}>
+                                        <td style={{ padding: '12px', fontWeight: 'bold', color: row.isClosed ? (row.kar > 0 ? '#16a36a' : row.kar < 0 ? '#e25555' : '#94a3b8') : '#a0aec0' }}>
                                             {row.isClosed ? formatPara(row.kar) : '-'}
                                         </td>
-                                        <td style={{ padding: '12px', fontWeight: 'bold', color: row.isClosed ? (row.margin >= 0 ? 'green' : 'red') : '#a0aec0' }}>
+                                        <td style={{ padding: '12px', fontWeight: 'bold', color: row.isClosed ? (row.margin > 0 ? '#16a36a' : row.margin < 0 ? '#e25555' : '#94a3b8') : '#a0aec0' }}>
                                             {row.isClosed ? `%${(row.margin || 0).toFixed(2)}` : '-'}
                                         </td>
                                         <td style={{ padding: '12px', textAlign: 'center' }}>

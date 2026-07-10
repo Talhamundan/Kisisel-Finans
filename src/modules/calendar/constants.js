@@ -19,6 +19,7 @@ export const CALENDAR_EVENT_SOURCES = [
     'subscription',
     'salary',
     'bill',
+    'bill_definition',
     'investment',
     'system',
 ];

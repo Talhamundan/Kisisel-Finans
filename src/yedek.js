@@ -914,7 +914,7 @@ function App() {
     }
 
     if (loading) return <div style={{ height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>Yükleniyor...</div>;
-    if (!user) return (<div style={{ height: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', background: 'linear-gradient(135deg, #1a2980 0%, #26d0ce 100%)', color: 'white', fontFamily: 'Segoe UI' }}> <h1 style={{ fontSize: '3rem', marginBottom: '20px' }}>🚀 CÜZDANIM</h1> <p style={{ marginBottom: '40px' }}>Bütçen kontrol altında.</p> <button onClick={girisYap} style={{ padding: '15px 40px', fontSize: '1.1rem', borderRadius: '50px', border: 'none', cursor: 'pointer', background: 'white', color: '#1a2980', fontWeight: 'bold' }}>Google ile Giriş Yap</button> <ToastContainer /> </div>);
+    if (!user) return (<div style={{ height: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', background: 'linear-gradient(135deg, #1a2980 0%, #26d0ce 100%)', color: 'white', fontFamily: 'Segoe UI' }}> <h1 style={{ fontSize: '3rem', marginBottom: '20px' }}>Kişisel Finans</h1> <p style={{ marginBottom: '40px' }}>Finansal hesabına devam et.</p> <button onClick={girisYap} style={{ padding: '15px 40px', fontSize: '1.1rem', borderRadius: '50px', border: 'none', cursor: 'pointer', background: 'white', color: '#1a2980', fontWeight: 'bold' }}>Giriş Yap</button> <ToastContainer /> </div>);
 
     if (!alanKodu) return (
         <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', background: '#f7fafc', fontFamily: 'Segoe UI' }}>
@@ -1081,8 +1081,7 @@ function App() {
                 {/* SOL: LOGO & KOD */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                     <h1 style={{ margin: 0, fontSize: '22px', fontWeight: '900', color: '#1a202c', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        <span>🚀</span>
-                        <span style={{ display: window.innerWidth < 600 ? 'none' : 'block' }}>CÜZDANIM</span>
+                        <span>Kişisel Finans</span>
                     </h1>
                     <span style={{ fontSize: '11px', background: '#edf2f7', padding: '4px 8px', borderRadius: '6px', color: '#718096', fontFamily: 'monospace', fontWeight: 'bold' }}>
                         {alanKodu}
@@ -1261,7 +1260,7 @@ function App() {
 
                             {/* HESAPLAR */}
                             <div style={cardStyle}>
-                                <h4 style={{ marginTop: 0, marginBottom: '15px', color: '#2d3748' }}>💳 Cüzdanlar & Kartlar</h4>
+                                <h4 style={{ marginTop: 0, marginBottom: '15px', color: '#2d3748' }}>Hesaplar & Kartlar</h4>
                                 <div style={{ marginBottom: '15px' }}>
                                     {hesaplar.map(h => {
                                         let toplamBakiye = parseFloat(h.guncelBakiye) || 0;

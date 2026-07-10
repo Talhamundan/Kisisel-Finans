@@ -1,93 +1,210 @@
-import React, { useState } from 'react';
-import { ResponsiveContainer, AreaChart, CartesianGrid, XAxis, YAxis, Tooltip, Area } from 'recharts';
-import { Info, X } from 'lucide-react';
-import { cardStyle, inputStyle, formatCurrencyPlain, tarihFormatla, tarihSadeceGunAyYil, toDateSafe, sortTurkishText } from '../../utils/helpers';
-import { isDateInPeriod } from '../../utils/period';
+import React, { useMemo, useState } from 'react';
+import {
+    ResponsiveContainer,
+    AreaChart,
+    Area,
+} from 'recharts';
+import {
+    ArrowDownRight,
+    ArrowUpRight,
+    Bell,
+    CalendarClock,
+    CreditCard,
+    Download,
+    Edit3,
+    Landmark,
+    LineChart,
+    Plus,
+    ReceiptText,
+    Repeat2,
+    Search,
+    Trash2,
+    Upload,
+    Wallet,
+} from 'lucide-react';
+import { inputStyle, formatCurrencyPlain, tarihFormatla, toDateSafe, sortTurkishText } from '../../utils/helpers';
+import { isDateInPeriod, MONTH_NAMES } from '../../utils/period';
 import DescriptionInput from '../Shared/DescriptionInput';
+import FinancialTrendChart from '../Shared/FinancialTrendChart';
+import HighQualityModal from '../Shared/HighQualityModal';
 import PremiumDonutChart from '../Shared/PremiumDonutChart';
+import { DONUT_PALETTE } from '../Shared/chartPalettes';
+import {
+    DashboardToolbar,
+    EmptyState,
+    IconTile,
+    PremiumCard,
+    SectionHeader,
+    StatusBadge,
+    TransactionRow,
+    UpcomingPaymentRow,
+} from '../Shared/PremiumUI';
 
-const TrendTooltip = ({ active, payload }) => {
-    if (!active || !payload?.length) return null;
-    const item = payload[0]?.payload;
-    const value = payload[0]?.value || 0;
+const parseAmount = (value) => parseFloat(value) || 0;
+
+const formatDayMonth = (date) => {
+    if (!date) return 'Tarih yok';
+    return date.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' });
+};
+
+const getFinancialTone = (value) => {
+    const amount = parseAmount(value);
+    if (amount > 0) return 'success';
+    if (amount < 0) return 'danger';
+    return 'neutral';
+};
+
+const getVisibleRange = (selectedPeriod) => {
+    const today = new Date();
+    if (selectedPeriod?.month === 'all') {
+        const visibleMonthCount = selectedPeriod.year === today.getFullYear()
+            ? today.getMonth() + 1
+            : selectedPeriod.year > today.getFullYear()
+                ? 0
+                : 12;
+
+        return Array.from({ length: visibleMonthCount }, (_, index) => ({
+            key: `${selectedPeriod.year}-${index + 1}`,
+            name: MONTH_NAMES[index],
+            tooltipLabel: `${MONTH_NAMES[index]} ${selectedPeriod.year}`,
+            gelir: 0,
+            gider: 0,
+            net: 0,
+        }));
+    }
+
+    const isFutureMonth = new Date(selectedPeriod.year, selectedPeriod.month - 1, 1) >
+        new Date(today.getFullYear(), today.getMonth(), 1);
+    const isCurrentMonth = selectedPeriod.year === today.getFullYear() &&
+        selectedPeriod.month === today.getMonth() + 1;
+    const visibleDayCount = isFutureMonth
+        ? 0
+        : isCurrentMonth
+            ? today.getDate()
+            : new Date(selectedPeriod.year, selectedPeriod.month, 0).getDate();
+
+    return Array.from({ length: visibleDayCount }, (_, index) => {
+        const day = index + 1;
+        return {
+            key: `${selectedPeriod.year}-${selectedPeriod.month}-${day}`,
+            name: day,
+            tooltipLabel: `${day} ${MONTH_NAMES[selectedPeriod.month - 1]} ${selectedPeriod.year}`,
+            gelir: 0,
+            gider: 0,
+            net: 0,
+        };
+    });
+};
+
+const Sparkline = ({ data = [], color = '#6d5dfc' }) => {
+    const hasData = (data || []).some((item) => parseAmount(item.value || item.gider || item.net) > 0);
+    if (!hasData) return null;
+
     return (
-        <div style={{
-            background: '#ffffff',
-            border: '1px solid rgba(15, 23, 42, 0.08)',
-            borderRadius: '10px',
-            boxShadow: '0 12px 30px rgba(15, 23, 42, 0.12)',
-            padding: '10px 12px'
-        }}>
-            <div style={{ color: '#64748b', fontSize: '12px', fontWeight: 700, marginBottom: 4 }}>{item.tooltipLabel}</div>
-            <div style={{ color: '#4f46e5', fontSize: '14px', fontWeight: 900 }}>{new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(value)}</div>
-        </div>
+        <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={data} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
+                <defs>
+                    <linearGradient id={`spark-${color.replace('#', '')}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={color} stopOpacity={0.18} />
+                        <stop offset="100%" stopColor={color} stopOpacity={0} />
+                    </linearGradient>
+                </defs>
+                <Area
+                    type="monotone"
+                    dataKey="value"
+                    stroke={color}
+                    strokeWidth={2}
+                    fill={`url(#spark-${color.replace('#', '')})`}
+                    dot={false}
+                    isAnimationActive={false}
+                />
+            </AreaChart>
+        </ResponsiveContainer>
     );
 };
 
-const BudgetUsageTooltip = ({ visible, used, limit, percent }) => {
-    if (!visible) return null;
+const QuickActionButton = ({ children, icon: Icon, variant = '', ...props }) => (
+    <button type="button" className={`qw-action-button ${variant ? `qw-action-button--${variant}` : ''}`} {...props}>
+        {Icon && <Icon size={16} strokeWidth={2.35} />}
+        {children}
+    </button>
+);
 
-    return (
-        <div
-            style={{
-                position: 'absolute',
-                left: '50%',
-                bottom: '24px',
-                transform: 'translateX(-50%) translateY(-4px)',
-                background: '#ffffff',
-                border: '1px solid rgba(148, 163, 184, 0.28)',
-                borderRadius: 12,
-                padding: '10px 12px',
-                minWidth: 148,
-                boxShadow: '0 12px 30px rgba(15, 23, 42, 0.12)',
-                zIndex: 1200,
-                pointerEvents: 'none',
-                opacity: 1,
-                transition: 'opacity 180ms ease, transform 180ms ease',
-                fontFamily: 'inherit',
-            }}
-        >
-            <div style={{ color: '#64748b', fontSize: 12, fontWeight: 800, marginBottom: 6, lineHeight: 1.2 }}>
-                Bütçe Kullanımı
-            </div>
-            <div style={{ color: '#0f172a', fontSize: 14, fontWeight: 900, lineHeight: 1.1, marginBottom: 4 }}>
-                {used} / {limit}
-            </div>
-            <div style={{ color: '#94a3b8', fontSize: 12, fontWeight: 800, lineHeight: 1.2 }}>
-                %{percent} kullanıldı
-            </div>
+const SummaryLine = ({ label, value, tone }) => (
+    <div className="qw-summary-line">
+        <span>{label}</span>
+        <strong className={tone ? `is-${tone}` : ''}>{value}</strong>
+    </div>
+);
+
+const ModuleRow = ({ icon, tone = 'neutral', title, meta, amount, amountTone, badge, onClick, actions }) => (
+    <div className={`qw-module-row ${onClick ? 'is-clickable' : ''}`} onClick={onClick}>
+        <IconTile icon={icon} tone={tone} />
+        <div className="qw-module-row__main">
+            <strong>{title}</strong>
+            {meta && <span>{meta}</span>}
         </div>
-    );
+        <div className="qw-module-row__side">
+            {amount !== undefined && <b className={amountTone ? `is-${amountTone}` : ''}>{amount}</b>}
+            {badge && <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>}
+            {actions && <div className="qw-row-actions">{actions}</div>}
+        </div>
+    </div>
+);
+
+const isBudgetTransaction = (transaction) => (
+    transaction?.kategori !== 'BES' &&
+    transaction?.islemTipi !== 'yatirim_alis' &&
+    transaction?.kategori !== 'Yatırım' &&
+    transaction?.islemTipi !== 'cari_iade'
+);
+
+const isSameCalendarDay = (date, target) => (
+    date &&
+    date.getDate() === target.getDate() &&
+    date.getMonth() === target.getMonth() &&
+    date.getFullYear() === target.getFullYear()
+);
+
+const isSameCalendarMonth = (date, target) => (
+    date &&
+    date.getMonth() === target.getMonth() &&
+    date.getFullYear() === target.getFullYear()
+);
+
+const getMonthlyDueDate = (item, year, month) => {
+    const explicitDate = toDateSafe(item?.sonOdemeTarihi || item?.tarih || item?.vadeTarihi);
+    if (explicitDate) return explicitDate;
+
+    const rawDay = item?.gun || item?.vadeGunu || item?.sonOdemeGunu || item?.odemeGunu;
+    const day = parseInt(rawDay);
+    if (!Number.isFinite(day) || day < 1) return null;
+
+    return new Date(year, month, Math.min(day, 28));
 };
 
-const TrendXAxisTick = ({ x, y, payload, data = [] }) => {
-    const item = data[payload?.index] || data.find((entry) => String(entry.name) === String(payload?.value));
-    return (
-        <text
-            x={x}
-            y={y + 14}
-            textAnchor="middle"
-            fill="#64748b"
-            fontSize={12}
-            fontWeight={item?.isToday ? 800 : 500}
-        >
-            {payload?.value}
-        </text>
-    );
+const getBillStatus = (date, hasDebt) => {
+    if (hasDebt) return { label: 'Borç oluştu', tone: 'danger' };
+    if (!date) return { label: 'Bekliyor', tone: 'neutral' };
+
+    const todayTime = new Date().setHours(0, 0, 0, 0);
+    const dueTime = new Date(date).setHours(0, 0, 0, 0);
+    const diffDays = Math.ceil((dueTime - todayTime) / 86400000);
+
+    if (diffDays >= 0 && diffDays <= 7) return { label: 'Yaklaşıyor', tone: 'warning' };
+    return { label: 'Bekliyor', tone: 'neutral' };
 };
 
 const BudgetDashboard = ({
     aktifAy,
     toplamGelir,
-    bugunGider,
     toplamGider,
     gunlukVeri,
-    gunlukOrtalama,
     kategoriVerisi,
     gizliMod,
     aylikLimit,
-    maaslar,
     hesaplar,
+    aktifModal,
     modalAc,
     normalSil,
     filtrelenmisIslemler,
@@ -131,945 +248,877 @@ const BudgetDashboard = ({
     faturaGirisTutar, setFaturaGirisTutar,
     faturaGirisTarih, setFaturaGirisTarih,
     faturaGirisAciklama, setFaturaGirisAciklama,
-    mevcutAylar,
-    setAktifAy,
     aramaMetni, setAramaMetni,
     filtreKategori, setFiltreKategori,
     borclar,
-    toplamKalanBorc,
-    borcOrderGuncelle,
     excelIndir,
     excelYukle,
     islemSil
 }) => {
-
-    const formatPara = (tutar) => gizliMod ? "**** ₺" : formatCurrencyPlain(tutar);
+    const [historyAccount, setHistoryAccount] = useState(null);
+    const isNestedModalOpen = Boolean(historyAccount && aktifModal);
+    const formatPara = (tutar) => gizliMod ? '****' : formatCurrencyPlain(parseAmount(tutar));
     const siraliKategoriListesi = sortTurkishText(kategoriListesi || []);
     const siraliHesaplar = [...(hesaplar || [])].sort((a, b) =>
         String(a?.hesapAdi || '').localeCompare(String(b?.hesapAdi || ''), 'tr-TR', { sensitivity: 'base' })
     );
-    const toplamAylikTaksitYuku = (taksitler || []).reduce((acc, t) => {
-        const toplamTutar = parseFloat(t.toplamTutar) || 0;
-        const aylikTutar = parseFloat(t.aylikTutar) || 0;
-        const odenmisTaksit = parseInt(t.odenmisTaksit) || 0;
-        const taksitSayisi = parseInt(t.taksitSayisi) || 0;
-        if (taksitSayisi > 0 && odenmisTaksit >= taksitSayisi) return acc;
 
-        const kalanTutar = Math.max(0, toplamTutar - (aylikTutar * odenmisTaksit));
-        return acc + Math.min(aylikTutar, kalanTutar);
-    }, 0);
-    const siraliTaksitler = [...(taksitler || [])].sort((a, b) => {
-        const aTarih = toDateSafe(a.alisTarihi) || toDateSafe(a.olusturmaTarihi);
-        const bTarih = toDateSafe(b.alisTarihi) || toDateSafe(b.olusturmaTarihi);
-        const aGun = aTarih?.getDate() || 32;
-        const bGun = bTarih?.getDate() || 32;
-        if (aGun !== bGun) return aGun - bGun;
+    const cashFlowData = useMemo(() => {
+        const buckets = getVisibleRange(selectedPeriod || {});
+        const bucketMap = new Map(buckets.map((item, index) => [item.key, { item, index }]));
 
-        const tarihFark = (aTarih?.getTime() || 0) - (bTarih?.getTime() || 0);
-        if (tarihFark !== 0) return tarihFark;
+        (filtrelenmisIslemler || []).forEach((transaction) => {
+            const date = toDateSafe(transaction.tarih);
+            if (!date) return;
+            const key = selectedPeriod?.month === 'all'
+                ? `${date.getFullYear()}-${date.getMonth() + 1}`
+                : `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+            const bucket = bucketMap.get(key)?.item;
+            if (!bucket) return;
 
-        return String(a.baslik || '').localeCompare(String(b.baslik || ''), 'tr-TR', { sensitivity: 'base' });
-    });
-
-    const [hareketHesabi, setHareketHesabi] = useState(null);
-    const [hareketBilgi, setHareketBilgi] = useState(null);
-
-    const siraliBorclar = [...(borclar || [])]
-        .sort((a, b) => {
-            const orderFark = (a.orderIndex || 0) - (b.orderIndex || 0);
-            if (orderFark !== 0) return orderFark;
-            const aTime = a.eklenmeTarihi?.seconds || 0;
-            const bTime = b.eklenmeTarihi?.seconds || 0;
-            return bTime - aTime;
+            const amount = parseAmount(transaction.tutar);
+            if (transaction.islemTipi === 'gelir') bucket.gelir += amount;
+            if (transaction.islemTipi === 'gider') bucket.gider += amount;
+            bucket.net = bucket.gelir - bucket.gider;
         });
 
-    const toplamKategoriGideri = (kategoriVerisi || []).reduce((sum, item) => sum + (parseFloat(item.value) || 0), 0);
-    const pieData = [...(kategoriVerisi || [])]
-        .filter(item => (parseFloat(item.value) || 0) > 0)
-        .sort((a, b) => b.value - a.value)
-        .map((item, index) => ({
+        return buckets;
+    }, [filtrelenmisIslemler, selectedPeriod]);
+
+    const expenseSparkline = useMemo(() => (gunlukVeri || []).map((item) => ({
+        name: item.name,
+        value: parseAmount(item.value),
+    })), [gunlukVeri]);
+
+    const todayStats = useMemo(() => {
+        const today = new Date();
+        return (tumIslemler || [])
+            .filter(isBudgetTransaction)
+            .reduce((acc, transaction) => {
+                const date = toDateSafe(transaction.tarih);
+                if (!isSameCalendarDay(date, today)) return acc;
+                const amount = parseAmount(transaction.tutar);
+                if (transaction.islemTipi === 'gelir') acc.income += amount;
+                if (transaction.islemTipi === 'gider') acc.expense += amount;
+                acc.count += 1;
+                return acc;
+            }, { income: 0, expense: 0, count: 0 });
+    }, [tumIslemler]);
+
+    const currentMonthStats = useMemo(() => {
+        const today = new Date();
+        return (tumIslemler || [])
+            .filter(isBudgetTransaction)
+            .reduce((acc, transaction) => {
+                const date = toDateSafe(transaction.tarih);
+                if (!isSameCalendarMonth(date, today)) return acc;
+                const amount = parseAmount(transaction.tutar);
+                if (transaction.islemTipi === 'gelir') acc.income += amount;
+                if (transaction.islemTipi === 'gider') acc.expense += amount;
+                acc.count += 1;
+                return acc;
+            }, { income: 0, expense: 0, count: 0 });
+    }, [tumIslemler]);
+
+    const kategoriToplam = (kategoriVerisi || []).reduce((sum, item) => sum + parseAmount(item.value), 0);
+    const donutData = useMemo(() => {
+        const sorted = [...(kategoriVerisi || [])]
+            .map((item) => ({ ...item, value: parseAmount(item.value) }))
+            .filter((item) => item.value > 0)
+            .sort((a, b) => b.value - a.value);
+        return sorted.map((item, index) => ({
             ...item,
-            yuzde: toplamKategoriGideri > 0 ? Math.round((item.value / toplamKategoriGideri) * 100) : 0
+            color: DONUT_PALETTE[index % DONUT_PALETTE.length],
+            yuzde: kategoriToplam > 0 ? Math.round((item.value / kategoriToplam) * 100) : 0,
         }));
-    const kategoriDonutVar = toplamKategoriGideri > 0 && pieData.length > 0;
-    const trendTitle = selectedPeriod?.month === 'all'
-        ? `${selectedPeriod?.year} Yıllık Harcama Trendi`
-        : `${aktifAy} Harcama Trendi`;
-    const averageLabel = selectedPeriod?.month === 'all'
-        ? 'Aylık ortalama harcamanız'
-        : 'Günlük ortalama harcamanız';
-    const safeAylikLimit = Math.max(0, parseFloat(aylikLimit) || 0);
-    const budgetUsagePercent = safeAylikLimit > 0 ? (toplamGider / safeAylikLimit) * 100 : 0;
-    const budgetUsageDisplay = Math.round(budgetUsagePercent);
-    const budgetUsageWidth = Math.min(100, Math.max(0, budgetUsagePercent));
-    const budgetUsageColor = budgetUsagePercent >= 95
-        ? '#b91c1c'
-        : budgetUsagePercent >= 80
-            ? '#dc2626'
-            : budgetUsagePercent >= 60
-                ? '#f59e0b'
-                : '#22c55e';
-    const [budgetTooltipVisible, setBudgetTooltipVisible] = useState(false);
+    }, [kategoriVerisi, kategoriToplam]);
 
-    const taksitTarihAraligi = (taksit) => {
-        const baslangic = toDateSafe(taksit.alisTarihi) || toDateSafe(taksit.olusturmaTarihi);
-        const taksitSayisi = parseInt(taksit.taksitSayisi);
-        if (!baslangic || !Number.isFinite(taksitSayisi) || taksitSayisi <= 0) return "";
+    const monthlyInstallmentLoad = (taksitler || []).reduce((acc, item) => {
+        const total = parseAmount(item.toplamTutar);
+        const monthly = parseAmount(item.aylikTutar);
+        const paid = parseInt(item.odenmisTaksit) || 0;
+        const count = parseInt(item.taksitSayisi) || 0;
+        if (count > 0 && paid >= count) return acc;
+        return acc + Math.min(monthly, Math.max(0, total - (monthly * paid)));
+    }, 0);
 
-        const bitis = new Date(baslangic);
-        bitis.setMonth(bitis.getMonth() + taksitSayisi - 1);
-        return `${tarihSadeceGunAyYil(baslangic)} - ${tarihSadeceGunAyYil(bitis)}`;
+    const upcomingPayments = useMemo(() => {
+        const periodDate = selectedPeriod?.month === 'all'
+            ? new Date()
+            : new Date(selectedPeriod.year, selectedPeriod.month - 1, 1);
+        const currentYear = periodDate.getFullYear();
+        const currentMonth = periodDate.getMonth();
+
+        const rows = [];
+
+        (bekleyenFaturalar || []).forEach((bill) => {
+            const definition = (tanimliFaturalar || []).find((item) => item.id === bill.tanimId);
+            const dueDate = toDateSafe(bill.sonOdemeTarihi || bill.tarih);
+            rows.push({
+                id: `bill-${bill.id}`,
+                title: bill.baslik || definition?.baslik || definition?.kurum || 'Bekleyen fatura',
+                type: 'Fatura',
+                badgeLabel: 'Fatura',
+                date: dueDate,
+                amount: parseAmount(bill.tutar),
+                icon: ReceiptText,
+                tone: 'danger',
+                onClick: () => modalAc('fatura_ode', bill),
+            });
+        });
+
+        (tanimliFaturalar || [])
+            .filter((definition) => !(bekleyenFaturalar || []).some((bill) => bill.tanimId === definition.id))
+            .forEach((definition) => {
+                const dueDate = getMonthlyDueDate(definition, currentYear, currentMonth);
+                if (!dueDate) return;
+                rows.push({
+                    id: `bill-definition-${definition.id}`,
+                    title: definition.baslik || definition.kurum || 'Fatura',
+                    type: 'Fatura',
+                    badgeLabel: 'Fatura',
+                    date: dueDate,
+                    amount: parseAmount(definition.tutar || definition.ortalamaTutar),
+                    icon: ReceiptText,
+                    tone: 'danger',
+                    onClick: () => modalAc('duzenle_fatura_tanim', definition),
+                });
+            });
+
+        (hesaplar || [])
+            .filter((account) => account.hesapTipi === 'krediKarti' && account.kesimGunu && parseAmount(account.guncelBakiye) < 0)
+            .forEach((account) => {
+                const day = parseInt(account.kesimGunu) || null;
+                const dueDate = day ? new Date(currentYear, currentMonth, Math.min(day, 28)) : null;
+                rows.push({
+                    id: `card-statement-${account.id}`,
+                    title: account.hesapAdi || 'Kart ekstresi',
+                    type: 'Kart ekstresi',
+                    badgeLabel: 'Kart ekstresi',
+                    date: dueDate,
+                    amount: Math.abs(parseAmount(account.guncelBakiye)),
+                    icon: CreditCard,
+                    tone: 'warning',
+                    onClick: () => modalAc('kredi_karti_ode', account),
+                });
+            });
+
+        (taksitler || []).forEach((installment) => {
+            const paid = parseInt(installment.odenmisTaksit) || 0;
+            const count = parseInt(installment.taksitSayisi) || 0;
+            if (count > 0 && paid >= count) return;
+            const baseDate = toDateSafe(installment.alisTarihi || installment.olusturmaTarihi);
+            const day = baseDate?.getDate();
+            const dueDate = day ? new Date(currentYear, currentMonth, Math.min(day, 28)) : null;
+            rows.push({
+                id: `installment-${installment.id}`,
+                title: installment.baslik || 'Taksit',
+                type: `${paid}/${count || '-'} taksit`,
+                badgeLabel: 'Taksit',
+                date: dueDate,
+                amount: parseAmount(installment.aylikTutar),
+                icon: CalendarClock,
+                tone: 'purple',
+                onClick: () => taksitOde(installment),
+            });
+        });
+
+        (abonelikler || []).forEach((subscription) => {
+            const day = parseInt(subscription.gun) || null;
+            const dueDate = day ? new Date(currentYear, currentMonth, Math.min(day, 28)) : null;
+            rows.push({
+                id: `subscription-${subscription.id}`,
+                title: subscription.ad || 'Abonelik',
+                type: 'Abonelik',
+                badgeLabel: 'Abonelik',
+                date: dueDate,
+                amount: parseAmount(subscription.tutar),
+                icon: Repeat2,
+                tone: 'info',
+                onClick: () => abonelikOde(subscription),
+            });
+        });
+
+        return rows
+            .filter((row) => row.date)
+            .sort((a, b) => (a.date?.getTime() || Number.MAX_SAFE_INTEGER) - (b.date?.getTime() || Number.MAX_SAFE_INTEGER));
+    }, [abonelikler, abonelikOde, bekleyenFaturalar, hesaplar, modalAc, selectedPeriod, taksitOde, taksitler, tanimliFaturalar]);
+
+    const recentTransactions = [...(filtrelenmisIslemler || [])]
+        .sort((a, b) => (toDateSafe(b.tarih)?.getTime() || 0) - (toDateSafe(a.tarih)?.getTime() || 0));
+
+    const subscriptionRows = [...(abonelikler || [])]
+        .sort((a, b) => (parseInt(a.gun) || 32) - (parseInt(b.gun) || 32))
+        .slice(0, 8);
+
+    const debtRows = [...(borclar || [])]
+        .sort((a, b) => (toDateSafe(a.sonOdemeTarihi || a.tarih)?.getTime() || Number.MAX_SAFE_INTEGER) - (toDateSafe(b.sonOdemeTarihi || b.tarih)?.getTime() || Number.MAX_SAFE_INTEGER))
+        .slice(0, 8);
+
+    const installmentRows = [...(taksitler || [])]
+        .filter((item) => {
+            const paid = parseInt(item.odenmisTaksit) || 0;
+            const count = parseInt(item.taksitSayisi) || 0;
+            return !(count > 0 && paid >= count);
+        })
+        .sort((a, b) => (toDateSafe(a.alisTarihi || a.olusturmaTarihi)?.getTime() || Number.MAX_SAFE_INTEGER) - (toDateSafe(b.alisTarihi || b.olusturmaTarihi)?.getTime() || Number.MAX_SAFE_INTEGER))
+        .slice(0, 8);
+
+    const selectedPeriodNet = toplamGelir - toplamGider;
+    const todayNet = todayStats.income - todayStats.expense;
+    const currentMonthNet = currentMonthStats.income - currentMonthStats.expense;
+    const budgetUsagePercent = parseAmount(aylikLimit) > 0 ? Math.round((currentMonthStats.expense / parseAmount(aylikLimit)) * 100) : null;
+    const billTotal = (bekleyenFaturalar || []).reduce((sum, item) => sum + parseAmount(item.tutar), 0);
+    const billDisplayRows = [
+        ...(bekleyenFaturalar || []).map((bill) => {
+            const definition = (tanimliFaturalar || []).find((item) => item.id === bill.tanimId);
+            const dueDate = toDateSafe(bill.sonOdemeTarihi || bill.tarih);
+            return {
+                id: `pending-${bill.id}`,
+                title: bill.baslik || definition?.baslik || definition?.kurum || 'Fatura',
+                date: dueDate,
+                amount: parseAmount(bill.tutar),
+                status: getBillStatus(dueDate, true),
+                data: bill,
+                mode: 'pending',
+            };
+        }),
+        ...(tanimliFaturalar || [])
+            .filter((definition) => !(bekleyenFaturalar || []).some((bill) => bill.tanimId === definition.id))
+            .map((definition) => {
+                const today = new Date();
+                const dueDate = getMonthlyDueDate(definition, today.getFullYear(), today.getMonth());
+                if (!dueDate) return null;
+                return {
+                    id: `definition-${definition.id}`,
+                    title: definition.baslik || definition.kurum || 'Fatura',
+                    date: dueDate,
+                    amount: parseAmount(definition.tutar || definition.ortalamaTutar),
+                    status: getBillStatus(dueDate, false),
+                    data: definition,
+                    mode: 'definition',
+                };
+            })
+            .filter(Boolean),
+    ]
+        .sort((a, b) => (a.date?.getTime() || Number.MAX_SAFE_INTEGER) - (b.date?.getTime() || Number.MAX_SAFE_INTEGER))
+        .slice(0, 8);
+    const debtOriginalTotal = (borclar || []).reduce((sum, item) => sum + parseAmount(item.tutar), 0);
+    const debtTotal = (borclar || []).reduce((sum, item) => sum + parseAmount(item.kalanTutar ?? item.tutar), 0);
+    const currentMonthDebtDue = (borclar || []).reduce((sum, item) => {
+        const dueDate = toDateSafe(item.sonOdemeTarihi || item.tarih);
+        return isSameCalendarMonth(dueDate, new Date()) ? sum + parseAmount(item.kalanTutar ?? item.tutar) : sum;
+    }, 0);
+    const filteredCount = (filtrelenmisIslemler || []).length;
+    const isFiltering = Boolean(aramaMetni) || filtreKategori !== 'Tümü';
+    const totalComparableTransactions = isFiltering ? (tumIslemler || []).filter(isBudgetTransaction).length : filteredCount;
+    const transactionDescription = isFiltering
+        ? `${totalComparableTransactions} işlemden ${filteredCount} sonuç`
+        : `${filteredCount} işlem`;
+
+    const transactionIcon = (transaction) => {
+        if (transaction.islemTipi === 'gelir') return ArrowDownRight;
+        if (transaction.islemTipi === 'transfer') return Repeat2;
+        return ArrowUpRight;
     };
 
-    const hesapHareketleri = hareketHesabi
-        ? (tumIslemler || []).filter(i => (
-            i.hesapId === hareketHesabi.id ||
-            i.kaynakId === hareketHesabi.id ||
-            i.hedefId === hareketHesabi.id
-        )).filter(i => isDateInPeriod(i.tarih, selectedPeriod)).map(i => {
-            let etki = 0;
-            let tipEtiketi = i.islemTipi || "";
-            if (i.islemTipi === 'transfer') {
-                etki = i.kaynakId === hareketHesabi.id ? -(parseFloat(i.tutar) || 0) : (parseFloat(i.tutar) || 0);
-                tipEtiketi = i.kaynakId === hareketHesabi.id ? 'Transfer Çıkış' : 'Transfer Giriş';
-            } else if (i.islemTipi === 'gelir' || i.islemTipi === 'yatirim_satis' || i.islemTipi === 'cari_iade') {
-                etki = parseFloat(i.tutar) || 0;
-                if (i.islemTipi === 'gelir') tipEtiketi = 'Gelir';
-                if (i.islemTipi === 'yatirim_satis') tipEtiketi = 'Yatırım Satış';
-                if (i.islemTipi === 'cari_iade') tipEtiketi = 'İade';
-            } else {
-                etki = -(parseFloat(i.tutar) || 0);
-                tipEtiketi = i.islemTipi === 'yatirim_alis' ? 'Yatırım Alış' : 'Gider';
-            }
-            return { ...i, hesapEtki: etki, tipEtiketi };
-        }).sort((a, b) => (toDateSafe(b.tarih)?.getTime() || 0) - (toDateSafe(a.tarih)?.getTime() || 0))
-        : [];
-
-    const hareketToplami = hesapHareketleri.reduce((sum, i) => sum + i.hesapEtki, 0);
-    const hesapTipiMetni = (hesap) => {
-        if (hesap?.hesapTipi === 'krediKarti') return 'kredi kartınız';
-        if (hesap?.hesapTipi === 'yatirim') return 'yatırım hesabınız';
-        return 'vadesiz TL hesabınız';
+    const transactionTone = (transaction) => {
+        if (transaction.islemTipi === 'gelir') return 'success';
+        if (transaction.islemTipi === 'transfer') return 'info';
+        return 'danger';
     };
-    const hareketDetayMetni = (hareket) => {
-        const tarih = tarihSadeceGunAyYil(hareket.tarih);
-        const tutar = formatPara(Math.abs(parseFloat(hareket.hesapEtki) || 0));
-        const bakiye = formatPara(hareket.islemSonrasiBakiye);
-        const hesapMetni = hesapTipiMetni(hareketHesabi);
 
-        if (hareket.islemTipi === 'transfer') {
-            const kaynak = hesaplar.find(h => h.id === hareket.kaynakId)?.hesapAdi || 'kaynak hesap';
-            const hedef = hesaplar.find(h => h.id === hareket.hedefId)?.hesapAdi || 'hedef hesap';
-            const yon = hareket.kaynakId === hareketHesabi.id
-                ? `${hedef} hesabına`
-                : `${kaynak} hesabından`;
-            const eylem = hareket.kaynakId === hareketHesabi.id ? 'para transferi yapıldı' : 'para transferi geldi';
-            return `${tarih} tarihinde ${hesapMetni} ${yon} ${tutar} tutarında ${eylem}. İşlem sonrası hesap bakiyeniz: ${bakiye}`;
+    const getAccountMovementAmount = (transaction, accountId) => {
+        const amount = parseAmount(transaction.tutar);
+        if (transaction.islemTipi === 'transfer') {
+            if (transaction.kaynakId === accountId) return -amount;
+            if (transaction.hedefId === accountId) return amount;
+            return 0;
         }
 
-        if (hareket.hesapEtki >= 0) {
-            return `${tarih} tarihinde ${hesapMetni} ${hareket.aciklama || 'işlem'} sonucunda ${tutar} giriş oldu. İşlem sonrası hesap bakiyeniz: ${bakiye}`;
-        }
-
-        return `${tarih} tarihinde ${hesapMetni} ${hareket.aciklama || 'işlem'} için ${tutar} tutarında ödeme yapıldı. İşlem sonrası hesap bakiyeniz: ${bakiye}`;
+        if (transaction.hesapId !== accountId) return 0;
+        if (['gelir', 'yatirim_satis', 'cari_iade'].includes(transaction.islemTipi)) return amount;
+        return -amount;
     };
-    const hesapHareketleriBakiyeli = hesapHareketleri.reduce((acc, hareket) => {
-        const islemSonrasiBakiye = acc.bakiye;
-        const hesapEtki = parseFloat(hareket.hesapEtki) || 0;
-        return {
-            bakiye: acc.bakiye - hesapEtki,
-            hareketler: [...acc.hareketler, { ...hareket, islemSonrasiBakiye }]
-        };
-    }, { bakiye: parseFloat(hareketHesabi?.guncelBakiye) || 0, hareketler: [] }).hareketler;
+
+    const getAccountMovements = (accountId) => [...(tumIslemler || [])]
+        .filter((transaction) => (
+            isDateInPeriod(transaction.tarih, selectedPeriod) &&
+            (
+                transaction.hesapId === accountId ||
+                transaction.kaynakId === accountId ||
+                transaction.hedefId === accountId
+            )
+        ))
+        .sort((a, b) => (toDateSafe(b.tarih)?.getTime() || 0) - (toDateSafe(a.tarih)?.getTime() || 0));
+
+    const selectedAccountMovements = historyAccount ? getAccountMovements(historyAccount.id) : [];
+
+    const getAccountMovementMeta = (transaction, accountId) => {
+        if (transaction.islemTipi !== 'transfer') return `${transaction.kategori || 'Kategori yok'} · ${tarihFormatla(transaction.tarih)}`;
+        if (transaction.kaynakId === accountId) return `Transfer çıkış · ${tarihFormatla(transaction.tarih)}`;
+        if (transaction.hedefId === accountId) return `Transfer giriş · ${tarihFormatla(transaction.tarih)}`;
+        return `Transfer · ${tarihFormatla(transaction.tarih)}`;
+    };
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}> {/* Ana Container gap düzeltildi */}
-            {hareketHesabi && (
-                <div
-                    onClick={() => {
-                        setHareketHesabi(null);
-                        setHareketBilgi(null);
-                    }}
-                    style={{
-                        position: 'fixed',
-                        inset: 0,
-                        zIndex: 1000,
-                        background: 'rgba(15, 23, 42, 0.38)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        padding: '20px'
-                    }}
-                >
-                    <div
-                        onClick={e => e.stopPropagation()}
-                        style={{
-                            width: 'min(1180px, 96vw)',
-                            maxHeight: '82vh',
-                            overflow: 'hidden',
-                            background: '#ffffff',
-                            borderRadius: '16px',
-                            boxShadow: '0 25px 70px rgba(15, 23, 42, 0.28)',
-                            border: '1px solid #e2e8f0',
-                            display: 'flex',
-                            flexDirection: 'column'
-                        }}
-                    >
-                        <div style={{ padding: '18px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', gap: '14px', alignItems: 'center' }}>
-                            <div>
-                                <div style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>{hareketHesabi.hesapAdi}</div>
-                                <div style={{ fontSize: '12px', color: '#64748b', marginTop: '3px' }}>
-                                    {hesapHareketleri.length} hareket • Net etki: <b style={{ color: hareketToplami >= 0 ? '#16a34a' : '#dc2626' }}>{formatPara(hareketToplami)}</b>
-                                </div>
-                            </div>
-                            <button aria-label="Kapat" onClick={() => {
-                                setHareketHesabi(null);
-                                setHareketBilgi(null);
-                            }} style={{ border: 'none', background: 'transparent', color: '#0f172a', width: '42px', height: '42px', cursor: 'pointer', display: 'grid', placeItems: 'center', flex: '0 0 auto', padding: 0 }}>
-                                <X size={22} strokeWidth={3} />
-                            </button>
-                        </div>
-
-                        <div style={{ overflow: 'auto' }}>
-                            {hesapHareketleri.length === 0 ? (
-                                <div style={{ padding: '28px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>Bu hesap için hareket bulunamadı.</div>
-                            ) : (
-                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', color: '#334155', minWidth: '980px', tableLayout: 'fixed' }}>
-                                    <thead>
-                                        <tr style={{ textAlign: 'left', color: '#64748b', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                                            <th style={{ padding: '12px 18px', width: '150px' }}>Tarih</th>
-                                            <th style={{ padding: '12px 18px', width: '145px' }}>Tip</th>
-                                            <th style={{ padding: '12px 18px', width: '130px' }}>Kategori</th>
-                                            <th style={{ padding: '11px 14px' }}>Açıklama</th>
-                                            <th style={{ padding: '12px 18px', width: '135px', textAlign: 'right' }}>Hareket</th>
-                                            <th style={{ padding: '12px 18px', width: '135px', textAlign: 'right' }}>Bakiye</th>
-                                            <th style={{ padding: '12px 14px', width: '76px', textAlign: 'center' }}>Detay</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {hesapHareketleriBakiyeli.map(i => (
-                                            <tr key={i.id} onClick={() => modalAc('duzenle_islem', i)} style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}>
-                                                <td style={{ padding: '13px 18px', whiteSpace: 'nowrap', color: '#64748b' }}>{tarihFormatla(i.tarih)}</td>
-                                                <td style={{ padding: '13px 18px', fontWeight: 700, whiteSpace: 'nowrap' }}>{i.tipEtiketi}</td>
-                                                <td style={{ padding: '13px 18px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{i.kategori || '-'}</td>
-                                                <td style={{ padding: '13px 18px', lineHeight: 1.35 }}>{i.aciklama || '-'}</td>
-                                                <td style={{ padding: '13px 18px', textAlign: 'right', fontWeight: 800, color: i.hesapEtki >= 0 ? '#16a34a' : '#dc2626', whiteSpace: 'nowrap' }}>
-                                                    {i.hesapEtki >= 0 ? '+' : ''}{formatPara(i.hesapEtki)}
-                                                </td>
-                                                <td style={{ padding: '13px 18px', textAlign: 'right', whiteSpace: 'nowrap', color: '#0f172a', fontWeight: 700 }}>
-                                                    {formatPara(i.islemSonrasiBakiye)}
-                                                </td>
-                                                <td style={{ padding: '13px 14px', textAlign: 'center' }}>
-                                                    <button
-                                                        type="button"
-                                                        aria-label="İşlem detayı"
-                                                        title="İşlem sonrası bakiye detayı"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setHareketBilgi(hareketDetayMetni(i));
-                                                        }}
-                                                        style={{
-                                                            width: '28px',
-                                                            height: '28px',
-                                                            border: 'none',
-                                                            background: 'transparent',
-                                                            color: '#334155',
-                                                            cursor: 'pointer',
-                                                            display: 'inline-grid',
-                                                            placeItems: 'center',
-                                                            verticalAlign: 'middle',
-                                                            padding: 0
-                                                        }}
-                                                    >
-                                                        <Info size={18} strokeWidth={2.4} />
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            )}
-                        </div>
+        <div className="qw-page qw-budget-page">
+            <div className="qw-top-summary-grid">
+                <PremiumCard tone="hero" className="qw-net-worth-card">
+                    <div className="qw-hero-copy">
+                        <span className="qw-eyebrow">Toplam Net Varlık</span>
+                        <h2>{formatPara(netVarlik)}</h2>
                     </div>
-                    {hareketBilgi && (
-                        <div
-                            onClick={(e) => e.stopPropagation()}
-                            style={{
-                                position: 'fixed',
-                                zIndex: 1010,
-                                left: '50%',
-                                top: '50%',
-                                transform: 'translate(-50%, -50%)',
-                                width: 'min(560px, calc(100vw - 42px))',
-                                background: '#ffffff',
-                                borderRadius: '16px',
-                                boxShadow: '0 22px 70px rgba(15, 23, 42, 0.32)',
-                                overflow: 'hidden',
-                                border: '1px solid #e2e8f0'
-                            }}
-                        >
-                            <div style={{ display: 'flex', gap: '18px', padding: '28px 30px', alignItems: 'flex-start' }}>
-                                <div style={{ width: '42px', height: '42px', borderRadius: '999px', background: '#84cc16', color: '#ffffff', display: 'grid', placeItems: 'center', flex: '0 0 auto' }}>
-                                    <Info size={24} strokeWidth={2.6} />
-                                </div>
-                                <div style={{ color: '#4b5563', fontSize: '18px', lineHeight: 1.45 }}>{hareketBilgi}</div>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => setHareketBilgi(null)}
-                                style={{
-                                    width: '100%',
-                                    border: 'none',
-                                    borderTop: '1px solid #e5e7eb',
-                                    background: '#ffffff',
-                                    color: '#0ea5e9',
-                                    padding: '18px',
-                                    cursor: 'pointer',
-                                    fontSize: '20px',
-                                    fontWeight: 800
-                                }}
-                            >
-                                Tamam
-                            </button>
+                    <div className="qw-hero-chart">
+                        <Sparkline data={expenseSparkline} color="#6d5dfc" />
+                    </div>
+                </PremiumCard>
+
+                <PremiumCard className="qw-compact-summary-card">
+                    <SectionHeader title="Bugün" description={`${todayStats.count} işlem`} />
+                    <div className="qw-summary-lines">
+                        <SummaryLine label="Gelir" value={formatPara(todayStats.income)} tone="success" />
+                        <SummaryLine label="Gider" value={formatPara(todayStats.expense)} tone="danger" />
+                        <SummaryLine label="Net" value={formatPara(todayNet)} tone={getFinancialTone(todayNet)} />
+                    </div>
+                </PremiumCard>
+
+                <PremiumCard className="qw-compact-summary-card">
+                    <SectionHeader
+                        title="Bu Ay"
+                        description={budgetUsagePercent === null ? 'Limit tanımsız' : `Bütçe %${budgetUsagePercent}`}
+                        action={budgetUsagePercent !== null && budgetUsagePercent > 100 ? <StatusBadge tone="warning">Limit aşıldı</StatusBadge> : null}
+                    />
+                    <div className="qw-summary-lines">
+                        <SummaryLine label="Gelir" value={formatPara(currentMonthStats.income)} tone="success" />
+                        <SummaryLine label="Gider" value={formatPara(currentMonthStats.expense)} tone="danger" />
+                        <SummaryLine label="Net" value={formatPara(currentMonthNet)} tone={getFinancialTone(currentMonthNet)} />
+                    </div>
+                    {budgetUsagePercent !== null && (
+                        <div className="qw-progress-track">
+                            <span style={{ width: `${Math.min(100, budgetUsagePercent)}%` }} className={budgetUsagePercent > 100 ? 'is-warning' : ''} />
                         </div>
                     )}
-                </div>
-            )}
+                </PremiumCard>
 
-            {/* 1. ve 2. SATIR BİRLEŞİK GRID (Yedek.js ile birebir aynı yapı) */}
-            <div className="responsive-grid-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '25px' }}>
-
-                {/* 1. SATIR: KARTLAR */}
-                <div className="responsive-card" style={{ ...cardStyle, borderLeft: '5px solid #48bb78', minHeight: '132px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
-                    <div className="card-title-sm responsive-title">GELİR</div>
-                    <div className="kpi-amount responsive-amount">{formatPara(toplamGelir)}</div>
-                </div>
-                <div className="responsive-card" style={{ ...cardStyle, borderLeft: '5px solid #F59E0B', minHeight: '132px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start' }}>
-                    <div className="card-title-sm responsive-title">BUGÜN HARCANAN</div>
-                    <div className="kpi-amount responsive-amount">{formatPara(bugunGider)}</div>
-                </div>
-                <div
-                    className="responsive-card"
-                    style={{
-                        ...cardStyle,
-                        borderLeft: '5px solid #f56565',
-                        minHeight: '132px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'flex-start',
-                        position: 'relative',
-                        paddingBottom: '42px',
-                    }}
-                    onMouseEnter={() => setBudgetTooltipVisible(true)}
-                    onMouseLeave={() => setBudgetTooltipVisible(false)}
-                >
-                    <div className="card-title-sm responsive-title">GİDER</div>
-                    <div className="kpi-amount-sm responsive-amount">{formatPara(toplamGider)}</div>
-                    <div
-                        style={{
-                            position: 'absolute',
-                            left: '20px',
-                            right: '20px',
-                            bottom: '16px',
-                            height: '4px',
-                            background: '#eef2f7',
-                            borderRadius: '999px',
-                            overflow: 'visible',
-                            cursor: 'default',
-                        }}
-                    >
-                        <div
-                            style={{
-                                width: `${budgetUsageWidth}%`,
-                                height: '100%',
-                                background: budgetUsageColor,
-                                borderRadius: '999px',
-                                transition: 'width 220ms ease, background-color 220ms ease',
-                            }}
-                        />
+                <PremiumCard className="qw-compact-summary-card">
+                    <SectionHeader title="Mevcut Durum" description="Hesap ve varlık özeti" />
+                    <div className="qw-summary-lines">
+                        <SummaryLine label="Cüzdan nakdi" value={formatPara(sadeceCuzdanNakiti)} tone={sadeceCuzdanNakiti >= 0 ? undefined : 'danger'} />
+                        <SummaryLine label="Yatırım gücü" value={formatPara(genelToplamYatirimGucu)} tone="info" />
+                        <SummaryLine label="Hesap sayısı" value={`${(hesaplar || []).length} hesap`} />
+                        <SummaryLine label="Aktif işlem" value={`${filteredCount} kayıt`} />
                     </div>
-                    <BudgetUsageTooltip
-                        visible={budgetTooltipVisible}
-                        used={formatCurrencyPlain(toplamGider)}
-                        limit={formatCurrencyPlain(safeAylikLimit)}
-                        percent={budgetUsageDisplay}
-                    />
-                </div>
-
-                {/* 2. SATIR: GRAFİK (2 Sütun) ve PASTA (1 Sütun) */}
-                <div style={{ ...cardStyle, gridColumn: kategoriDonutVar ? 'span 2' : 'span 3', minHeight: '300px' }}>
-                    <div className="card-title" style={{ marginBottom: '16px' }}>{trendTitle}</div>
-                    <ResponsiveContainer width="100%" height={250}>
-                        <AreaChart data={gunlukVeri || []} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-                            <defs>
-                                <linearGradient id="spendingTrendFill" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#7c3aed" stopOpacity={0.22} />
-                                    <stop offset="95%" stopColor="#7c3aed" stopOpacity={0.02} />
-                                </linearGradient>
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(148, 163, 184, 0.22)" />
-                            <XAxis
-                                dataKey="name"
-                                tick={(props) => <TrendXAxisTick {...props} data={gunlukVeri || []} />}
-                            />
-                            <YAxis tick={{ fontSize: 12 }} />
-                            <Tooltip content={<TrendTooltip />} />
-                            <Area
-                                type="monotone"
-                                dataKey="value"
-                                stroke="#6d28d9"
-                                strokeWidth={3}
-                                fill="url(#spendingTrendFill)"
-                                dot={{ r: 3, strokeWidth: 2, stroke: '#6d28d9', fill: '#ffffff' }}
-                                activeDot={{ r: 5, strokeWidth: 2, stroke: '#ffffff', fill: '#6d28d9' }}
-                            />
-                        </AreaChart>
-                    </ResponsiveContainer>
-                    <div style={{ textAlign: 'center', marginTop: '10px', fontSize: '13px', color: '#718096', fontStyle: 'italic' }}>
-                        ✨ {averageLabel}: <span style={{ fontWeight: 'bold', color: '#2d3748' }}>{formatPara(gunlukOrtalama)}</span>
-                    </div>
-                </div>
-
-                {kategoriDonutVar && (
-                    <div
-                        className="responsive-card"
-                        style={{
-                            ...cardStyle,
-                            gridColumn: 'span 1',
-                            padding: '18px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                        }}
-                    >
-                        <PremiumDonutChart
-                            data={pieData}
-                            centerValue={formatPara(toplamKategoriGideri)}
-                            centerLabel="Toplam Gider"
-                            formatValue={formatPara}
-                            height={280}
-                            innerRadius={82}
-                            outerRadius={110}
-                        />
-                    </div>
-                )}
+                </PremiumCard>
             </div>
 
-            {/* --- ALT BÖLÜM (FORMLAR VE LİSTE) --- */}
-            <div id="cuzdanlar-section" className="responsive-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '25px' }}>
+            <div className="qw-priority-grid">
+                <FinancialTrendChart
+                        title="Nakit Akışı"
+                        subtitle={`${aktifAy} hareket görünümü`}
+                        data={cashFlowData}
+                        series={[
+                            { key: 'gelir', label: 'Gelir', tone: 'success', color: '#16a36a' },
+                            { key: 'gider', label: 'Gider', tone: 'danger', color: '#e25555', fillOpacity: 0.14, fillOpacityEnd: 0.01 },
+                        ]}
+                        summary={{
+                            label: 'Net',
+                            value: formatPara(selectedPeriodNet),
+                            tone: getFinancialTone(selectedPeriodNet),
+                        }}
+                        valueFormatter={(value) => gizliMod ? '****' : formatCurrencyPlain(value)}
+                        yTickFormatter={(value) => gizliMod ? '****' : `${new Intl.NumberFormat('tr-TR', { notation: 'compact', maximumFractionDigits: 1 }).format(value)} ₺`}
+                        tooltipRows={(item, formatter) => {
+                            const income = parseAmount(item?.gelir);
+                            const expense = -Math.abs(parseAmount(item?.gider));
+                            const net = parseAmount(item?.net);
+                            return [
+                                { label: 'Gelir', value: formatter(income), tone: 'success' },
+                                { label: 'Gider', value: formatter(expense), tone: 'danger' },
+                                { label: 'Net', value: formatter(net), tone: getFinancialTone(net) },
+                            ];
+                        }}
+                        emptyTitle="Nakit akışı oluşmadı"
+                        emptyDescription="Seçili dönemde gelir veya gider hareketi yok."
+                        emptyIcon={LineChart}
+                    />
 
-                {/* SOL SÜTUN */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
-                    {/* MAAŞ MODÜLÜ */}
-                    <div className="responsive-card" style={{ ...cardStyle, height: 'fit-content' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                            <div className="card-title">Maaşlar & Gelirler</div>
-                            <button onClick={() => modalAc('maas_ekle')} className="btn-ui btn-ui-success">
-                                + Gelir Ekle
-                            </button>
-                        </div>
-                        <div>
-                            {(maaslar || []).map(m => {
-                                const hesap = hesaplar.find(h => h.id === m.hesapId);
-                                return (
-                                    <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', borderBottom: '1px solid #f0f0f0', fontSize: '14px' }}>
-                                        <div><div style={{ fontWeight: 'bold' }}>{m.ad}</div><div style={{ fontSize: '11px', color: '#999' }}>Her ayın {m.gun}. günü • {hesap?.hesapAdi}</div></div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                            <span style={{ color: 'green', fontWeight: 'bold' }}>{formatPara(m.tutar)}</span>
-                                            <span onClick={(e) => { e.stopPropagation(); modalAc('duzenle_maas', m); }} style={{ cursor: 'pointer', fontSize: '12px', marginLeft: '5px' }}>✏️</span>
-                                            <span onClick={(e) => { e.stopPropagation(); normalSil("maaslar", m.id); }} style={{ cursor: 'pointer', color: 'red', fontSize: '12px' }}>🗑️</span>
-                                        </div>
-                                    </div>
-                                )
-                            })}
-                        </div>
-                        {maaslar.length === 0 && <div style={{ fontSize: '12px', color: '#aaa', padding: '10px', textAlign: 'center' }}>Düzenli gelir eklemek için + butonuna basın.</div>}
+                <PremiumCard className="qw-scroll-card qw-upcoming-card">
+                    <SectionHeader
+                        title="Yaklaşan Ödemeler"
+                        description={`${upcomingPayments.length} ödeme`}
+                    />
+                    <div className="qw-payment-list qw-payment-list--scroll">
+                        {upcomingPayments.map((payment) => {
+                            const dueTime = payment.date ? new Date(payment.date).setHours(0, 0, 0, 0) : null;
+                            const todayTime = new Date().setHours(0, 0, 0, 0);
+                            const diffDays = dueTime !== null ? Math.ceil((dueTime - todayTime) / 86400000) : null;
+                            const dueMeta = diffDays !== null && diffDays >= 0 && diffDays <= 3
+                                ? `${formatDayMonth(payment.date)} · ${payment.type} · Yakın`
+                                : `${formatDayMonth(payment.date)} · ${payment.type}`;
+                            return (
+                                <UpcomingPaymentRow
+                                    key={payment.id}
+                                    icon={payment.icon}
+                                    tone={payment.tone}
+                                    title={payment.title}
+                                    meta={dueMeta}
+                                    amount={formatPara(payment.amount)}
+                                    badge={payment.badgeLabel}
+                                    onClick={payment.onClick}
+                                />
+                            );
+                        })}
+                        {upcomingPayments.length === 0 && (
+                            <EmptyState title="Yaklaşan ödeme yok" description="Seçili dönemde bekleyen ödeme görünmüyor." icon={Bell} />
+                        )}
                     </div>
+                </PremiumCard>
+            </div>
 
-                    {/* HESAPLAR */}
-                    <div className="responsive-card" style={{ ...cardStyle, height: 'fit-content' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '10px' }}>
-                            <div className="card-title">Hesaplar</div>
-                            <button onClick={() => modalAc('hesap_ekle')} className="btn-ui btn-ui-primary">
-                                + Hesap Ekle
+            <div className="qw-transactions-accounts-grid">
+                <PremiumCard className="qw-transactions-card">
+                    <SectionHeader
+                        title="Son İşlemler"
+                        description={transactionDescription}
+                        action={(
+                            <div className="qw-export-actions">
+                                <QuickActionButton icon={Download} onClick={excelIndir}>XLS</QuickActionButton>
+                                <label className="qw-action-button">
+                                    <Upload size={16} strokeWidth={2.35} />
+                                    Yükle
+                                    <input type="file" accept=".xlsx,.xls,.csv" onChange={excelYukle} hidden />
+                                </label>
+                            </div>
+                        )}
+                    />
+                    <DashboardToolbar
+                        searchValue={aramaMetni}
+                        onSearchChange={setAramaMetni}
+                        categoryValue={filtreKategori}
+                        onCategoryChange={setFiltreKategori}
+                        categories={sortTurkishText([...siraliKategoriListesi, 'Transfer'])}
+                    />
+                    <div className="qw-transaction-list qw-transaction-list--scroll">
+                        {recentTransactions.map((transaction) => {
+                            const amountTone = transaction.islemTipi === 'gelir' ? 'success' : transaction.islemTipi === 'transfer' ? 'info' : 'danger';
+                            const prefix = transaction.islemTipi === 'gelir' ? '+' : transaction.islemTipi === 'gider' ? '-' : '';
+                            return (
+                                <TransactionRow
+                                    key={transaction.id}
+                                    icon={transactionIcon(transaction)}
+                                    tone={transactionTone(transaction)}
+                                    title={transaction.aciklama || transaction.kategori || 'İşlem'}
+                                    meta={`${transaction.kategori || 'Kategori yok'} · ${tarihFormatla(transaction.tarih)}`}
+                                    amount={`${prefix}${formatPara(transaction.tutar)}`}
+                                    amountTone={amountTone}
+                                    onClick={() => modalAc('duzenle_islem', transaction)}
+                                    actions={(
+                                        <>
+                                            <button type="button" className="qw-mini-icon-button" aria-label="Düzenle" onClick={(event) => { event.stopPropagation(); modalAc('duzenle_islem', transaction); }}>
+                                                <Edit3 size={14} />
+                                            </button>
+                                            <button type="button" className="qw-mini-icon-button is-danger" aria-label="Sil" onClick={(event) => { event.stopPropagation(); islemSil(transaction.id); }}>
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </>
+                                    )}
+                                />
+                            );
+                        })}
+                        {recentTransactions.length === 0 && <EmptyState title="İşlem bulunamadı" description="Arama veya kategori filtrenizi değiştirin." icon={Search} />}
+                    </div>
+                    <div className="qw-card-sticky-footer">
+                        <span>Net nakit akışı (bu ay)</span>
+                        <strong className={`is-${getFinancialTone(currentMonthNet)}`}>{formatPara(currentMonthNet)}</strong>
+                    </div>
+                </PremiumCard>
+
+                <PremiumCard className="qw-accounts-card">
+                    <SectionHeader
+                        title="Hesaplar"
+                        description={`${(hesaplar || []).length} hesap`}
+                        action={<QuickActionButton icon={Plus} onClick={() => modalAc('hesap_ekle')}>Hesap ekle</QuickActionButton>}
+                    />
+                    <div className="qw-account-list">
+                        {siraliHesaplar.map((account) => (
+                            <button key={account.id} type="button" className="qw-account-row" title={account.hesapAdi} onClick={() => setHistoryAccount(account)}>
+                                <IconTile icon={Landmark} tone={account.hesapTipi === 'krediKarti' ? 'warning' : 'accent'} />
+                                <span>
+                                    <strong>{account.hesapAdi}</strong>
+                                    <small>{account.hesapTipi === 'krediKarti' ? 'Kredi kartı' : account.hesapTipi === 'yatirim' ? 'Yatırım hesabı' : 'Vadesiz hesap'}</small>
+                                </span>
+                                <span className="qw-account-row__side">
+                                    <b className={parseAmount(account.guncelBakiye) < 0 ? 'is-danger' : ''}>{formatPara(account.guncelBakiye)}</b>
+                                    <span className="qw-row-actions">
+                                        <button type="button" className="qw-mini-icon-button" aria-label="Düzenle" onClick={(event) => { event.stopPropagation(); modalAc('duzenle_hesap', account); }}>
+                                            <Edit3 size={14} />
+                                        </button>
+                                    </span>
+                                </span>
                             </button>
-                        </div>
-                        <div style={{ marginBottom: '15px' }}>
-                            {siraliHesaplar.map(h => {
-                                let toplamBakiye = parseFloat(h.guncelBakiye);
-                                if (isNaN(toplamBakiye)) toplamBakiye = 0;
-                                let aylikFark = 0;
-                                filtrelenmisIslemler.forEach(i => {
-                                    if (i.hesapId === h.id) {
-                                        if (i.islemTipi === 'gelir') aylikFark += i.tutar;
-                                        if (i.islemTipi === 'gider') aylikFark -= i.tutar;
-                                    }
-                                    if (i.islemTipi === 'transfer') {
-                                        if (i.kaynakId === h.id) aylikFark -= i.tutar;
-                                        if (i.hedefId === h.id) aylikFark += i.tutar;
-                                    }
-                                });
+                        ))}
+                        {siraliHesaplar.length === 0 && <EmptyState title="Hesap yok" description="Yeni hesap ekleyerek başlayın." icon={Wallet} />}
+                    </div>
+                </PremiumCard>
+            </div>
 
-                                return (
-                                    <div key={h.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', borderBottom: '1px solid #f0f0f0', fontSize: '14px' }}>
+            <div className="qw-secondary-grid">
+                <PremiumCard>
+                    <SectionHeader
+                        title="Harcama Dağılımı"
+                        description="En yüksek kategoriler"
+                    />
+                    {donutData.length > 0 ? (
+                        <div className="qw-donut-layout">
+                            <div className="qw-donut-chart">
+                                <PremiumDonutChart
+                                    data={donutData}
+                                    centerValue={formatPara(kategoriToplam)}
+                                    centerLabel="Toplam gider"
+                                    formatValue={formatPara}
+                                    height={220}
+                                    innerRadius={64}
+                                    outerRadius={88}
+                                />
+                            </div>
+                            <div className="qw-category-list">
+                                {donutData.map((item) => (
+                                    <div className="qw-category-row" key={item.name}>
+                                        <span style={{ background: item.color }} />
                                         <div>
-                                            <b>{h.hesapAdi}</b> <small style={{ color: '#aaa' }}>({h.hesapTipi})</small>
-                                            {h.hesapTipi === 'yatirim' && <span style={{ fontSize: '10px', marginLeft: '5px' }}>📈</span>}
-                                            <span onClick={() => setHareketHesabi(h)} title="Hesap hareketleri" style={{ fontSize: '11px', cursor: 'pointer', marginLeft: '5px', color: '#475569' }}>📜</span>
-                                            <span onClick={() => modalAc('duzenle_hesap', h)} style={{ fontSize: '10px', cursor: 'pointer', marginLeft: '5px', color: 'blue' }}>✏️</span>
-                                            <div style={{ fontSize: '10px', color: '#aaa' }}>Dönem: {aylikFark > 0 ? '+' : ''}{formatPara(aylikFark)}</div>
+                                            <strong>{item.name}</strong>
+                                            <small>%{item.yuzde}</small>
                                         </div>
-                                        <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
-                                            <span style={{ color: toplamBakiye < 0 ? 'red' : 'green', fontWeight: '600', fontSize: '15px' }}>{formatPara(toplamBakiye)}</span>
-                                            {h.hesapTipi === 'krediKarti' && toplamBakiye < 0 && <button onClick={() => modalAc('kredi_karti_ode', h)} style={{ background: '#805ad5', color: 'white', border: 'none', padding: '3px 8px', borderRadius: '4px', fontSize: '10px', cursor: 'pointer', marginLeft: '5px' }}>Borç Öde</button>}
-                                            <span onClick={() => normalSil("hesaplar", h.id)} style={{ cursor: 'pointer', color: 'red', fontSize: '12px' }}>🗑️</span>
-                                        </div>
+                                        <b>{formatPara(item.value)}</b>
                                     </div>
-                                )
-                            })}
-                        </div>
-                        <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #eee', textAlign: 'right', fontSize: '14px' }}>
-                            <div style={{ color: '#666' }}>Nakit Varlık: <b>{formatPara(sadeceCuzdanNakiti)}</b></div>
-                            <div style={{ color: '#666' }}>Yatırım: <b>{formatPara(genelToplamYatirimGucu)}</b></div>
-                            <div style={{ color: '#2d3748', fontSize: '16px', marginTop: '5px' }}>NET VARLIK: <b style={{ color: netVarlik >= 0 ? 'green' : 'red' }}>{formatPara(netVarlik)}</b></div>
-                        </div>
-                    </div>
-
-                    {/* TAKSİTLER */}
-                    <div className="responsive-card" style={cardStyle}>
-                        <div className="card-title" style={{ marginBottom: '12px' }}>Taksitler</div>
-                        {taksitler.length === 0 ? <p style={{ fontSize: '13px', color: '#aaa' }}>Aktif taksit borcu yok.</p> :
-                            <div style={{ marginBottom: '15px' }}>
-                                {siraliTaksitler.map(t => {
-                                    const yuzde = (t.odenmisTaksit / t.taksitSayisi) * 100;
-                                    return (
-                                        <div key={t.id} style={{ padding: '10px', borderBottom: '1px solid #f0f0f0', fontSize: '13px' }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-                                                <div><b>{t.baslik}</b><div style={{ fontSize: '10px', color: '#999' }}>{t.kategori}</div></div>
-                                                <span style={{ fontWeight: 'bold' }}>{formatPara(t.toplamTutar - (t.aylikTutar * t.odenmisTaksit))} <small style={{ color: '#999' }}>Kaldı</small></span>
-                                            </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', color: '#666', marginBottom: '5px' }}>
-                                                <span>{t.odenmisTaksit}/{t.taksitSayisi} Ödendi</span>
-                                                <span>Aylık: {formatPara(t.aylikTutar)}</span>
-                                            </div>
-                                            {taksitTarihAraligi(t) && (
-                                                <div style={{ fontSize: '11px', color: '#8da0bd', marginBottom: '8px' }}>
-                                                    {taksitTarihAraligi(t)}
-                                                </div>
-                                            )}
-                                            <div style={{ width: '100%', height: '8px', background: '#eee', borderRadius: '4px', marginBottom: '10px' }}><div style={{ width: `${yuzde}%`, height: '100%', background: '#805ad5', borderRadius: '4px', transition: 'width 0.5s' }}></div></div>
-                                            <div style={{ textAlign: 'right' }}>
-                                                <button onClick={() => taksitOde(t)} style={{ background: '#805ad5', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer', fontSize: '11px' }}>Bu Ayı İşle ({formatPara(t.aylikTutar)})</button>
-                                                <span onClick={() => modalAc('duzenle_taksit', t)} style={{ cursor: 'pointer', marginLeft: '10px' }}>✏️</span>
-                                                <span onClick={() => normalSil("taksitler", t.id)} style={{ cursor: 'pointer', marginLeft: '10px' }}>🗑️</span>
-                                            </div>
-                                        </div>
-                                    )
-                                })}
-                            </div>
-                        }
-                        <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', fontSize: '13px' }}>
-                            <span style={{ color: '#718096' }}>Toplam Aylık Yük: <b style={{ color: '#805ad5' }}>{formatPara(toplamAylikTaksitYuku)}</b></span>
-                            <span style={{ color: '#718096' }}>Kalan Toplam Borç: <b style={{ color: '#e53e3e' }}>{formatPara(toplamKalanTaksitBorcu)}</b></span>
-                        </div>
-                    </div>
-
-                    {/* FATURALAR (YENİ MODÜL) */}
-                    <div className="responsive-card" style={{ ...cardStyle, height: 'fit-content' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                            <div className="card-title">Faturalar</div>
-                            <button onClick={() => modalAc('fatura_tanim_ekle')} className="btn-ui btn-ui-neutral">
-                                + Fatura Tanımla
-                            </button>
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                            {/* Faturalar */}
-                            {(tanimliFaturalar || []).map(tanim => {
-                                const tanimHesap = hesaplar.find(h => h.id === tanim.hesapId);
-                                const bekleyenler = bekleyenFaturalar
-                                    .filter(f => f.tanimId === tanim.id)
-                                    .sort((a, b) => new Date(a.sonOdemeTarihi) - new Date(b.sonOdemeTarihi));
-                                return (
-                                    <div key={tanim.id} style={{ marginBottom: '10px', border: '1px solid #eee', borderRadius: '10px', overflow: 'hidden', position: 'relative', zIndex: 10 }}>
-                                        <div style={{ padding: '10px', background: '#f7fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <div>
-                                                <div style={{ fontWeight: 'bold', fontSize: '13px', color: '#2d3748' }}>{tanim.baslik}</div>
-                                                <div style={{ fontSize: '10px', color: '#718096' }}>
-                                                    {tanim.kurum} {tanim.aboneNo ? `• ${tanim.aboneNo}` : ''}
-                                                </div>
-                                                {tanimHesap && (
-                                                    <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>
-                                                        {tanimHesap.hesapAdi}
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div style={{ display: 'flex', gap: '5px' }}>
-                                                <span onClick={() => modalAc('duzenle_fatura_tanim', tanim)} style={{ cursor: 'pointer', fontSize: '12px' }}>✏️</span>
-                                                <span onClick={() => normalSil("fatura_tanimlari", tanim.id)} style={{ cursor: 'pointer', fontSize: '12px', color: '#e53e3e' }}>🗑️</span>
-                                            </div>
-                                        </div>
-                                        {bekleyenler.length > 0 ? (
-                                            bekleyenler.map(bekleyen => (
-                                                <div key={bekleyen.id} style={{ padding: '8px', background: '#fff5f5', borderTop: '1px solid #feb2b2', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                    <div><div style={{ fontWeight: 'bold', color: '#c53030', fontSize: '13px' }}>{formatPara(bekleyen.tutar)}</div><div style={{ fontSize: '10px', color: '#c53030' }}>Son: {tarihSadeceGunAyYil(bekleyen.sonOdemeTarihi)}</div></div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                                        <span onClick={() => modalAc('duzenle_bekleyen_fatura', bekleyen)} style={{ cursor: 'pointer', fontSize: '12px' }}>✏️</span>
-                                                        <span onClick={() => normalSil("bekleyen_faturalar", bekleyen.id)} style={{ cursor: 'pointer', fontSize: '12px', color: '#e53e3e', marginRight: '5px' }}>🗑️</span>
-                                                        <button onClick={() => modalAc('fatura_ode', bekleyen)} style={{ background: '#c53030', color: 'white', border: 'none', padding: '4px 10px', borderRadius: '15px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>ÖDE</button>
-                                                    </div>
-                                                </div>
-                                            ))
-                                        ) : (<div style={{ padding: '5px', fontSize: '10px', color: '#ccc', textAlign: 'center' }}>Bekleyen yok</div>)}
-                                    </div>
-                                )
-                            })}
-                        </div>
-                    </div>
-
-                    {/* ABONELİKLER */}
-                    <div className="responsive-card" style={{ ...cardStyle, height: 'fit-content' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                            <div className="card-title">Sabit Giderler</div>
-                            <button onClick={() => modalAc('abonelik_ekle')} className="btn-ui btn-ui-primary">
-                                + Gider Ekle
-                            </button>
-                        </div>
-                        <div style={{ marginBottom: '15px' }}>
-                            {(abonelikler || []).map(abo => {
-                                const hesap = hesaplar.find(h => h.id === abo.hesapId);
-                                return (
-                                    <div key={abo.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', borderBottom: '1px solid #f0f0f0', fontSize: '14px' }}>
-                                        <div><div style={{ fontWeight: 'bold' }}>{abo.ad}</div><div style={{ fontSize: '11px', color: '#999' }}>{abo.gun}. gün • {abo.kategori} • {hesap?.hesapAdi}</div></div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                            <div style={{ fontWeight: 'bold', color: '#e53e3e' }}>{formatPara(abo.tutar)}</div>
-                                            <button onClick={() => abonelikOde(abo)} style={{ background: '#e2e8f0', color: '#333', fontWeight: 'bold', border: 'none', cursor: 'pointer', padding: '5px 10px', borderRadius: '5px', fontSize: '12px' }}>Öde</button>
-                                            <span onClick={() => modalAc('duzenle_abonelik', abo)} style={{ cursor: 'pointer', fontSize: '12px' }}>✏️</span>
-                                            <span onClick={() => normalSil("abonelikler", abo.id)} style={{ cursor: 'pointer', fontSize: '12px' }}>🗑️</span>
-                                        </div>
-                                    </div>
-                                )
-                            })}
-                        </div>
-                        <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #eee', textAlign: 'right', fontSize: '13px' }}>
-                            <span style={{ color: '#718096' }}>Aylık Sabit Gider: <b style={{ color: '#e53e3e' }}>{formatPara(toplamSabitGider)}</b></span>
-                        </div>
-                    </div>
-
-                    {/* BORÇLAR (YENİ MODÜL) */}
-                    <div className="responsive-card" style={cardStyle}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                            <div className="card-title">Borçlar</div>
-                            <button onClick={() => modalAc('borc_tanimla')} className="btn-ui btn-ui-danger">
-                                + Borç Tanımla
-                            </button>
-                        </div>
-                        {(!borclar || borclar.length === 0) ? <p style={{ fontSize: '13px', color: '#aaa' }}>Aktif borç kaydı yok.</p> :
-                            <div style={{ marginBottom: '15px' }}>
-                                {siraliBorclar.map((b, index, array) => {
-                                    const toplamTutar = parseFloat(b.toplamTutar) || 0;
-                                    const kalanTutar = parseFloat(b.kalanTutar) || 0;
-                                    const yuzde = toplamTutar > 0 ? ((toplamTutar - kalanTutar) / toplamTutar) * 100 : 0;
-
-                                    const move = async (dir) => {
-                                        const currentPos = index;
-                                        const targetPos = index + dir;
-                                        if (targetPos < 0 || targetPos >= array.length || !borcOrderGuncelle) return;
-
-                                        const normalizePromises = array
-                                            .map((item, itemIndex) => {
-                                                const mevcutSira = Number.isFinite(Number(item.orderIndex)) ? Number(item.orderIndex) : itemIndex;
-                                                if (mevcutSira === itemIndex) return null;
-                                                return borcOrderGuncelle(item.id, { orderIndex: itemIndex });
-                                            })
-                                            .filter(Boolean);
-
-                                        if (normalizePromises.length > 0) {
-                                            await Promise.all(normalizePromises);
-                                        }
-
-                                        const targetItem = array[targetPos];
-                                        await borcOrderGuncelle(b.id, { orderIndex: targetPos });
-                                        await borcOrderGuncelle(targetItem.id, { orderIndex: currentPos });
-                                    };
-
-                                    return (
-                                        <div key={b.id} style={{ padding: '10px', borderBottom: '1px solid #f0f0f0', fontSize: '13px' }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-                                                <div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                                            <button type="button" onClick={() => move(-1)} disabled={index === 0} style={{ border: 'none', background: 'transparent', cursor: index === 0 ? 'default' : 'pointer', opacity: index === 0 ? 0.3 : 1, fontSize: '10px', padding: 0 }}>▲</button>
-                                                            <button type="button" onClick={() => move(1)} disabled={index === array.length - 1} style={{ border: 'none', background: 'transparent', cursor: index === array.length - 1 ? 'default' : 'pointer', opacity: index === array.length - 1 ? 0.3 : 1, fontSize: '10px', padding: 0 }}>▼</button>
-                                                        </div>
-                                                        <b>{b.ad}</b>
-                                                    </div>
-                                                </div>
-                                                <span style={{ fontWeight: 'bold' }}>{formatPara(b.kalanTutar)} <small style={{ color: '#999' }}>Kaldı</small></span>
-                                            </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', color: '#666', marginBottom: '5px' }}>
-                                                <span>{formatPara(b.toplamTutar - b.kalanTutar)} Ödendi</span>
-                                                <span>Toplam: {formatPara(b.toplamTutar)}</span>
-                                            </div>
-                                            <div style={{ width: '100%', height: '8px', background: '#eee', borderRadius: '4px', marginBottom: '10px' }}>
-                                                <div style={{ width: `${Math.min(100, Math.max(0, yuzde))}%`, height: '100%', background: '#e53e3e', borderRadius: '4px', transition: 'width 0.5s' }}></div>
-                                            </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <div>
-                                                    {b.sonOdemeTarihi && <span style={{ fontSize: '11px', color: '#e53e3e' }}>Son Ödeme: {tarihSadeceGunAyYil(new Date(b.sonOdemeTarihi))}</span>}
-                                                </div>
-                                                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                                                    <button onClick={() => modalAc('borc_ode', b)} style={{ background: '#e53e3e', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '5px', cursor: 'pointer', fontSize: '11px' }}>Ödeme Yap</button>
-                                                    <span onClick={() => modalAc('duzenle_borc', b)} style={{ cursor: 'pointer', fontSize: '12px' }}>✏️</span>
-                                                    <span onClick={() => normalSil("borclar", b.id)} style={{ cursor: 'pointer', fontSize: '12px' }}>🗑️</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )
-                                })}
-                            </div>
-                        }
-                        <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                            <span style={{ color: '#718096' }}>Kalan Toplam Borç: <b style={{ color: '#e53e3e' }}>{formatPara(toplamKalanBorc)}</b></span>
-                        </div>
-                    </div>
-                </div>
-
-                {/* --- SAĞ SÜTUN (İKİ AYRI KART) --- */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
-
-                    {/* 1. KART: VERİ GİRİŞ FORMLARI */}
-                    <div className="responsive-card" style={cardStyle}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                                <button
-                                    onClick={() => setFormTab("islem")}
-                                    style={{
-                                        padding: '6px 12px',
-                                        borderRadius: '999px',
-                                        border: 'none',
-                                        cursor: 'pointer',
-                                        background: formTab === "islem" ? '#ed8936' : '#edf2f7',
-                                        color: formTab === "islem" ? '#ffffff' : '#4a5568',
-                                        fontWeight: 600,
-                                        fontSize: '11px'
-                                    }}
-                                >
-                                    İşlem
-                                </button>
-                                <button
-                                    onClick={() => setFormTab("transfer")}
-                                    style={{
-                                        padding: '6px 12px',
-                                        borderRadius: '999px',
-                                        border: 'none',
-                                        cursor: 'pointer',
-                                        background: formTab === "transfer" ? '#3182ce' : '#edf2f7',
-                                        color: formTab === "transfer" ? '#ffffff' : '#4a5568',
-                                        fontWeight: 600,
-                                        fontSize: '11px'
-                                    }}
-                                >
-                                    Transfer
-                                </button>
-                                <button
-                                    onClick={() => setFormTab("taksit")}
-                                    style={{
-                                        padding: '6px 12px',
-                                        borderRadius: '999px',
-                                        border: 'none',
-                                        cursor: 'pointer',
-                                        background: formTab === "taksit" ? '#805ad5' : '#edf2f7',
-                                        color: formTab === "taksit" ? '#ffffff' : '#4a5568',
-                                        fontWeight: 600,
-                                        fontSize: '11px'
-                                    }}
-                                >
-                                    Taksit
-                                </button>
-                                <button
-                                    onClick={() => setFormTab("fatura")}
-                                    style={{
-                                        padding: '6px 12px',
-                                        borderRadius: '999px',
-                                        border: 'none',
-                                        cursor: 'pointer',
-                                        background: formTab === "fatura" ? '#c53030' : '#edf2f7',
-                                        color: formTab === "fatura" ? '#ffffff' : '#4a5568',
-                                        fontWeight: 600,
-                                        fontSize: '11px'
-                                    }}
-                                >
-                                    Fatura
-                                </button>
+                                ))}
                             </div>
                         </div>
+                    ) : (
+                        <EmptyState title="Harcama kategorisi yok" description="Seçili dönemde gider kategorisi bulunmadı." icon={PiePlaceholder} />
+                    )}
+                </PremiumCard>
 
-                        {formTab === "islem" && (
-                            <form onSubmit={islemEkle} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                <div style={{ display: 'flex', gap: '10px' }}>
-                                    <select value={secilenHesapId} onChange={e => setSecilenHesapId(e.target.value)} style={{ flex: 1, ...inputStyle, backgroundColor: '#f7fafc' }}><option value="">Hangi Hesaptan?</option>{siraliHesaplar.map(h => <option key={h.id} value={h.id}>{h.hesapAdi} ({formatPara(h.guncelBakiye)})</option>)}</select>
-                                    <select value={islemTipi} onChange={e => setIslemTipi(e.target.value)} style={{ flex: 1, ...inputStyle }}><option value="gider">🔴 Gider</option><option value="gelir">🟢 Gelir</option></select>
-                                </div>
-                                <div style={{ display: 'flex', gap: '10px' }}>
-                                    <select value={kategori || (siraliKategoriListesi && siraliKategoriListesi[0])} onChange={e => setKategori(e.target.value)} style={{ flex: 1, ...inputStyle }}>{siraliKategoriListesi.map(k => <option key={k} value={k}>{k}</option>)}</select>
-                                </div>
-                                <div style={{ display: 'flex', gap: '10px' }}>
-                                    <DescriptionInput
-                                        value={islemAciklama}
-                                        onChange={e => setIslemAciklama(e.target.value)}
-                                        historyItems={tumIslemler}
-                                        inputStyle={inputStyle}
-                                        wrapperStyle={{ flex: 1 }}
-                                    />
-                                    <input type="number" placeholder="Tutar (₺)" value={islemTutar} onChange={e => setIslemTutar(e.target.value)} style={{ flex: 1, ...inputStyle }} />
-                                </div>
-                                <input type="datetime-local" value={islemTarihi} onChange={e => setIslemTarihi(e.target.value)} style={{ ...inputStyle }} />
-                                <button type="submit" style={{ padding: '15px', background: '#ed8936', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '16px' }}>KAYDET</button>
-                            </form>
-                        )}
+                <PremiumCard className="qw-quick-entry-card qw-quick-entry-card--compact">
+                    <SectionHeader title="Hızlı İşlem" />
+                    <div className="qw-form-tabs">
+                        {[
+                            ['islem', 'İşlem'],
+                            ['transfer', 'Transfer'],
+                            ['taksit', 'Taksit'],
+                            ['fatura', 'Fatura'],
+                        ].map(([id, label]) => (
+                            <button key={id} type="button" className={formTab === id ? 'is-active' : ''} onClick={() => setFormTab(id)}>
+                                {label}
+                            </button>
+                        ))}
+                    </div>
 
-                        {formTab === "transfer" && (
-                            <form onSubmit={transferYap} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', background: '#ebf8ff', padding: '20px', borderRadius: '10px' }}>
-                                <div><label style={{ fontSize: '12px', color: '#2b6cb0' }}>Nereden?</label><select value={transferKaynakId} onChange={e => setTransferKaynakId(e.target.value)} style={{ ...inputStyle }}><option value="">Seçiniz...</option>{(hesaplar || []).map(h => <option key={h.id} value={h.id}>{h.hesapAdi} ({formatPara(h.guncelBakiye)})</option>)}</select></div>
-                                <div><label style={{ fontSize: '12px', color: '#2b6cb0' }}>Nereye?</label><select value={transferHedefId} onChange={e => setTransferHedefId(e.target.value)} style={{ ...inputStyle }}><option value="">Seçiniz...</option>{(hesaplar || []).map(h => <option key={h.id} value={h.id}>{h.hesapAdi} ({formatPara(h.guncelBakiye)})</option>)}</select></div>
-
-                                {/* 2. SATIR: İŞLEM TUTARI ve TRANSFER ÜCRETİ (YAN YANA) */}
-                                <input type="number" placeholder="İşlem Tutarı (₺)" value={transferTutar} onChange={e => setTransferTutar(e.target.value)} style={{ ...inputStyle }} />
-                                <input type="number" placeholder="Ücret (Opsiyonel)" value={transferUcreti} onChange={e => setTransferUcreti(e.target.value)} style={{ ...inputStyle }} />
-
-                                <input type="datetime-local" value={transferTarihi} onChange={e => setTransferTarihi(e.target.value)} style={{ gridColumn: 'span 2', ...inputStyle }} />
-                                <button type="submit" style={{ gridColumn: 'span 2', padding: '15px', background: '#3182ce', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '16px' }}>TRANSFER YAP / BORÇ ÖDE</button>
-                            </form>
-                        )}
-
-                        {formTab === "taksit" && (
-                            <form onSubmit={taksitEkle} className="taksit-grid">
-                                <div style={{ gridColumn: '1 / -1' }}><h4 style={{ margin: '0 0 10px 0', color: '#6b46c1' }}>📦 Yeni Taksit Planı Oluştur</h4></div>
-
-                                {/* 1. SATIR: Hangi Karttan? (Sol) - Ne Aldın? (Sağ) */}
-                                <select value={taksitHesapId} onChange={e => setTaksitHesapId(e.target.value)} style={{ ...inputStyle, border: '1px solid #d6bcfa' }} required>
-                                    <option value="">Hangi Karttan?</option>
-                                    {(hesaplar || []).map(h => <option key={h.id} value={h.id}>{h.hesapAdi}</option>)}
+                    {formTab === 'islem' && (
+                        <form onSubmit={islemEkle} className="qw-quick-form">
+                            <div className="qw-form-row">
+                                <select value={secilenHesapId} onChange={e => setSecilenHesapId(e.target.value)} style={inputStyle}>
+                                    <option value="">Hangi hesaptan?</option>
+                                    {siraliHesaplar.map(h => <option key={h.id} value={h.id}>{h.hesapAdi} ({formatPara(h.guncelBakiye)})</option>)}
                                 </select>
-                                <input placeholder="Ne aldın?" value={taksitBaslik} onChange={e => setTaksitBaslik(e.target.value)} style={{ ...inputStyle, border: '1px solid #d6bcfa' }} required />
+                                <select value={islemTipi} onChange={e => setIslemTipi(e.target.value)} style={inputStyle}>
+                                    <option value="gider">Gider</option>
+                                    <option value="gelir">Gelir</option>
+                                </select>
+                            </div>
+                            <select value={kategori || (siraliKategoriListesi && siraliKategoriListesi[0])} onChange={e => setKategori(e.target.value)} style={inputStyle}>
+                                {siraliKategoriListesi.map(k => <option key={k} value={k}>{k}</option>)}
+                            </select>
+                            <div className="qw-form-row">
+                                <DescriptionInput
+                                    value={islemAciklama}
+                                    onChange={e => setIslemAciklama(e.target.value)}
+                                    historyItems={tumIslemler}
+                                    inputStyle={inputStyle}
+                                    wrapperStyle={{ flex: 1 }}
+                                />
+                                <input type="number" placeholder="Tutar" value={islemTutar} onChange={e => setIslemTutar(e.target.value)} style={inputStyle} />
+                            </div>
+                            <input type="datetime-local" value={islemTarihi} onChange={e => setIslemTarihi(e.target.value)} style={inputStyle} />
+                            <button type="submit" className="qw-submit-button">Kaydet</button>
+                        </form>
+                    )}
 
-                                {/* 2. SATIR: Toplam Borç (Sol) - Kaç Taksit? (Sağ) */}
-                                <input type="number" placeholder="Toplam Borç (₺)" value={taksitToplamTutar} onChange={e => setTaksitToplamTutar(e.target.value)} style={{ ...inputStyle, border: '1px solid #d6bcfa' }} required />
-                                <input type="number" placeholder="Kaç Taksit?" value={taksitSayisi} onChange={e => setTaksitSayisi(e.target.value)} style={{ ...inputStyle, border: '1px solid #d6bcfa' }} required />
+                    {formTab === 'transfer' && (
+                        <form onSubmit={transferYap} className="qw-quick-form">
+                            <div className="qw-form-row">
+                                <select value={transferKaynakId} onChange={e => setTransferKaynakId(e.target.value)} style={inputStyle}>
+                                    <option value="">Nereden?</option>
+                                    {siraliHesaplar.map(h => <option key={h.id} value={h.id}>{h.hesapAdi}</option>)}
+                                </select>
+                                <select value={transferHedefId} onChange={e => setTransferHedefId(e.target.value)} style={inputStyle}>
+                                    <option value="">Nereye?</option>
+                                    {siraliHesaplar.map(h => <option key={h.id} value={h.id}>{h.hesapAdi}</option>)}
+                                </select>
+                            </div>
+                            <div className="qw-form-row">
+                                <input type="number" placeholder="İşlem tutarı" value={transferTutar} onChange={e => setTransferTutar(e.target.value)} style={inputStyle} />
+                                <input type="number" placeholder="Ücret" value={transferUcreti} onChange={e => setTransferUcreti(e.target.value)} style={inputStyle} />
+                            </div>
+                            <input type="datetime-local" value={transferTarihi} onChange={e => setTransferTarihi(e.target.value)} style={inputStyle} />
+                            <button type="submit" className="qw-submit-button">Transfer yap</button>
+                        </form>
+                    )}
 
-                                {/* 3. SATIR: Kategori (Sol) - Tarih (Sağ) */}
-                                <select value={taksitKategori || (kategoriListesi && kategoriListesi[0])} onChange={e => setTaksitKategori(e.target.value)} style={{ ...inputStyle, border: '1px solid #d6bcfa' }}>
+                    {formTab === 'taksit' && (
+                        <form onSubmit={taksitEkle} className="qw-quick-form">
+                            <div className="qw-form-row">
+                                <select value={taksitHesapId} onChange={e => setTaksitHesapId(e.target.value)} style={inputStyle} required>
+                                    <option value="">Hangi karttan?</option>
+                                    {siraliHesaplar.map(h => <option key={h.id} value={h.id}>{h.hesapAdi}</option>)}
+                                </select>
+                                <input placeholder="Ne aldın?" value={taksitBaslik} onChange={e => setTaksitBaslik(e.target.value)} style={inputStyle} required />
+                            </div>
+                            <div className="qw-form-row">
+                                <input type="number" placeholder="Toplam borç" value={taksitToplamTutar} onChange={e => setTaksitToplamTutar(e.target.value)} style={inputStyle} required />
+                                <input type="number" placeholder="Kaç taksit?" value={taksitSayisi} onChange={e => setTaksitSayisi(e.target.value)} style={inputStyle} required />
+                            </div>
+                            <div className="qw-form-row">
+                                <select value={taksitKategori || (siraliKategoriListesi && siraliKategoriListesi[0])} onChange={e => setTaksitKategori(e.target.value)} style={inputStyle}>
                                     {siraliKategoriListesi.map(k => <option key={k} value={k}>{k}</option>)}
                                 </select>
-                                <input type="date" placeholder="Tarih" value={taksitAlisTarihi} onChange={e => setTaksitAlisTarihi(e.target.value)} style={{ ...inputStyle, border: '1px solid #d6bcfa' }} />
+                                <input type="date" value={taksitAlisTarihi} onChange={e => setTaksitAlisTarihi(e.target.value)} style={inputStyle} />
+                            </div>
+                            <StatusBadge tone="purple">Aylık {taksitToplamTutar && taksitSayisi ? formatPara(taksitToplamTutar / taksitSayisi) : formatPara(0)}</StatusBadge>
+                            <button type="submit" className="qw-submit-button">Kaydet</button>
+                        </form>
+                    )}
 
-                                {/* BİLGİ KUTUSU ve BUTON */}
-                                <div style={{ gridColumn: '1 / -1', fontSize: '14px', color: '#553c9a', fontWeight: 'bold', padding: '10px', background: 'white', borderRadius: '8px' }}>ℹ️ Aylık: {taksitToplamTutar && taksitSayisi ? formatPara(taksitToplamTutar / taksitSayisi) : '0,00 ₺'}</div>
-                                <button type="submit" style={{ gridColumn: '1 / -1', padding: '15px', background: '#805ad5', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '16px' }}>KAYDET</button>
-                            </form>
-                        )}
-
-                        {formTab === "fatura" && (
-                            <div style={{ background: '#fff5f5', padding: '20px', borderRadius: '10px' }}>
-                                <h4 style={{ margin: '0 0 15px 0', color: '#c53030' }}>🧾 Dönemsel Fatura Tutarı Gir</h4>
-                                {tanimliFaturalar.length === 0 ? (
-                                    <div style={{ textAlign: 'center', color: '#c53030', padding: '10px', fontSize: '13px' }}>
-                                        ⚠️ Önce sol taraftaki panelden bir fatura/abone tanımı eklemelisiniz.
+                    {formTab === 'fatura' && (
+                        <form onSubmit={faturaGir} className="qw-quick-form">
+                            {(tanimliFaturalar || []).length === 0 ? (
+                                <EmptyState title="Fatura tanımı yok" description="Önce bir fatura tanımı ekleyin." icon={ReceiptText} />
+                            ) : (
+                                <>
+                                    <select value={secilenTanimId} onChange={e => setSecilenTanimId(e.target.value)} style={inputStyle} required>
+                                        <option value="">Hangi fatura?</option>
+                                        {(tanimliFaturalar || []).map(t => <option key={t.id} value={t.id}>{t.baslik} ({t.kurum})</option>)}
+                                    </select>
+                                    <div className="qw-form-row">
+                                        <input type="number" placeholder="Tutar" value={faturaGirisTutar} onChange={e => setFaturaGirisTutar(e.target.value)} style={inputStyle} required />
+                                        <input type="date" value={faturaGirisTarih} onChange={e => setFaturaGirisTarih(e.target.value)} style={inputStyle} required />
                                     </div>
-                                ) : (
-                                    <form onSubmit={faturaGir} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                                        <div style={{ gridColumn: 'span 2' }}>
-                                            <select value={secilenTanimId} onChange={e => setSecilenTanimId(e.target.value)} style={{ ...inputStyle, border: '1px solid #feb2b2' }} required>
-                                                <option value="">Hangi Fatura?</option>
-                                                {(tanimliFaturalar || []).map(t => <option key={t.id} value={t.id}>{t.baslik} ({t.kurum})</option>)}
-                                            </select>
-                                        </div>
-                                        <input type="number" placeholder="Tutar (₺)" value={faturaGirisTutar} onChange={e => setFaturaGirisTutar(e.target.value)} style={{ ...inputStyle, border: '1px solid #feb2b2' }} required />
-                                        <input type="date" value={faturaGirisTarih} onChange={e => setFaturaGirisTarih(e.target.value)} style={{ ...inputStyle, border: '1px solid #feb2b2' }} required />
-                                        <input placeholder="Açıklama (Opsiyonel)" value={faturaGirisAciklama} onChange={e => setFaturaGirisAciklama(e.target.value)} style={{ gridColumn: 'span 2', ...inputStyle, border: '1px solid #feb2b2' }} />
-                                        <button type="submit" style={{ gridColumn: 'span 2', padding: '15px', background: '#c53030', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '16px' }}>KAYDET</button>
-                                    </form>
-                                )}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* 2. KART: GEÇMİŞ LİSTESİ VE TABLO */}
-                    <div className="responsive-card" style={{ ...cardStyle, overflowX: 'auto' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '5px' }}>
-                            <h4 style={{ marginTop: 0, color: '#2c3e50', margin: 0 }}>📜 Hesap Hareketleri</h4>
-                        </div>
-
-                        {/* YENİ FİLTRE ALANI */}
-                        <div style={{ background: '#f7fafc', padding: '15px', borderRadius: '10px', marginBottom: '15px', display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', border: '1px solid #edf2f7' }}>
-                            <div style={{ flex: 2, minWidth: '200px', display: 'flex', alignItems: 'center', background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0 10px' }}>
-                                <span style={{ fontSize: '16px' }}>🔍</span>
-                                <input type="text" placeholder="Harcama, market, tutar ara..." value={aramaMetni} onChange={(e) => setAramaMetni(e.target.value)} style={{ border: 'none', outline: 'none', padding: '10px', width: '100%', fontSize: '13px', background: 'transparent', color: '#333' }} />
-                                {aramaMetni && <span onClick={() => setAramaMetni("")} style={{ cursor: 'pointer', color: '#aaa', fontWeight: 'bold' }}>X</span>}
-                            </div>
-                            <select value={filtreKategori} onChange={e => setFiltreKategori(e.target.value)} style={{ flex: 1, minWidth: '120px', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', cursor: 'pointer', fontSize: '13px', backgroundColor: '#ffffff', color: '#333' }}><option value="Tümü">Tüm Kategoriler</option>{sortTurkishText([...siraliKategoriListesi, "Transfer"]).map(k => <option key={k} value={k}>{k}</option>)}</select>
-                            <div style={{ display: 'flex', gap: '5px' }}>
-                                <button onClick={excelIndir} style={{ background: '#276749', color: 'white', border: 'none', padding: '10px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>📥 XLS</button>
-                                <label style={{ background: '#2b6cb0', color: 'white', padding: '10px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>📤 Yükle <input type="file" accept=".xlsx,.xls,.csv" onChange={excelYukle} style={{ display: 'none' }} /></label>
-                            </div>
-                        </div>
-
-                        <div style={{ overflowX: 'auto' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '15px', color: '#333', minWidth: '500px' }}>
-                                <thead><tr style={{ textAlign: 'left', color: '#718096', borderBottom: '2px solid #e2e8f0' }}><th style={{ padding: '10px' }}>Tarih</th><th style={{ padding: '10px' }}>Hesap</th><th style={{ padding: '10px' }}>Kategori</th><th style={{ padding: '10px' }}>Açıklama</th><th style={{ padding: '10px' }}>Tutar</th><th></th><th></th></tr></thead>
-                                <tbody>
-                                    {(filtrelenmisIslemler || []).map(i => {
-                                        const hesap = hesaplar.find(h => h.id === i.hesapId);
-                                        let hesapAdi = hesap?.hesapAdi || "Bilinmeyen";
-                                        let renk = 'black';
-                                        if (i.islemTipi === 'transfer') {
-                                            const kaynak = hesaplar.find(h => h.id === i.kaynakId)?.hesapAdi;
-                                            const hedef = hesaplar.find(h => h.id === i.hedefId)?.hesapAdi;
-                                            hesapAdi = `${kaynak} ➝ ${hedef}`;
-                                            renk = '#3182ce';
-                                        } else if (i.islemTipi === 'gelir' || i.islemTipi === 'yatirim_satis') {
-                                            renk = 'green';
-                                        } else {
-                                            renk = '#e53e3e';
-                                        }
-                                        return (
-                                            <tr key={i.id} style={{ borderBottom: '1px solid #f7fafc' }}>
-                                                <td onClick={() => modalAc('duzenle_islem', i)} style={{ padding: '10px', color: '#718096', cursor: 'pointer' }}>{tarihFormatla(i.tarih)}</td>
-                                                <td onClick={() => modalAc('duzenle_islem', i)} style={{ padding: '10px', fontWeight: '600', cursor: 'pointer', fontSize: '14px' }}>{hesapAdi}</td>
-                                                <td onClick={() => modalAc('duzenle_islem', i)} style={{ padding: '10px', cursor: 'pointer' }}>
-                                                    {i.kategori}
-                                                </td>
-                                                <td onClick={() => modalAc('duzenle_islem', i)} style={{ padding: '10px', cursor: 'pointer' }}>{i.aciklama}</td>
-                                                <td onClick={() => modalAc('duzenle_islem', i)} style={{ padding: '10px', fontWeight: 'bold', color: renk, cursor: 'pointer' }}>{formatPara(i.tutar)}</td>
-                                                <td><span onClick={() => modalAc('duzenle_islem', i)} style={{ cursor: 'pointer' }}>✏️</span></td>
-                                                <td><span onClick={() => islemSil(i.id)} style={{ cursor: 'pointer' }}>🗑️</span></td>
-                                            </tr>
-                                        )
-                                    })}
-                                </tbody>
-                                <tfoot>
-                                    <tr>
-                                        <td colSpan="7" style={{ padding: '12px 10px', textAlign: 'right', color: '#718096', fontSize: '13px', fontWeight: 700, borderTop: '2px solid #e2e8f0' }}>
-                                            Toplam {(filtrelenmisIslemler || []).length} hareket
-                                        </td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
-
-                        <div style={{ marginTop: '20px', paddingTop: '15px', borderTop: '2px solid #f0f0f0', textAlign: 'right', color: '#2d3748', fontSize: '16px', fontWeight: 'bold' }}>
-                            Net Nakit Akışı: <span style={{ color: (toplamGelir - toplamGider) >= 0 ? 'green' : '#e53e3e' }}>{formatPara(toplamGelir - toplamGider)}</span>
-                        </div>
-
-                        <footer style={{ textAlign: 'center', marginTop: '30px', padding: '10px', color: '#a0aec0', fontSize: '12px' }}>
-                            <p style={{ margin: 0, fontWeight: 'bold' }}>MUNDAN BİLİŞİM</p>
-                        </footer>
-                    </div>
-
-                </div>
+                                    <input placeholder="Açıklama" value={faturaGirisAciklama} onChange={e => setFaturaGirisAciklama(e.target.value)} style={inputStyle} />
+                                    <button type="submit" className="qw-submit-button">Kaydet</button>
+                                </>
+                            )}
+                        </form>
+                    )}
+                </PremiumCard>
             </div>
+
+            <div className="qw-module-grid">
+                <PremiumCard className="qw-module-card">
+                    <SectionHeader
+                        title="Abonelikler"
+                        description={`${(abonelikler || []).length} abonelik`}
+                        action={<QuickActionButton icon={Plus} onClick={() => modalAc('abonelik_ekle')}>Abonelik</QuickActionButton>}
+                    />
+                    <div className="qw-summary-lines">
+                        <SummaryLine label="Aylık toplam" value={formatPara(toplamSabitGider)} tone="info" />
+                    </div>
+                    <div className="qw-module-list">
+                        {subscriptionRows.map((subscription) => (
+                            <ModuleRow
+                                key={subscription.id}
+                                icon={Repeat2}
+                                tone="info"
+                                title={subscription.ad || 'Abonelik'}
+                                meta={`Her ayın ${subscription.gun || '-'} günü`}
+                                amount={formatPara(subscription.tutar)}
+                                onClick={() => abonelikOde(subscription)}
+                                actions={(
+                                    <>
+                                        <button type="button" className="qw-mini-icon-button" aria-label="Düzenle" onClick={(event) => { event.stopPropagation(); modalAc('duzenle_abonelik', subscription); }}>
+                                            <Edit3 size={14} />
+                                        </button>
+                                        <button type="button" className="qw-mini-icon-button is-danger" aria-label="Sil" onClick={(event) => { event.stopPropagation(); normalSil('abonelikler', subscription.id); }}>
+                                            <Trash2 size={14} />
+                                        </button>
+                                    </>
+                                )}
+                            />
+                        ))}
+                        {subscriptionRows.length === 0 && <EmptyState title="Abonelik yok" description="Abonelik ekleyerek takip edebilirsiniz." icon={Repeat2} />}
+                    </div>
+                </PremiumCard>
+
+                <PremiumCard className="qw-module-card">
+                    <SectionHeader
+                        title="Faturalar"
+                        description={`${billDisplayRows.length} fatura`}
+                        action={<QuickActionButton icon={Plus} onClick={() => modalAc('fatura_tanim_ekle')}>Fatura tanımı</QuickActionButton>}
+                    />
+                    <div className="qw-summary-lines">
+                        <SummaryLine label="Bekleyen toplam tutar" value={formatPara(billTotal)} tone="danger" />
+                    </div>
+                    <div className="qw-module-list">
+                        {billDisplayRows.map((bill) => (
+                            <ModuleRow
+                                key={bill.id}
+                                icon={ReceiptText}
+                                tone={bill.mode === 'pending' ? 'danger' : 'neutral'}
+                                title={bill.title}
+                                meta={bill.date ? `${formatDayMonth(bill.date)} · Fatura` : 'Tarih tanımsız'}
+                                amount={bill.amount > 0 ? formatPara(bill.amount) : undefined}
+                                amountTone={bill.mode === 'pending' ? 'danger' : undefined}
+                                badge={bill.status}
+                                onClick={() => modalAc(bill.mode === 'pending' ? 'fatura_ode' : 'duzenle_fatura_tanim', bill.data)}
+                                actions={(
+                                    <>
+                                        <button type="button" className="qw-mini-icon-button" aria-label="Düzenle" onClick={(event) => { event.stopPropagation(); modalAc(bill.mode === 'pending' ? 'duzenle_bekleyen_fatura' : 'duzenle_fatura_tanim', bill.data); }}>
+                                            <Edit3 size={14} />
+                                        </button>
+                                        <button type="button" className="qw-mini-icon-button is-danger" aria-label="Sil" onClick={(event) => { event.stopPropagation(); normalSil(bill.mode === 'pending' ? 'bekleyen_faturalar' : 'tanimli_faturalar', bill.data.id); }}>
+                                            <Trash2 size={14} />
+                                        </button>
+                                    </>
+                                )}
+                            />
+                        ))}
+                        {billDisplayRows.length === 0 && <EmptyState title="Bekleyen fatura yok" description="Borcu oluşan veya tarihi yaklaşan faturalar burada görünür." icon={ReceiptText} />}
+                    </div>
+                </PremiumCard>
+
+                <PremiumCard className="qw-module-card">
+                    <SectionHeader title="Taksitler" description={`${installmentRows.length} aktif plan`} />
+                    <div className="qw-summary-lines">
+                        <SummaryLine label="Kalan taksit borcu" value={formatPara(toplamKalanTaksitBorcu)} tone="purple" />
+                        <SummaryLine label="Bu ay taksitler" value={formatPara(monthlyInstallmentLoad)} />
+                    </div>
+                    <div className="qw-module-list">
+                        {installmentRows.map((installment) => {
+                            const paid = parseInt(installment.odenmisTaksit) || 0;
+                            const count = parseInt(installment.taksitSayisi) || 0;
+                            return (
+                                <ModuleRow
+                                    key={installment.id}
+                                    icon={CalendarClock}
+                                    tone="purple"
+                                    title={installment.baslik || 'Taksit'}
+                                    meta={`${paid}/${count || '-'} taksit`}
+                                    amount={formatPara(installment.aylikTutar)}
+                                    onClick={() => taksitOde(installment)}
+                                    actions={(
+                                        <>
+                                            <button type="button" className="qw-mini-icon-button" aria-label="Düzenle" onClick={(event) => { event.stopPropagation(); modalAc('duzenle_taksit', installment); }}>
+                                                <Edit3 size={14} />
+                                            </button>
+                                            <button type="button" className="qw-mini-icon-button is-danger" aria-label="Sil" onClick={(event) => { event.stopPropagation(); normalSil('taksitler', installment.id); }}>
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </>
+                                    )}
+                                />
+                            );
+                        })}
+                        {installmentRows.length === 0 && <EmptyState title="Aktif taksit yok" description="Taksit planlarınız burada görünür." icon={CalendarClock} />}
+                    </div>
+                </PremiumCard>
+            </div>
+
+            <div className="qw-debt-grid">
+                <PremiumCard className="qw-module-card">
+                    <SectionHeader
+                        title="Borçlar"
+                        description={`${(borclar || []).length} borç kaydı`}
+                        action={<QuickActionButton icon={Plus} onClick={() => modalAc('borc_tanimla')}>Borç ekle</QuickActionButton>}
+                    />
+                    <div className="qw-summary-lines qw-summary-lines--wide">
+                        <SummaryLine label="Toplam Borç" value={formatPara(debtOriginalTotal)} tone="warning" />
+                        <SummaryLine label="Bu Ay Ödenecek" value={formatPara(currentMonthDebtDue)} />
+                        <SummaryLine label="Kalan Borç" value={formatPara(debtTotal)} tone="danger" />
+                        <SummaryLine label="Borç Sayısı" value={`${(borclar || []).length} kayıt`} />
+                    </div>
+                    <div className="qw-module-list qw-module-list--debt">
+                        {debtRows.map((debt) => (
+                            <ModuleRow
+                                key={debt.id}
+                                icon={CreditCard}
+                                tone="warning"
+                                title={debt.ad || debt.baslik || 'Borç'}
+                                meta={debt.sonOdemeTarihi ? `${formatDayMonth(toDateSafe(debt.sonOdemeTarihi))} · Borç` : 'Borç'}
+                                amount={formatPara(debt.kalanTutar ?? debt.tutar)}
+                                amountTone="danger"
+                                onClick={() => modalAc('borc_ode', debt)}
+                            />
+                        ))}
+                        {debtRows.length === 0 && <EmptyState title="Borç kaydı yok" description="Yeni borç ekleyerek takip edebilirsiniz." icon={CreditCard} />}
+                    </div>
+                </PremiumCard>
+            </div>
+
+            <HighQualityModal
+                isOpen={Boolean(historyAccount)}
+                onClose={() => setHistoryAccount(null)}
+                title={historyAccount?.hesapAdi || ''}
+                subtitle={`${selectedAccountMovements.length} hareket`}
+                width="min(760px, calc(100vw - 48px))"
+                maxHeight="min(760px, calc(100vh - 80px))"
+                className="qw-account-history-modal"
+                bodyClassName="qw-account-history-body"
+                overlayClassName="qw-account-history-overlay"
+                overlayStyle={{
+                    background: isNestedModalOpen ? 'transparent' : 'rgba(15, 23, 42, 0.36)',
+                    backdropFilter: isNestedModalOpen ? 'none' : 'blur(6px)',
+                    WebkitBackdropFilter: isNestedModalOpen ? 'none' : 'blur(6px)',
+                    padding: '24px'
+                }}
+                contentStyle={{
+                    borderRadius: '24px',
+                    overflow: 'hidden'
+                }}
+                headerStyle={{
+                    padding: '24px 28px 18px',
+                    flexShrink: 0,
+                    alignItems: 'flex-start'
+                }}
+                bodyStyle={{
+                    padding: 0,
+                    minHeight: 0
+                }}
+            >
+                <div className="qw-transaction-list qw-account-history-list">
+                    {historyAccount && selectedAccountMovements.map((transaction) => {
+                        const movementAmount = getAccountMovementAmount(transaction, historyAccount.id);
+                        const amountTone = getFinancialTone(movementAmount);
+                        const prefix = movementAmount > 0 ? '+' : movementAmount < 0 ? '-' : '';
+                        return (
+                            <TransactionRow
+                                key={transaction.id}
+                                icon={transactionIcon(transaction)}
+                                tone={movementAmount > 0 ? 'success' : movementAmount < 0 ? 'danger' : 'neutral'}
+                                title={transaction.aciklama || transaction.kategori || 'İşlem'}
+                                meta={getAccountMovementMeta(transaction, historyAccount.id)}
+                                amount={`${prefix}${formatPara(Math.abs(movementAmount))}`}
+                                amountTone={amountTone}
+                                onClick={() => modalAc('duzenle_islem', transaction)}
+                                actions={(
+                                    <>
+                                        <button type="button" className="qw-mini-icon-button" aria-label="Düzenle" onClick={(event) => { event.stopPropagation(); modalAc('duzenle_islem', transaction); }}>
+                                            <Edit3 size={14} />
+                                        </button>
+                                        <button type="button" className="qw-mini-icon-button is-danger" aria-label="Sil" onClick={(event) => { event.stopPropagation(); islemSil(transaction.id); }}>
+                                            <Trash2 size={14} />
+                                        </button>
+                                    </>
+                                )}
+                            />
+                        );
+                    })}
+                    {selectedAccountMovements.length === 0 && <EmptyState title="Hareket yok" description="Bu hesaba bağlı işlem bulunmuyor." icon={Wallet} />}
+                </div>
+            </HighQualityModal>
         </div>
     );
 };
+
+const PiePlaceholder = ReceiptText;
 
 export default BudgetDashboard;

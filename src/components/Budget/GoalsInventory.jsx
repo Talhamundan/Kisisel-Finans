@@ -143,7 +143,7 @@ const GoalsInventory = ({
                         <h3 style={{ margin: '0 0 5px 0', fontSize: '14px', opacity: 0.8, letterSpacing: '1px' }}>VARLIK DURUMU</h3>
                         <div style={{ marginBottom: '20px' }}>
                             <div style={{ fontSize: '12px', opacity: 0.6 }}>Olası Nakit (Alacaklar)</div>
-                            <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#48bb78' }}>
+                            <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#16a36a' }}>
                                 +{formatPara(toplamAlacaklar)}
                             </div>
                         </div>
@@ -154,8 +154,8 @@ const GoalsInventory = ({
                             </div>
                             <div style={{ textAlign: 'right' }}>
                                 <div style={{ fontSize: '11px', opacity: 0.6 }}>Ticari Kasa</div>
-                                <div style={{ fontSize: '18px', fontWeight: 'bold', color: ticariKasa >= 0 ? '#48bb78' : '#e53e3e' }}>
-                                    {ticariKasa >= 0 ? '+' : ''}{formatPara(ticariKasa)}
+                                <div style={{ fontSize: '18px', fontWeight: 'bold', color: ticariKasa > 0 ? '#16a36a' : ticariKasa < 0 ? '#e25555' : '#94a3b8' }}>
+                                    {ticariKasa > 0 ? '+' : ''}{formatPara(ticariKasa)}
                                 </div>
                             </div>
                         </div>
@@ -338,8 +338,8 @@ const GoalsInventory = ({
                                             </div>
                                             <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px' }}>
                                                 <div style={{ display: 'flex', gap: '5px' }}>
-                                                    <div style={{ fontSize: '11px', fontWeight: 'bold', padding: '4px 8px', borderRadius: '6px', background: kar >= 0 ? '#c6f6d5' : '#fed7d7', color: kar >= 0 ? '#22543d' : '#9b2c2c', display: 'inline-block' }}>
-                                                        {kar >= 0 ? '+' : ''}{formatPara(kar)} Kar
+                                                    <div style={{ fontSize: '11px', fontWeight: 'bold', padding: '4px 8px', borderRadius: '6px', background: kar > 0 ? '#e9f8f0' : kar < 0 ? '#fff0f0' : '#f3f4f7', color: kar > 0 ? '#16a36a' : kar < 0 ? '#e25555' : '#94a3b8', display: 'inline-block' }}>
+                                                        {kar > 0 ? '+' : ''}{formatPara(kar)} Kar
                                                     </div>
                                                     <div style={{ fontSize: '11px', fontWeight: 'bold', padding: '4px 8px', borderRadius: '6px', background: isTamam ? '#c6f6d5' : '#fed7d7', color: isTamam ? '#22543d' : '#9b2c2c', display: 'inline-block' }}>
                                                         {isTamam ? 'TAMAMLANDI' : 'BORCU VAR'}

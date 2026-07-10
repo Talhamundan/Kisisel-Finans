@@ -17,6 +17,37 @@ const getDayOfMonth = (value) => {
     return date.getDate();
 };
 
+const isInactive = (item) => (
+    item?.deletedAt ||
+    item?.silindi ||
+    item?.isDeleted ||
+    item?.aktif === false ||
+    item?.pasif === true
+);
+
+const sameMonth = (date, year, month) => (
+    date && date.getFullYear() === year && date.getMonth() === month
+);
+
+const clampDay = (day, year, month) => {
+    const maxDay = new Date(year, month + 1, 0).getDate();
+    return Math.min(Math.max(Number(day) || 1, 1), maxDay);
+};
+
+const monthlyDateFor = (item, year, month) => {
+    const startDate = toDateValue(item?.baslangicTarihi || item?.ilkOdemeTarihi || item?.sonOdemeTarihi || item?.tarih || item?.vadeTarihi || item?.olusturmaTarihi);
+    const endDate = toDateValue(item?.bitisTarihi || item?.bitis || item?.sonTarih);
+    const targetStart = new Date(year, month, 1);
+    const targetEnd = new Date(year, month + 1, 0, 23, 59, 59, 999);
+
+    if (startDate && targetEnd < new Date(startDate.getFullYear(), startDate.getMonth(), 1)) return null;
+    if (endDate && targetStart > endDate) return null;
+
+    const day = Number(item?.gun || item?.vadeGunu || item?.sonOdemeGunu || item?.odemeGunu) || getDayOfMonth(startDate);
+    if (!Number.isFinite(day) || day <= 0) return null;
+    return new Date(year, month, clampDay(day, year, month));
+};
+
 const formatAmount = (value) => {
     const num = Number(value);
     return Number.isFinite(num) ? num : null;
@@ -55,6 +86,7 @@ export const buildCalendarEventsFromData = (data, anchorDate = new Date()) => {
     const installments = Array.isArray(data.installments) ? data.installments : [];
     const bills = Array.isArray(data.bills) ? data.bills : [];
     const billDefinitions = Array.isArray(data.billDefinitions) ? data.billDefinitions : [];
+    const debts = Array.isArray(data.debts) ? data.debts : [];
     const salaries = Array.isArray(data.salaries) ? data.salaries : [];
     const goals = Array.isArray(data.goals) ? data.goals : [];
     const inventory = Array.isArray(data.inventory) ? data.inventory : [];
@@ -64,42 +96,49 @@ export const buildCalendarEventsFromData = (data, anchorDate = new Date()) => {
         const kesimGunu = Number(account.kesimGunu || 0);
         if (!Number.isFinite(kesimGunu) || kesimGunu <= 0) return;
 
-        const statementDate = new Date(baseYear, baseMonth, Math.min(kesimGunu, 28));
-        if (statementDate < anchorDate) {
-            statementDate.setMonth(statementDate.getMonth() + 1);
-        }
-        const paymentDate = new Date(statementDate);
-        paymentDate.setDate(paymentDate.getDate() + 10);
-        const amount = creditCardAmount(account);
-        const accountName = firstText(account.hesapAdi, account.ad, account.name) || 'Kredi Kartı';
+        [-1, 0].forEach((offset) => {
+            const statementBase = new Date(baseYear, baseMonth + offset, 1);
+            const statementDate = new Date(
+                statementBase.getFullYear(),
+                statementBase.getMonth(),
+                clampDay(kesimGunu, statementBase.getFullYear(), statementBase.getMonth())
+            );
+            const paymentDate = new Date(statementDate);
+            paymentDate.setDate(paymentDate.getDate() + 10);
+            const amount = creditCardAmount(account);
+            const accountName = firstText(account.hesapAdi, account.ad, account.name) || 'Kredi Kartı';
 
-        events.push(buildEvent({
-            title: `${accountName} Ekstre Kesimi`,
-            date: dateToKey(statementDate),
-            type: 'credit_card_statement',
-            amount,
-            source: 'credit_card',
-            sourceId: account.id,
-            description: 'Kredi kartı kesimi',
-        }));
-        events.push(buildEvent({
-            title: `${accountName} Son Ödeme`,
-            date: dateToKey(paymentDate),
-            type: 'credit_card_payment',
-            amount,
-            source: 'credit_card',
-            sourceId: account.id,
-            description: 'Son ödeme tarihi',
-        }));
+            if (sameMonth(statementDate, baseYear, baseMonth)) {
+                events.push(buildEvent({
+                    title: `${accountName} Ekstre Kesimi`,
+                    date: dateToKey(statementDate),
+                    type: 'credit_card_statement',
+                    amount,
+                    source: 'credit_card',
+                    sourceId: account.id,
+                    description: 'Kredi kartı kesimi',
+                }));
+            }
+
+            if (sameMonth(paymentDate, baseYear, baseMonth)) {
+                events.push(buildEvent({
+                    title: `${accountName} Son Ödeme`,
+                    date: dateToKey(paymentDate),
+                    type: 'credit_card_payment',
+                    amount,
+                    source: 'credit_card',
+                    sourceId: account.id,
+                    description: 'Son ödeme tarihi',
+                }));
+            }
+        });
     });
 
     subscriptions.forEach((subscription) => {
         const day = Number(subscription.gun || 0);
         if (!Number.isFinite(day) || day <= 0) return;
-        const date = new Date(baseYear, baseMonth, Math.min(day, 28));
-        if (date < anchorDate) {
-            date.setMonth(date.getMonth() + 1);
-        }
+        if (isInactive(subscription)) return;
+        const date = new Date(baseYear, baseMonth, clampDay(day, baseYear, baseMonth));
         events.push(buildEvent({
             title: subscription.ad || 'Abonelik',
             date: dateToKey(date),
@@ -139,7 +178,7 @@ export const buildCalendarEventsFromData = (data, anchorDate = new Date()) => {
     });
 
     bills.forEach((bill) => {
-        const billDate = toDateValue(bill.sonOdemeTarihi);
+        const billDate = toDateValue(bill.sonOdemeTarihi || bill.tarih || bill.vadeTarihi);
         if (!billDate) return;
         const dateKey = dateToKey(billDate);
         const definition = billDefinitions.find((item) => item.id && item.id === bill.tanimId);
@@ -166,13 +205,36 @@ export const buildCalendarEventsFromData = (data, anchorDate = new Date()) => {
         }));
     });
 
+    billDefinitions.forEach((definition) => {
+        if (isInactive(definition)) return;
+        const alreadyHasBill = bills.some((bill) => {
+            if (!bill?.tanimId || bill.tanimId !== definition.id) return false;
+            return sameMonth(toDateValue(bill.sonOdemeTarihi || bill.tarih || bill.vadeTarihi), baseYear, baseMonth);
+        });
+        if (alreadyHasBill) return;
+
+        const dueDate = monthlyDateFor(definition, baseYear, baseMonth);
+        if (!dueDate) return;
+        const billTitle = firstText(definition.baslik, definition.ad, definition.kurum) || 'Tanımlı Fatura';
+
+        events.push(buildEvent({
+            title: billTitle,
+            date: dateToKey(dueDate),
+            type: 'bill',
+            amount: formatAmount(definition.tutar || definition.ortalamaTutar),
+            currency: 'TRY',
+            source: 'bill_definition',
+            sourceId: definition.id,
+            status: 'planned',
+            description: 'Tanımlı fatura',
+        }));
+    });
+
     salaries.forEach((salary) => {
         const day = Number(salary.gun || 0);
         if (!Number.isFinite(day) || day <= 0) return;
-        const date = new Date(baseYear, baseMonth, Math.min(day, 28));
-        if (date < anchorDate) {
-            date.setMonth(date.getMonth() + 1);
-        }
+        if (isInactive(salary)) return;
+        const date = new Date(baseYear, baseMonth, clampDay(day, baseYear, baseMonth));
         events.push(buildEvent({
             title: salary.ad || 'Maaş',
             date: dateToKey(date),
@@ -212,6 +274,22 @@ export const buildCalendarEventsFromData = (data, anchorDate = new Date()) => {
             source: 'investment',
             sourceId: item.id,
             description: 'Satın alma planı',
+        }));
+    });
+
+    debts.forEach((debt) => {
+        if (isInactive(debt)) return;
+        const date = toDateValue(debt.sonOdemeTarihi || debt.tarih || debt.vadeTarihi);
+        if (!date || !sameMonth(date, baseYear, baseMonth)) return;
+        events.push(buildEvent({
+            title: debt.ad || debt.baslik || 'Borç',
+            date: dateToKey(date),
+            type: 'loan_payment',
+            amount: formatAmount(debt.kalanTutar ?? debt.tutar ?? debt.toplamTutar),
+            currency: 'TRY',
+            source: 'loan',
+            sourceId: debt.id,
+            description: 'Borç ödeme tarihi',
         }));
     });
 

@@ -1,15 +1,46 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import ReactDOM from 'react-dom';
 
 /**
  * A reusable, high-quality modal component.
  * Uses Portal to render at document.body level to avoid z-index/overflow issues.
  */
-const HighQualityModal = ({ isOpen, onClose, title, icon, children, footerButtons, width = '450px', minHeight, maxHeight = '90vh' }) => {
+const HighQualityModal = ({
+    isOpen,
+    onClose,
+    title,
+    subtitle,
+    icon,
+    children,
+    footerButtons,
+    width = '450px',
+    minHeight,
+    maxHeight = '90vh',
+    className,
+    bodyClassName,
+    overlayClassName,
+    overlayStyle,
+    contentStyle,
+    headerStyle,
+    bodyStyle,
+    bodyScrollLock = true
+}) => {
+    useEffect(() => {
+        if (!isOpen || !bodyScrollLock) return undefined;
+
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+
+        return () => {
+            document.body.style.overflow = previousOverflow;
+        };
+    }, [isOpen, bodyScrollLock]);
+
     if (!isOpen) return null;
 
     return ReactDOM.createPortal(
         <div
+            className={overlayClassName}
             style={{
                 position: 'fixed',
                 inset: 0,
@@ -21,11 +52,13 @@ const HighQualityModal = ({ isOpen, onClose, title, icon, children, footerButton
                 display: 'flex',
                 justifyContent: 'center',
                 alignItems: 'center',
-                zIndex: 99999
+                zIndex: 99999,
+                ...overlayStyle
             }}
             onClick={onClose}
         >
             <div
+                className={className}
                 style={{
                     background: 'var(--surface-solid, #ffffff)',
                     width: '100%',
@@ -39,15 +72,19 @@ const HighQualityModal = ({ isOpen, onClose, title, icon, children, footerButton
                     display: 'flex',
                     flexDirection: 'column',
                     animation: 'fadeIn 0.25s ease-out',
-                    position: 'relative' // Ensure relative content context
+                    position: 'relative',
+                    ...contentStyle
                 }}
                 onClick={e => e.stopPropagation()}
             >
                 {/* HEADER */}
-                <div style={{ padding: '14px 18px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ padding: '14px 18px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', ...headerStyle }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
                         {icon && <span style={{ fontSize: '18px' }}>{icon}</span>}
-                        <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: '#0f172a', letterSpacing: '0.1px' }}>{title}</h3>
+                        <div style={{ minWidth: 0 }}>
+                            <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: '#0f172a', letterSpacing: '0.1px' }}>{title}</h3>
+                            {subtitle && <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#64748b', fontWeight: 600 }}>{subtitle}</p>}
+                        </div>
                     </div>
                     <button
                         onClick={onClose}
@@ -65,7 +102,7 @@ const HighQualityModal = ({ isOpen, onClose, title, icon, children, footerButton
                 </div>
 
                 {/* BODY */}
-                <div style={{ padding: '18px 20px' }}>
+                <div className={bodyClassName} style={{ padding: '18px 20px', ...bodyStyle }}>
                     {children}
                 </div>
 

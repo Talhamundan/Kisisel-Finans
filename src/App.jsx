@@ -3,6 +3,7 @@ import { db } from './firebase'
 import { doc, setDoc } from 'firebase/firestore'
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { Eye, EyeOff, LockKeyhole, Mail, ShieldCheck, TrendingDown, TrendingUp } from 'lucide-react';
 
 // Components
 import Header from './components/Layout/Header';
@@ -13,6 +14,7 @@ import GoalsInventory from './components/Budget/GoalsInventory';
 import FinanceCalendarDashboard from './components/Calendar/FinanceCalendarDashboard';
 import ModalManager from './components/Modals/ModalManager';
 import MobileNav from './components/Layout/MobileNav';
+import AppLogo from './components/Shared/AppLogo';
 
 // Hooks
 import { useAuth } from './hooks/useAuth';
@@ -42,6 +44,11 @@ function App() {
     // Login / Code Login
     const [alanKodu, setAlanKodu] = useState(localStorage.getItem("alan_kodu") || "");
     const [girilenKod, setGirilenKod] = useState("");
+    const [loginEmail, setLoginEmail] = useState("");
+    const [loginPassword, setLoginPassword] = useState("");
+    const [loginRemember, setLoginRemember] = useState(false);
+    const [loginPasswordVisible, setLoginPasswordVisible] = useState(false);
+    const [loginSubmitting, setLoginSubmitting] = useState(false);
 
     // 3. HOOKS initialization
     const data = useDataListeners(user, alanKodu);
@@ -150,6 +157,19 @@ function App() {
         window.location.reload();
     }
 
+    const premiumLoginSubmit = async (e) => {
+        e.preventDefault();
+        if (loginSubmitting) return;
+        setLoginSubmitting(true);
+        try {
+            // TODO: Replace temporary Google sign-in submit flow
+            // with username/password authentication.
+            await girisYap();
+        } finally {
+            setLoginSubmitting(false);
+        }
+    }
+
     const koddanCikis = () => {
         setAktifModal('cikis_onay');
     }
@@ -204,99 +224,117 @@ function App() {
     if (loading) return <div style={{ height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>Yükleniyor...</div>;
 
     if (!user) return (
-        <div style={{
-            height: '100vh',
-            width: '100vw',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center',
-            alignItems: 'center',
-            background: 'linear-gradient(135deg, #2563eb 0%, #1e40af 100%)',
-            color: 'white',
-            fontFamily: 'Segoe UI',
-            position: 'relative',
-            overflow: 'hidden'
-        }}>
-            {/* Background Pattern/Blur Effect */}
-            <div style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.1) 0%, rgba(0,0,0,0) 50%)',
-                pointerEvents: 'none'
-            }}></div>
+        <div className="qw-login-shell">
+            <section className="qw-login-brand-panel">
+                <AppLogo size="md" showText className="qw-login-brand" />
 
-            <div style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                zIndex: 1,
-                padding: '20px',
-                width: '100%',
-                maxWidth: '400px'
-            }}>
-                <div style={{
-                    fontSize: '4rem',
-                    marginBottom: '10px',
-                    filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.2))'
-                }}>
-                    🚀
+                <div className="qw-login-copy">
+                    <h1>Finansal hayatın,<br />tek ve sakin bir yerde.</h1>
+                    <p>Hesaplarını, yatırımlarını, ödemelerini ve hedeflerini tek ekrandan yönet.</p>
                 </div>
 
-                <h1 style={{
-                    fontSize: '2.5rem',
-                    marginBottom: '10px',
-                    fontWeight: 'bold',
-                    textShadow: '0 2px 4px rgba(0,0,0,0.2)'
-                }}>
-                    CÜZDANIM
-                </h1>
+                <div className="qw-login-preview" aria-hidden="true">
+                    <div className="qw-preview-card qw-preview-card--main">
+                        <div>
+                            <span>Toplam Net Varlık</span>
+                            <strong>••••••</strong>
+                        </div>
+                        <ShieldCheck size={22} strokeWidth={2.2} />
+                        <div className="qw-preview-chart">
+                            <span />
+                            <span />
+                            <span />
+                            <span />
+                            <span />
+                            <span />
+                        </div>
+                    </div>
+                    <div className="qw-preview-grid">
+                        <div className="qw-preview-card">
+                            <TrendingUp size={18} strokeWidth={2.2} />
+                            <span>Bu Ay Gelir</span>
+                            <strong>Gizli</strong>
+                        </div>
+                        <div className="qw-preview-card">
+                            <TrendingDown size={18} strokeWidth={2.2} />
+                            <span>Bu Ay Gider</span>
+                            <strong>Gizli</strong>
+                        </div>
+                    </div>
+                </div>
+            </section>
 
-                <p style={{
-                    marginBottom: '40px',
-                    fontSize: '1.1rem',
-                    opacity: 0.9,
-                    fontWeight: '500'
-                }}>
-                    Bütçen kontrol altında.
-                </p>
+            <main className="qw-login-card-wrap">
+                <form className="qw-login-card" onSubmit={premiumLoginSubmit}>
+                    <div className="qw-login-card-brand">
+                        <AppLogo size="md" showText />
+                    </div>
 
-                <button
-                    onClick={girisYap}
-                    style={{
-                        padding: '12px 24px',
-                        width: '100%',
-                        maxWidth: '320px',
-                        fontSize: '1rem',
-                        borderRadius: '12px',
-                        border: 'none',
-                        cursor: 'pointer',
-                        background: 'white',
-                        color: '#1f2937',
-                        fontWeight: '600',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '12px',
-                        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-                        transition: 'transform 0.1s, box-shadow 0.2s'
-                    }}
-                    onMouseDown={e => e.currentTarget.style.transform = 'scale(0.98)'}
-                    onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
-                    onMouseOver={e => e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'}
-                    onMouseOut={e => e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)'}
-                >
-                    <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-                        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
-                        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-                    </svg>
-                    Google ile Giriş Yap
-                </button>
-            </div>
+                    <div className="qw-login-card-heading">
+                        <h2>Tekrar hoş geldin</h2>
+                        <p>Finansal hesabına devam etmek için giriş yap.</p>
+                    </div>
+
+                    <label className="qw-login-field">
+                        <span>Kullanıcı adı veya e-posta</span>
+                        <div>
+                            <Mail size={18} strokeWidth={2.2} />
+                            <input
+                                type="email"
+                                value={loginEmail}
+                                onChange={(event) => setLoginEmail(event.target.value)}
+                                placeholder="kullanici@kisisel-finans.app"
+                                autoComplete="username"
+                            />
+                        </div>
+                    </label>
+
+                    <label className="qw-login-field">
+                        <span>Şifre</span>
+                        <div>
+                            <LockKeyhole size={18} strokeWidth={2.2} />
+                            <input
+                                type={loginPasswordVisible ? 'text' : 'password'}
+                                value={loginPassword}
+                                onChange={(event) => setLoginPassword(event.target.value)}
+                                placeholder="••••••••"
+                                autoComplete="current-password"
+                            />
+                            <button
+                                type="button"
+                                className="qw-login-password-toggle"
+                                onClick={() => setLoginPasswordVisible((value) => !value)}
+                                aria-label={loginPasswordVisible ? 'Şifreyi gizle' : 'Şifreyi göster'}
+                            >
+                                {loginPasswordVisible ? <EyeOff size={18} strokeWidth={2.2} /> : <Eye size={18} strokeWidth={2.2} />}
+                            </button>
+                        </div>
+                    </label>
+
+                    <div className="qw-login-options">
+                        <label>
+                            <input
+                                type="checkbox"
+                                checked={loginRemember}
+                                onChange={(event) => setLoginRemember(event.target.checked)}
+                            />
+                            <span>Beni hatırla</span>
+                        </label>
+                        <button type="button" title="Yakında">Şifremi unuttum</button>
+                    </div>
+
+                    <button type="submit" className="qw-login-submit" disabled={loginSubmitting}>
+                        {loginSubmitting ? 'Giriş yapılıyor...' : 'Giriş Yap'}
+                    </button>
+
+                    <p className="qw-login-trust">Giriş yaparak güvenli oturum akışını başlatırsın.</p>
+                </form>
+
+                <footer className="qw-login-footer">
+                    <span>© 2026 Kişisel Finans</span>
+                    <span>Gizlilik · Yardım</span>
+                </footer>
+            </main>
             <ToastContainer />
         </div>
     );
@@ -327,7 +365,7 @@ function App() {
                 whiteSpace: 'nowrap',
                 userSelect: 'none'
             }}>
-                CÜZDANIM
+                Kişisel Finans
             </div>
 
             <div style={{
@@ -545,7 +583,7 @@ function App() {
                 selectedPeriod={selectedPeriod}
                 setSelectedPeriod={setSelectedPeriod}
                 availablePeriods={availablePeriods}
-                showPeriodFilter={anaSekme !== 'hedefler'}
+                showPeriodFilter={!['hedefler', 'takvim'].includes(anaSekme)}
             />
 
             <Notifications
@@ -596,6 +634,7 @@ function App() {
                     filtreKategori={calculations.filtreKategori} setFiltreKategori={calculations.setFiltreKategori}
 
                     // Actions & States
+                    aktifModal={aktifModal}
                     modalAc={modalAc}
                     normalSil={budgetActions.normalSil}
                     maasEkle={budgetActions.maasEkle}
@@ -730,16 +769,13 @@ function App() {
                     user={user}
                     alanKodu={alanKodu}
                     gizliMod={gizliMod}
-                    selectedYear={selectedPeriod.year}
-                    selectedMonth={selectedPeriod.month}
-                    setSelectedPeriod={setSelectedPeriod}
-                    availablePeriods={availablePeriods}
                     sourceData={{
                         accounts: data.hesaplar,
                         subscriptions: data.abonelikler,
                         installments: data.taksitler,
                         bills: data.bekleyenFaturalar,
                         billDefinitions: data.tanimliFaturalar,
+                        debts: data.borclar,
                         salaries: data.maaslar,
                         goals: data.hedefler,
                         inventory: data.envanter,

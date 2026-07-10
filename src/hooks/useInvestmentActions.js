@@ -550,7 +550,7 @@ export const useInvestmentActions = (user, alanKodu) => {
     }
 
     const besGuncelle = async (veri) => {
-        console.log("🚀 besGuncelle ÇAĞRILDI", { alanKodu, veri });
+        console.log("besGuncelle ÇAĞRILDI", { alanKodu, veri });
 
         if (!alanKodu) {
             toast.error("Sistem Hatası: Alan Kodu bulunamadı!");

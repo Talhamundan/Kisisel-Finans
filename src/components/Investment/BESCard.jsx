@@ -222,7 +222,7 @@ const BESCard = ({
                         </div>
                         <div>
                             <div style={{ fontSize: '12px', color: '#a0aec0' }}>Net Getiri (Fon)</div>
-                            <div style={{ fontWeight: 'bold', color: netGetiri >= 0 ? '#48bb78' : '#e53e3e', fontSize: '13px' }}>
+                            <div style={{ fontWeight: 'bold', color: netGetiri > 0 ? '#16a36a' : netGetiri < 0 ? '#e25555' : '#94a3b8', fontSize: '13px' }}>
                                 {netGetiri > 0 ? '+' : ''}{formatPara(netGetiri)}
                             </div>
                         </div>
@@ -234,9 +234,9 @@ const BESCard = ({
                             <div className="bes-monthly-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '13px' }}>
                                 <span style={{ fontWeight: '600', color: '#718096' }}>Dönem:</span>
                                 <div className="bes-monthly-values" style={{ display: 'flex', gap: '15px' }}>
-                                    <span style={{ color: '#48bb78' }}>Yatırılan: <b>{formatPara(seciliAyYatirilan)}</b></span>
-                                    <span style={{ color: '#c53030' }}>Kesinti: <b>{formatPara(seciliAyKesinti)}</b></span>
-                                    <span style={{ color: seciliAyNetYatirim > 0 ? '#198754' : 'inherit', fontWeight: 'bold' }}>
+                                    <span style={{ color: '#16a36a' }}>Yatırılan: <b>{formatPara(seciliAyYatirilan)}</b></span>
+                                    <span style={{ color: '#e25555' }}>Kesinti: <b>{formatPara(seciliAyKesinti)}</b></span>
+                                    <span style={{ color: seciliAyNetYatirim > 0 ? '#16a36a' : seciliAyNetYatirim < 0 ? '#e25555' : '#94a3b8', fontWeight: 'bold' }}>
                                         Net: {formatPara(seciliAyNetYatirim)}
                                     </span>
                                 </div>

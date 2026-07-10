@@ -20,7 +20,7 @@ const Feedback = ({ userEmail }) => {
                 createdAt: serverTimestamp(),
             });
 
-            toast.success('Mesajınız iletildi, teşekkürler! 🚀');
+            toast.success('Mesajınız iletildi, teşekkürler!');
             setText('');
             setIsOpen(false);
         } catch (error) {

@@ -1,17 +1,7 @@
 import React from 'react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Sector } from 'recharts';
 import { formatCurrencyPlain } from '../../utils/helpers';
-
-export const DONUT_PALETTE = [
-    '#5B8DEF',
-    '#8B7CF6',
-    '#38BDF8',
-    '#34D399',
-    '#F59E72',
-    '#F6D365',
-    '#F472B6',
-    '#94A3B8',
-];
+import { DONUT_PALETTE } from './chartPalettes';
 
 const chartText = {
     fill: '#0f172a',
