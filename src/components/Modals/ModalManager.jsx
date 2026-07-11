@@ -5,6 +5,12 @@ import { formatCurrencyPlain, inputStyle, tarihSadeceGunAyYil, sortTurkishText }
 import { toast } from 'react-toastify';
 import Swal from 'sweetalert2';
 
+const FieldLabel = ({ children }) => (
+    <label style={{ display: 'block', margin: '0 0 6px', fontSize: '12px', fontWeight: 700, color: '#64748b' }}>
+        {children}
+    </label>
+);
+
 // Sub-component to handle Portföy Düzenleme with own state
 const IslemEkleMobilModal = ({ close, islemEkle, hesaplar, kategoriListesi, inputStyle, tumIslemler }) => {
     const [hesapId, setHesapId] = useState("");
@@ -173,6 +179,10 @@ const ModalManager = ({
     hesapTipi, setHesapTipi,
     baslangicBakiye, setBaslangicBakiye,
     hesapKesimGunu, setHesapKesimGunu,
+    maasHesabi, setMaasHesabi,
+    anaMaasHesabi, setAnaMaasHesabi,
+    hesapMaasGunu, setHesapMaasGunu,
+    bagliMaasId, setBagliMaasId,
     hesapDuzenle,
     islemAciklama, setIslemAciklama,
     islemTutar, setIslemTutar,
@@ -201,6 +211,7 @@ const ModalManager = ({
     maasGun, setMaasGun,
     maasHesapId, setMaasHesapId,
     maasDuzenle,
+    maaslar = [],
     kkOdemeKartId,
     kkOdemeKaynakId, setKkOdemeKaynakId,
     kkOdemeTutar, setKkOdemeTutar,
@@ -324,14 +335,55 @@ const ModalManager = ({
                 setIsProcessing(false);
                 if (success) close();
             }}>
-                <input placeholder="Hesap Adı" value={hesapAdi} onChange={e => setHesapAdi(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} />
-                <select value={hesapTipi} onChange={e => setHesapTipi(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }}>
-                    <option value="nakit">Nakit</option>
-                    <option value="krediKarti">Kart</option>
-                    <option value="yatirim">Yatırım H.</option>
-                </select>
-                <input placeholder="0" type="number" min="0" value={baslangicBakiye} onChange={e => setBaslangicBakiye(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} />
-                {hesapTipi === 'krediKarti' && <input type="number" placeholder="Kesim Günü (1-31)" value={hesapKesimGunu} onChange={e => setHesapKesimGunu(e.target.value)} style={{ ...inputStyle, marginBottom: '20px' }} />}
+                <div style={{ marginBottom: '15px' }}>
+                    <FieldLabel>Hesap adı</FieldLabel>
+                    <input placeholder="Hesap Adı" value={hesapAdi} onChange={e => setHesapAdi(e.target.value)} style={inputStyle} />
+                </div>
+                <div style={{ marginBottom: '15px' }}>
+                    <FieldLabel>Hesap türü</FieldLabel>
+                    <select value={hesapTipi} onChange={e => setHesapTipi(e.target.value)} style={inputStyle}>
+                        <option value="nakit">Nakit</option>
+                        <option value="krediKarti">Kart</option>
+                        <option value="yatirim">Yatırım H.</option>
+                    </select>
+                </div>
+                <div style={{ marginBottom: '15px' }}>
+                    <FieldLabel>{hesapTipi === 'krediKarti' ? 'Güncel bakiye / borç' : 'Güncel bakiye'}</FieldLabel>
+                    <input placeholder="0" type="number" value={baslangicBakiye} onChange={e => setBaslangicBakiye(e.target.value)} style={inputStyle} />
+                </div>
+                {hesapTipi === 'krediKarti' && (
+                    <div style={{ marginBottom: '20px' }}>
+                        <FieldLabel>Ekstre kesim günü</FieldLabel>
+                        <input type="number" min="1" max="31" placeholder="1-31" value={hesapKesimGunu} onChange={e => setHesapKesimGunu(e.target.value)} style={inputStyle} />
+                    </div>
+                )}
+                {hesapTipi !== 'krediKarti' && (
+                    <div style={{ marginBottom: '20px', padding: '14px', borderRadius: '14px', background: '#f8fafc' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 700, color: '#0f172a', marginBottom: maasHesabi ? '12px' : 0 }}>
+                            <input type="checkbox" checked={maasHesabi} onChange={e => setMaasHesabi(e.target.checked)} />
+                            Maaş hesabı
+                        </label>
+                        {maasHesabi && (
+                            <>
+                                <div style={{ marginBottom: '12px' }}>
+                                    <FieldLabel>Maaş günü</FieldLabel>
+                                    <input type="number" min="1" max="31" placeholder="1-31" value={hesapMaasGunu} onChange={e => setHesapMaasGunu(e.target.value)} style={inputStyle} />
+                                </div>
+                                <div style={{ marginBottom: '12px' }}>
+                                    <FieldLabel>Bağlı düzenli gelir</FieldLabel>
+                                    <select value={bagliMaasId} onChange={e => setBagliMaasId(e.target.value)} style={inputStyle}>
+                                        <option value="">Bağlı gelir yok</option>
+                                        {maaslar.map(m => <option key={m.id} value={m.id}>{m.ad}</option>)}
+                                    </select>
+                                </div>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 700, color: '#475569' }}>
+                                    <input type="checkbox" checked={anaMaasHesabi} onChange={e => setAnaMaasHesabi(e.target.checked)} />
+                                    Ana maaş hesabı
+                                </label>
+                            </>
+                        )}
+                    </div>
+                )}
                 <button type="submit" disabled={isProcessing} style={{ width: '100%', background: '#3182ce', color: 'white', padding: '14px', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold', opacity: isProcessing ? 0.7 : 1 }}>{isProcessing ? 'KAYDEDİLİYOR...' : 'KAYDET'}</button>
             </form>
         );
@@ -468,14 +520,58 @@ const ModalManager = ({
         title = "Hesabı Düzenle";
         content = (
             <form onSubmit={(e) => hesapDuzenle(e, seciliVeri.id).then(res => res && close())}>
-                <input value={hesapAdi} onChange={e => setHesapAdi(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} placeholder="Hesap Adı" />
-                <select value={hesapTipi} onChange={e => setHesapTipi(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }}>
-                    <option value="nakit">Nakit</option>
-                    <option value="krediKarti">Kart</option>
-                    <option value="yatirim">Yatırım H.</option>
-                </select>
-                <input type="number" value={baslangicBakiye} onChange={e => setBaslangicBakiye(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} placeholder="Bakiye" />
-                {hesapTipi === 'krediKarti' && <input type="number" placeholder="Kesim Günü (1-31)" value={hesapKesimGunu} onChange={e => setHesapKesimGunu(e.target.value)} style={{ ...inputStyle, marginBottom: '20px' }} />}
+                <div style={{ marginBottom: '15px' }}>
+                    <FieldLabel>Hesap adı</FieldLabel>
+                    <input value={hesapAdi} onChange={e => setHesapAdi(e.target.value)} style={inputStyle} placeholder="Hesap Adı" />
+                </div>
+                <div style={{ marginBottom: '15px' }}>
+                    <FieldLabel>Hesap türü</FieldLabel>
+                    <select value={hesapTipi} onChange={e => setHesapTipi(e.target.value)} style={inputStyle}>
+                        <option value="nakit">Nakit</option>
+                        <option value="krediKarti">Kart</option>
+                        <option value="yatirim">Yatırım H.</option>
+                    </select>
+                </div>
+                <div style={{ marginBottom: '15px' }}>
+                    <FieldLabel>{hesapTipi === 'krediKarti' ? 'Güncel bakiye / borç' : 'Güncel bakiye'}</FieldLabel>
+                    <input type="number" value={baslangicBakiye} onChange={e => setBaslangicBakiye(e.target.value)} style={inputStyle} placeholder="Bakiye" />
+                </div>
+                {hesapTipi === 'krediKarti' && (
+                    <div style={{ marginBottom: '20px' }}>
+                        <FieldLabel>Ekstre kesim günü</FieldLabel>
+                        <input type="number" min="1" max="31" placeholder="1-31" value={hesapKesimGunu} onChange={e => setHesapKesimGunu(e.target.value)} style={inputStyle} />
+                        <div style={{ marginTop: '8px', fontSize: '12px', lineHeight: 1.45, color: '#94a3b8' }}>
+                            Kesim gününü değiştirmek geçmiş ekstre dönemlerinin dağılımını değiştirebilir.
+                        </div>
+                    </div>
+                )}
+                {hesapTipi !== 'krediKarti' && (
+                    <div style={{ marginBottom: '20px', padding: '14px', borderRadius: '14px', background: '#f8fafc' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 700, color: '#0f172a', marginBottom: maasHesabi ? '12px' : 0 }}>
+                            <input type="checkbox" checked={maasHesabi} onChange={e => setMaasHesabi(e.target.checked)} />
+                            Maaş hesabı
+                        </label>
+                        {maasHesabi && (
+                            <>
+                                <div style={{ marginBottom: '12px' }}>
+                                    <FieldLabel>Maaş günü</FieldLabel>
+                                    <input type="number" min="1" max="31" placeholder="1-31" value={hesapMaasGunu} onChange={e => setHesapMaasGunu(e.target.value)} style={inputStyle} />
+                                </div>
+                                <div style={{ marginBottom: '12px' }}>
+                                    <FieldLabel>Bağlı düzenli gelir</FieldLabel>
+                                    <select value={bagliMaasId} onChange={e => setBagliMaasId(e.target.value)} style={inputStyle}>
+                                        <option value="">Bağlı gelir yok</option>
+                                        {maaslar.map(m => <option key={m.id} value={m.id}>{m.ad}</option>)}
+                                    </select>
+                                </div>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 700, color: '#475569' }}>
+                                    <input type="checkbox" checked={anaMaasHesabi} onChange={e => setAnaMaasHesabi(e.target.checked)} />
+                                    Ana maaş hesabı
+                                </label>
+                            </>
+                        )}
+                    </div>
+                )}
                 <button type="submit" style={{ width: '100%', background: '#6366f1', color: 'white', padding: '14px', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold' }}>Kaydet</button>
             </form>
         );

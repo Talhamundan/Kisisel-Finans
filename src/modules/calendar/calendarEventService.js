@@ -63,6 +63,60 @@ const creditCardAmount = (account) => {
     return amount === null ? null : Math.abs(amount);
 };
 
+const buildInstallmentPaymentCounts = (transactions = []) => {
+    const counts = new Map();
+
+    const addPayment = (installmentId, paymentKey) => {
+        if (!installmentId) return;
+        if (!counts.has(installmentId)) counts.set(installmentId, new Set());
+        counts.get(installmentId).add(paymentKey);
+    };
+
+    transactions.forEach((transaction) => {
+        const linkedIds = [
+            transaction.taksitId,
+            transaction.installmentId,
+            transaction.planId,
+            transaction.sourceId,
+            transaction.generatedFrom,
+            transaction.linkedTransactionId,
+        ].filter(Boolean);
+        if (linkedIds.length === 0) return;
+
+        const paymentKey = transaction.installmentNumber
+            || transaction.taksitNo
+            || transaction.taksitSirasi
+            || transaction.id
+            || `${transaction.tarih || ''}-${transaction.tutar || ''}-${transaction.aciklama || ''}`;
+
+        linkedIds.forEach((installmentId) => addPayment(installmentId, paymentKey));
+    });
+
+    return counts;
+};
+
+const getInstallmentPaidCount = (installment, paymentCounts) => {
+    const totalCount = Number(installment.taksitSayisi || 0);
+    const remainingCount = Number(installment.remainingInstallments);
+    const directPaid = Math.max(
+        Number(installment.odenmisTaksit || 0),
+        Number(installment.completedInstallments || 0),
+        Number(installment.paidInstallmentCount || 0),
+        Number.isFinite(remainingCount) && totalCount > 0 ? Math.max(0, totalCount - remainingCount) : 0,
+    );
+    const linkedPaid = paymentCounts.get(installment.id)?.size || 0;
+    const status = String(installment.status || '').toLowerCase();
+    const isCompleted = installment.paid === true
+        || installment.isPaid === true
+        || Boolean(installment.paidAt)
+        || ['paid', 'completed', 'complete', 'odendi', 'tamamlandi'].includes(status);
+    const paidCount = isCompleted && totalCount > 0
+        ? totalCount
+        : Math.max(directPaid, linkedPaid);
+
+    return totalCount > 0 ? Math.min(paidCount, totalCount) : paidCount;
+};
+
 const buildEvent = ({ title, date, type, amount, currency = 'TRY', source, sourceId, status = 'upcoming', description = '' }) => ({
     id: `${source || 'system'}-${type}-${date}-${title}`,
     title,
@@ -90,6 +144,8 @@ export const buildCalendarEventsFromData = (data, anchorDate = new Date()) => {
     const salaries = Array.isArray(data.salaries) ? data.salaries : [];
     const goals = Array.isArray(data.goals) ? data.goals : [];
     const inventory = Array.isArray(data.inventory) ? data.inventory : [];
+    const transactions = Array.isArray(data.transactions) ? data.transactions : [];
+    const installmentPaymentCounts = buildInstallmentPaymentCounts(transactions);
 
     accounts.forEach((account) => {
         if (account?.hesapTipi !== 'krediKarti') return;
@@ -154,7 +210,7 @@ export const buildCalendarEventsFromData = (data, anchorDate = new Date()) => {
     installments.forEach((installment) => {
         const startDate = toDateValue(installment.alisTarihi) || toDateValue(installment.olusturmaTarihi) || anchorDate;
         const total = formatAmount(installment.toplamTutar) || formatAmount(installment.aylikTutar) || 0;
-        const paidCount = Number(installment.odenmisTaksit || 0);
+        const paidCount = getInstallmentPaidCount(installment, installmentPaymentCounts);
         const totalCount = Number(installment.taksitSayisi || 0);
         const remaining = Math.max(totalCount - paidCount, 0);
         if (remaining <= 0) return;

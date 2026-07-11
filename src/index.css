@@ -1597,7 +1597,14 @@ button:active {
 
 .qw-debt-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  align-items: stretch;
+}
+
+.qw-debt-grid > .qw-card {
+  min-height: 430px;
+  height: 100%;
 }
 
 .qw-account-history-modal {
@@ -2020,6 +2027,7 @@ button:active {
   .qw-transactions-accounts-grid,
   .qw-secondary-grid,
   .qw-module-grid,
+  .qw-debt-grid,
   .qw-top-summary-grid .qw-net-worth-card {
     grid-template-columns: 1fr;
   }
@@ -2034,6 +2042,7 @@ button:active {
 
   .qw-secondary-grid > .qw-card,
   .qw-module-grid > .qw-card,
+  .qw-debt-grid > .qw-card,
   .qw-quick-entry-card--compact,
   .qw-priority-grid > .qw-card,
   .qw-transactions-accounts-grid > .qw-card {
@@ -2625,7 +2634,8 @@ textarea:focus {
   .qw-priority-grid,
   .qw-transactions-accounts-grid,
   .qw-secondary-grid,
-  .qw-module-grid {
+  .qw-module-grid,
+  .qw-debt-grid {
     grid-template-columns: 1fr;
   }
 

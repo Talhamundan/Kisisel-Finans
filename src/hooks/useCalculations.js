@@ -184,7 +184,60 @@ export const useCalculations = (
     const toplamKalanBorc = borclar ? borclar
         .filter((b) => b.sonOdemeTarihi ? isDateInPeriod(b.sonOdemeTarihi, selectedPeriod) : true)
         .reduce((sum, b) => sum + (b.kalanTutar || 0), 0) : 0;
-    const toplamKalanTaksitBorcu = taksitler.reduce((acc, t) => acc + (t.toplamTutar - (t.aylikTutar * t.odenmisTaksit)), 0);
+    const taksitOdemeSayilari = useMemo(() => {
+        const counts = new Map();
+
+        const addPayment = (installmentId, paymentKey) => {
+            if (!installmentId) return;
+            if (!counts.has(installmentId)) counts.set(installmentId, new Set());
+            counts.get(installmentId).add(paymentKey);
+        };
+
+        islemler.forEach((transaction) => {
+            const linkedIds = [
+                transaction.taksitId,
+                transaction.installmentId,
+                transaction.planId,
+                transaction.sourceId,
+                transaction.generatedFrom,
+                transaction.linkedTransactionId,
+            ].filter(Boolean);
+            if (linkedIds.length === 0) return;
+
+            const paymentKey = transaction.installmentNumber
+                || transaction.taksitNo
+                || transaction.taksitSirasi
+                || transaction.id
+                || `${transaction.tarih || ''}-${transaction.tutar || ''}-${transaction.aciklama || ''}`;
+
+            linkedIds.forEach((installmentId) => addPayment(installmentId, paymentKey));
+        });
+
+        return counts;
+    }, [islemler]);
+
+    const toplamKalanTaksitBorcu = taksitler.reduce((acc, t) => {
+        const totalCount = parseInt(t.taksitSayisi) || 0;
+        const remainingCount = parseInt(t.remainingInstallments);
+        const directPaid = Math.max(
+            parseInt(t.odenmisTaksit) || 0,
+            parseInt(t.completedInstallments) || 0,
+            parseInt(t.paidInstallmentCount) || 0,
+            Number.isFinite(remainingCount) && totalCount > 0 ? Math.max(0, totalCount - remainingCount) : 0,
+        );
+        const linkedPaid = taksitOdemeSayilari.get(t.id)?.size || 0;
+        const status = String(t.status || '').toLowerCase();
+        const isCompleted = t.paid === true
+            || t.isPaid === true
+            || Boolean(t.paidAt)
+            || ['paid', 'completed', 'complete', 'odendi', 'tamamlandi'].includes(status);
+        const paidCount = isCompleted && totalCount > 0
+            ? totalCount
+            : Math.max(directPaid, linkedPaid);
+        const normalizedPaid = totalCount > 0 ? Math.min(paidCount, totalCount) : paidCount;
+
+        return acc + Math.max(0, (t.toplamTutar || 0) - ((t.aylikTutar || 0) * normalizedPaid));
+    }, 0);
     const toplamSabitGider = abonelikler.reduce((acc, abo) => acc + abo.tutar, 0);
     const toplamNakitVarlik = hesaplar.reduce((acc, h) => acc + (parseFloat(h.guncelBakiye) || 0), 0);
     const netVarlik = toplamNakitVarlik + portfoyGuncelDegeri + (besVerisi?.guncelTutar || 0);

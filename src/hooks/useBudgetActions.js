@@ -12,6 +12,10 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
     const [hesapTipi, setHesapTipi] = useState("nakit");
     const [baslangicBakiye, setBaslangicBakiye] = useState("");
     const [hesapKesimGunu, setHesapKesimGunu] = useState("");
+    const [maasHesabi, setMaasHesabi] = useState(false);
+    const [anaMaasHesabi, setAnaMaasHesabi] = useState(false);
+    const [hesapMaasGunu, setHesapMaasGunu] = useState("");
+    const [bagliMaasId, setBagliMaasId] = useState("");
 
     // İşlem (Gelir/Gider/Transfer)
     const [secilenHesapId, setSecilenHesapId] = useState("");
@@ -100,13 +104,37 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
             if (isNaN(bakiye)) {
                 bakiye = 0;
             }
+            const kesimGunu = parseInt(hesapKesimGunu);
+            if (hesapTipi === 'krediKarti' && (!Number.isFinite(kesimGunu) || kesimGunu < 1 || kesimGunu > 31)) {
+                toast.warning("Ekstre kesim günü 1-31 arasında olmalı.");
+                return false;
+            }
+            const salaryDay = parseInt(hesapMaasGunu);
+            const isSalaryAccount = hesapTipi !== 'krediKarti' && maasHesabi;
+            if (isSalaryAccount && (!Number.isFinite(salaryDay) || salaryDay < 1 || salaryDay > 31)) {
+                toast.warning("Maaş günü 1-31 arasında olmalı.");
+                return false;
+            }
 
-            await addDoc(collection(db, "hesaplar"), {
+            const accountRef = doc(collection(db, "hesaplar"));
+            const batch = writeBatch(db);
+            batch.set(accountRef, {
                 uid: user.uid, alanKodu, hesapAdi, hesapTipi,
                 guncelBakiye: bakiye,
-                kesimGunu: hesapTipi === 'krediKarti' ? hesapKesimGunu : ""
+                kesimGunu: hesapTipi === 'krediKarti' ? kesimGunu : "",
+                maasHesabi: isSalaryAccount,
+                anaMaasHesabi: isSalaryAccount ? Boolean(anaMaasHesabi) : false,
+                maasGunu: isSalaryAccount ? salaryDay : "",
+                bagliMaasId: isSalaryAccount ? (bagliMaasId || "") : ""
             });
+            if (isSalaryAccount && anaMaasHesabi) {
+                hesaplar
+                    .filter((account) => account.anaMaasHesabi)
+                    .forEach((account) => batch.update(doc(db, "hesaplar", account.id), { anaMaasHesabi: false }));
+            }
+            await batch.commit();
             setHesapAdi(""); setBaslangicBakiye(""); setHesapKesimGunu("");
+            setMaasHesabi(false); setAnaMaasHesabi(false); setHesapMaasGunu(""); setBagliMaasId("");
             toast.success("Hesap eklendi.");
             return true;
         } catch (error) {
@@ -124,11 +152,33 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
                 toast.warning("Geçerli bir bakiye giriniz.");
                 return false;
             }
-            await updateDoc(doc(db, "hesaplar", id), {
+            const kesimGunu = parseInt(hesapKesimGunu);
+            if (hesapTipi === 'krediKarti' && (!Number.isFinite(kesimGunu) || kesimGunu < 1 || kesimGunu > 31)) {
+                toast.warning("Ekstre kesim günü 1-31 arasında olmalı.");
+                return false;
+            }
+            const salaryDay = parseInt(hesapMaasGunu);
+            const isSalaryAccount = hesapTipi !== 'krediKarti' && maasHesabi;
+            if (isSalaryAccount && (!Number.isFinite(salaryDay) || salaryDay < 1 || salaryDay > 31)) {
+                toast.warning("Maaş günü 1-31 arasında olmalı.");
+                return false;
+            }
+            const batch = writeBatch(db);
+            batch.update(doc(db, "hesaplar", id), {
                 hesapAdi, hesapTipi,
                 guncelBakiye: bakiye,
-                kesimGunu: hesapTipi === 'krediKarti' ? hesapKesimGunu : ""
+                kesimGunu: hesapTipi === 'krediKarti' ? kesimGunu : "",
+                maasHesabi: isSalaryAccount,
+                anaMaasHesabi: isSalaryAccount ? Boolean(anaMaasHesabi) : false,
+                maasGunu: isSalaryAccount ? salaryDay : "",
+                bagliMaasId: isSalaryAccount ? (bagliMaasId || "") : ""
             });
+            if (isSalaryAccount && anaMaasHesabi) {
+                hesaplar
+                    .filter((account) => account.id !== id && account.anaMaasHesabi)
+                    .forEach((account) => batch.update(doc(db, "hesaplar", account.id), { anaMaasHesabi: false }));
+            }
+            await batch.commit();
             toast.success("Hesap güncellendi.");
             return true;
         } catch (error) {
@@ -1202,7 +1252,16 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
     }
 
     // Helpers to fill forms
-    const fillAccountForm = (v) => { setHesapAdi(v.hesapAdi); setHesapTipi(v.hesapTipi || "nakit"); setBaslangicBakiye(formatMoneyInputValue(v.guncelBakiye)); setHesapKesimGunu(v.kesimGunu || ""); }
+    const fillAccountForm = (v) => {
+        setHesapAdi(v.hesapAdi);
+        setHesapTipi(v.hesapTipi || "nakit");
+        setBaslangicBakiye(formatMoneyInputValue(v.guncelBakiye));
+        setHesapKesimGunu(v.kesimGunu || "");
+        setMaasHesabi(Boolean(v.maasHesabi));
+        setAnaMaasHesabi(Boolean(v.anaMaasHesabi));
+        setHesapMaasGunu(v.maasGunu || "");
+        setBagliMaasId(v.bagliMaasId || "");
+    }
     const fillTransactionForm = (v) => {
         setIslemAciklama(v.aciklama);
         setIslemTutar(formatMoneyInputValue(v.tutar));
@@ -1225,6 +1284,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
     return {
         // States
         hesapAdi, setHesapAdi, hesapTipi, setHesapTipi, baslangicBakiye, setBaslangicBakiye, hesapKesimGunu, setHesapKesimGunu,
+        maasHesabi, setMaasHesabi, anaMaasHesabi, setAnaMaasHesabi, hesapMaasGunu, setHesapMaasGunu, bagliMaasId, setBagliMaasId,
         secilenHesapId, setSecilenHesapId, islemTutar, setIslemTutar, islemAciklama, setIslemAciklama, islemTipi, setIslemTipi, kategori, setKategori, islemTarihi, setIslemTarihi,
         islemAdet, setIslemAdet, islemBirimFiyat, setIslemBirimFiyat, // Return new states
         transferKaynakId, setTransferKaynakId, transferHedefId, setTransferHedefId, transferTutar, setTransferTutar, transferUcreti, setTransferUcreti, transferTarihi, setTransferTarihi,

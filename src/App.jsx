@@ -482,6 +482,10 @@ function App() {
                 hesapTipi={budgetActions.hesapTipi} setHesapTipi={budgetActions.setHesapTipi}
                 baslangicBakiye={budgetActions.baslangicBakiye} setBaslangicBakiye={budgetActions.setBaslangicBakiye}
                 hesapKesimGunu={budgetActions.hesapKesimGunu} setHesapKesimGunu={budgetActions.setHesapKesimGunu}
+                maasHesabi={budgetActions.maasHesabi} setMaasHesabi={budgetActions.setMaasHesabi}
+                anaMaasHesabi={budgetActions.anaMaasHesabi} setAnaMaasHesabi={budgetActions.setAnaMaasHesabi}
+                hesapMaasGunu={budgetActions.hesapMaasGunu} setHesapMaasGunu={budgetActions.setHesapMaasGunu}
+                bagliMaasId={budgetActions.bagliMaasId} setBagliMaasId={budgetActions.setBagliMaasId}
                 hesapDuzenle={budgetActions.hesapDuzenle}
                 islemAciklama={budgetActions.islemAciklama} setIslemAciklama={budgetActions.setIslemAciklama}
                 islemTutar={budgetActions.islemTutar} setIslemTutar={budgetActions.setIslemTutar}
@@ -511,6 +515,7 @@ function App() {
                 maasGun={budgetActions.maasGun} setMaasGun={budgetActions.setMaasGun}
                 maasHesapId={budgetActions.maasHesapId} setMaasHesapId={budgetActions.setMaasHesapId}
                 maasDuzenle={budgetActions.maasDuzenle}
+                maaslar={data.maaslar}
                 kkOdemeKartId={budgetActions.kkOdemeKartId}
                 kkOdemeKaynakId={budgetActions.kkOdemeKaynakId} setKkOdemeKaynakId={budgetActions.setKkOdemeKaynakId}
                 kkOdemeTutar={budgetActions.kkOdemeTutar} setKkOdemeTutar={budgetActions.setKkOdemeTutar}
@@ -771,6 +776,7 @@ function App() {
                     gizliMod={gizliMod}
                     sourceData={{
                         accounts: data.hesaplar,
+                        transactions: data.islemler,
                         subscriptions: data.abonelikler,
                         installments: data.taksitler,
                         bills: data.bekleyenFaturalar,

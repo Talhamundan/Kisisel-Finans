@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
     ResponsiveContainer,
     AreaChart,
@@ -24,6 +24,13 @@ import {
 } from 'lucide-react';
 import { inputStyle, formatCurrencyPlain, tarihFormatla, toDateSafe, sortTurkishText } from '../../utils/helpers';
 import { isDateInPeriod, MONTH_NAMES } from '../../utils/period';
+import {
+    formatSalaryPeriodRange,
+    getSalaryPeriod,
+    isDateInSalaryPeriod,
+    isSalaryAccount,
+    summarizeSalaryPeriod,
+} from '../../utils/salaryPeriod';
 import DescriptionInput from '../Shared/DescriptionInput';
 import FinancialTrendChart from '../Shared/FinancialTrendChart';
 import HighQualityModal from '../Shared/HighQualityModal';
@@ -52,6 +59,64 @@ const getFinancialTone = (value) => {
     if (amount > 0) return 'success';
     if (amount < 0) return 'danger';
     return 'neutral';
+};
+
+const addMonthsClamped = (date, monthOffset) => {
+    if (!date) return null;
+    const result = new Date(date);
+    const originalDay = result.getDate();
+    result.setDate(1);
+    result.setMonth(result.getMonth() + monthOffset);
+    const lastDay = new Date(result.getFullYear(), result.getMonth() + 1, 0).getDate();
+    result.setDate(Math.min(originalDay, lastDay));
+    return result;
+};
+
+const startOfDay = (date) => {
+    if (!date) return null;
+    const result = new Date(date);
+    result.setHours(0, 0, 0, 0);
+    return result;
+};
+
+const getValidBillingDate = (year, month, billingDay) => {
+    const day = parseInt(billingDay) || 0;
+    if (day < 1 || day > 31) return null;
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    return new Date(year, month, Math.min(day, lastDay), 0, 0, 0, 0);
+};
+
+const getCreditCardBillingDay = (account) => {
+    const rawDay = account?.kesimGunu
+        || account?.statementDay
+        || account?.billingDay
+        || account?.statementClosingDay
+        || account?.ekstreKesimGunu;
+    const day = parseInt(rawDay) || 0;
+    return day >= 1 && day <= 31 ? day : null;
+};
+
+const getStatementPeriod = (account, selectedPeriod) => {
+    const billingDay = getCreditCardBillingDay(account);
+    if (!billingDay) return null;
+    const today = new Date();
+    const statementYear = selectedPeriod?.year || today.getFullYear();
+    const statementMonth = selectedPeriod?.month === 'all'
+        ? today.getMonth()
+        : (parseInt(selectedPeriod?.month) || today.getMonth() + 1) - 1;
+    const end = getValidBillingDate(statementYear, statementMonth, billingDay);
+    const startBase = new Date(statementYear, statementMonth - 1, 1);
+    const start = getValidBillingDate(startBase.getFullYear(), startBase.getMonth(), billingDay);
+    return start && end ? { start, end, statementYear, statementMonth, billingDay } : null;
+};
+
+const formatPeriodDate = (date) => date?.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' }) || '';
+
+const formatStatementRange = (period) => {
+    if (!period?.start || !period?.end) return '';
+    const inclusiveEnd = new Date(period.end);
+    inclusiveEnd.setDate(inclusiveEnd.getDate() - 1);
+    return `${formatPeriodDate(period.start)} - ${inclusiveEnd.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}`;
 };
 
 const getVisibleRange = (selectedPeriod) => {
@@ -215,6 +280,7 @@ const BudgetDashboard = ({
     netVarlik,
     tanimliFaturalar,
     bekleyenFaturalar,
+    maaslar,
     taksitler,
     taksitOde,
     toplamKalanTaksitBorcu,
@@ -256,6 +322,7 @@ const BudgetDashboard = ({
     islemSil
 }) => {
     const [historyAccount, setHistoryAccount] = useState(null);
+    const [salaryHistoryMode, setSalaryHistoryMode] = useState('calendar');
     const isNestedModalOpen = Boolean(historyAccount && aktifModal);
     const formatPara = (tutar) => gizliMod ? '****' : formatCurrencyPlain(parseAmount(tutar));
     const siraliKategoriListesi = sortTurkishText(kategoriListesi || []);
@@ -320,6 +387,38 @@ const BudgetDashboard = ({
             }, { income: 0, expense: 0, count: 0 });
     }, [tumIslemler]);
 
+    const getSalaryStatus = (salary) => {
+        const today = new Date();
+        const day = parseInt(salary?.gun);
+        const dueDate = Number.isFinite(day) && day >= 1 && day <= 31
+            ? new Date(today.getFullYear(), today.getMonth(), Math.min(day, new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()))
+            : null;
+        const paid = (tumIslemler || []).some((transaction) => {
+            const date = toDateSafe(transaction.tarih);
+            if (!date || !isSameCalendarMonth(date, today)) return false;
+            return transaction.islemTipi === 'gelir' &&
+                transaction.hesapId === salary.hesapId &&
+                (transaction.aciklama || '').toLocaleLowerCase('tr-TR').includes((salary.ad || '').toLocaleLowerCase('tr-TR'));
+        });
+
+        if (paid) return { label: 'Yattı', tone: 'success', dueDate };
+        if (dueDate && startOfDay(today) > startOfDay(dueDate)) return { label: 'Gecikti', tone: 'danger', dueDate };
+        return { label: 'Bekleniyor', tone: 'warning', dueDate };
+    };
+
+    const salaryRows = [...(maaslar || [])]
+        .sort((a, b) => (parseInt(a.gun) || 32) - (parseInt(b.gun) || 32))
+        .slice(0, 6);
+    const salaryExpectedTotal = (maaslar || []).reduce((sum, salary) => sum + parseAmount(salary.tutar), 0);
+    const salaryReceivedThisMonth = (maaslar || []).reduce((sum, salary) => {
+        const status = getSalaryStatus(salary);
+        return status.label === 'Yattı' ? sum + parseAmount(salary.tutar) : sum;
+    }, 0);
+    const nextSalary = [...(maaslar || [])]
+        .map((salary) => ({ salary, status: getSalaryStatus(salary) }))
+        .filter((item) => item.status.dueDate && item.status.label !== 'Yattı')
+        .sort((a, b) => a.status.dueDate - b.status.dueDate)[0];
+
     const kategoriToplam = (kategoriVerisi || []).reduce((sum, item) => sum + parseAmount(item.value), 0);
     const donutData = useMemo(() => {
         const sorted = [...(kategoriVerisi || [])]
@@ -333,10 +432,64 @@ const BudgetDashboard = ({
         }));
     }, [kategoriVerisi, kategoriToplam]);
 
+    const linkedInstallmentPaymentCounts = useMemo(() => {
+        const counts = new Map();
+
+        const addPayment = (installmentId, paymentKey) => {
+            if (!installmentId) return;
+            if (!counts.has(installmentId)) counts.set(installmentId, new Set());
+            counts.get(installmentId).add(paymentKey);
+        };
+
+        (tumIslemler || []).forEach((transaction) => {
+            const linkedIds = [
+                transaction.taksitId,
+                transaction.installmentId,
+                transaction.planId,
+                transaction.sourceId,
+                transaction.generatedFrom,
+                transaction.linkedTransactionId,
+            ].filter(Boolean);
+            if (linkedIds.length === 0) return;
+
+            const paymentKey = transaction.installmentNumber
+                || transaction.taksitNo
+                || transaction.taksitSirasi
+                || transaction.id
+                || `${transaction.tarih || ''}-${transaction.tutar || ''}-${transaction.aciklama || ''}`;
+
+            linkedIds.forEach((installmentId) => addPayment(installmentId, paymentKey));
+        });
+
+        return counts;
+    }, [tumIslemler]);
+
+    const getInstallmentPaidCount = useCallback((installment) => {
+        const count = parseInt(installment.taksitSayisi) || 0;
+        const remaining = parseInt(installment.remainingInstallments);
+        const directPaid = Math.max(
+            parseInt(installment.odenmisTaksit) || 0,
+            parseInt(installment.completedInstallments) || 0,
+            parseInt(installment.paidInstallmentCount) || 0,
+            Number.isFinite(remaining) && count > 0 ? Math.max(0, count - remaining) : 0,
+        );
+        const linkedPaid = linkedInstallmentPaymentCounts.get(installment.id)?.size || 0;
+        const status = String(installment.status || '').toLowerCase();
+        const isCompleted = installment.paid === true
+            || installment.isPaid === true
+            || Boolean(installment.paidAt)
+            || ['paid', 'completed', 'complete', 'odendi', 'tamamlandi'].includes(status);
+        const paidCount = isCompleted && count > 0
+            ? count
+            : Math.max(directPaid, linkedPaid);
+
+        return count > 0 ? Math.min(paidCount, count) : paidCount;
+    }, [linkedInstallmentPaymentCounts]);
+
     const monthlyInstallmentLoad = (taksitler || []).reduce((acc, item) => {
         const total = parseAmount(item.toplamTutar);
         const monthly = parseAmount(item.aylikTutar);
-        const paid = parseInt(item.odenmisTaksit) || 0;
+        const paid = getInstallmentPaidCount(item);
         const count = parseInt(item.taksitSayisi) || 0;
         if (count > 0 && paid >= count) return acc;
         return acc + Math.min(monthly, Math.max(0, total - (monthly * paid)));
@@ -404,22 +557,24 @@ const BudgetDashboard = ({
             });
 
         (taksitler || []).forEach((installment) => {
-            const paid = parseInt(installment.odenmisTaksit) || 0;
+            const paid = getInstallmentPaidCount(installment);
             const count = parseInt(installment.taksitSayisi) || 0;
             if (count > 0 && paid >= count) return;
             const baseDate = toDateSafe(installment.alisTarihi || installment.olusturmaTarihi);
-            const day = baseDate?.getDate();
-            const dueDate = day ? new Date(currentYear, currentMonth, Math.min(day, 28)) : null;
+            const dueDate = addMonthsClamped(baseDate, paid);
+            const isOverdue = dueDate && startOfDay(dueDate) < startOfDay(new Date());
+            const installmentForPayment = { ...installment, odenmisTaksit: paid };
             rows.push({
-                id: `installment-${installment.id}`,
+                id: `installment-${installment.id}-${paid + 1}`,
                 title: installment.baslik || 'Taksit',
-                type: `${paid}/${count || '-'} taksit`,
-                badgeLabel: 'Taksit',
+                type: `${paid + 1}/${count || '-'} taksit`,
+                badgeLabel: isOverdue ? 'Gecikti' : 'Taksit',
                 date: dueDate,
                 amount: parseAmount(installment.aylikTutar),
                 icon: CalendarClock,
-                tone: 'purple',
-                onClick: () => taksitOde(installment),
+                tone: isOverdue ? 'danger' : 'purple',
+                isOverdue,
+                onClick: () => taksitOde(installmentForPayment),
             });
         });
 
@@ -441,11 +596,20 @@ const BudgetDashboard = ({
 
         return rows
             .filter((row) => row.date)
-            .sort((a, b) => (a.date?.getTime() || Number.MAX_SAFE_INTEGER) - (b.date?.getTime() || Number.MAX_SAFE_INTEGER));
-    }, [abonelikler, abonelikOde, bekleyenFaturalar, hesaplar, modalAc, selectedPeriod, taksitOde, taksitler, tanimliFaturalar]);
+            .sort((a, b) => {
+                if (a.isOverdue !== b.isOverdue) return a.isOverdue ? -1 : 1;
+                return (a.date?.getTime() || Number.MAX_SAFE_INTEGER) - (b.date?.getTime() || Number.MAX_SAFE_INTEGER);
+            });
+    }, [abonelikler, abonelikOde, bekleyenFaturalar, getInstallmentPaidCount, hesaplar, modalAc, selectedPeriod, taksitOde, taksitler, tanimliFaturalar]);
 
     const recentTransactions = [...(filtrelenmisIslemler || [])]
         .sort((a, b) => (toDateSafe(b.tarih)?.getTime() || 0) - (toDateSafe(a.tarih)?.getTime() || 0));
+    const filteredTransactionsNet = recentTransactions.reduce((sum, transaction) => {
+        const amount = parseAmount(transaction.tutar);
+        if (transaction.islemTipi === 'gelir') return sum + amount;
+        if (transaction.islemTipi === 'gider') return sum - amount;
+        return sum;
+    }, 0);
 
     const subscriptionRows = [...(abonelikler || [])]
         .sort((a, b) => (parseInt(a.gun) || 32) - (parseInt(b.gun) || 32))
@@ -457,7 +621,7 @@ const BudgetDashboard = ({
 
     const installmentRows = [...(taksitler || [])]
         .filter((item) => {
-            const paid = parseInt(item.odenmisTaksit) || 0;
+            const paid = getInstallmentPaidCount(item);
             const count = parseInt(item.taksitSayisi) || 0;
             return !(count > 0 && paid >= count);
         })
@@ -515,6 +679,28 @@ const BudgetDashboard = ({
     const transactionDescription = isFiltering
         ? `${totalComparableTransactions} işlemden ${filteredCount} sonuç`
         : `${filteredCount} işlem`;
+    const accountNameById = useMemo(() => new Map(
+        (hesaplar || []).map((account) => [account.id, account.hesapAdi || 'İsimsiz hesap'])
+    ), [hesaplar]);
+
+    const getAccountName = (accountId) => accountNameById.get(accountId) || 'Hesap yok';
+
+    const getTransactionAccountLabel = (transaction) => {
+        if (transaction.islemTipi === 'transfer') {
+            const sourceName = transaction.kaynakId ? getAccountName(transaction.kaynakId) : null;
+            const targetName = transaction.hedefId ? getAccountName(transaction.hedefId) : null;
+            if (sourceName && targetName) return `${sourceName} → ${targetName}`;
+            return sourceName || targetName || 'Hesap yok';
+        }
+
+        return transaction.hesapId ? getAccountName(transaction.hesapId) : 'Hesap yok';
+    };
+
+    const getTransactionMeta = (transaction) => [
+        transaction.kategori || (transaction.islemTipi === 'transfer' ? 'Transfer' : 'Kategori yok'),
+        getTransactionAccountLabel(transaction),
+        tarihFormatla(transaction.tarih),
+    ].filter(Boolean).join(' · ');
 
     const transactionIcon = (transaction) => {
         if (transaction.islemTipi === 'gelir') return ArrowDownRight;
@@ -541,18 +727,113 @@ const BudgetDashboard = ({
         return -amount;
     };
 
-    const getAccountMovements = (accountId) => [...(tumIslemler || [])]
-        .filter((transaction) => (
-            isDateInPeriod(transaction.tarih, selectedPeriod) &&
-            (
-                transaction.hesapId === accountId ||
-                transaction.kaynakId === accountId ||
-                transaction.hedefId === accountId
-            )
-        ))
-        .sort((a, b) => (toDateSafe(b.tarih)?.getTime() || 0) - (toDateSafe(a.tarih)?.getTime() || 0));
+    const historyAccountStatementPeriod = historyAccount?.hesapTipi === 'krediKarti'
+        ? getStatementPeriod(historyAccount, selectedPeriod)
+        : null;
+    const historyAccountBillingDay = historyAccount?.hesapTipi === 'krediKarti'
+        ? getCreditCardBillingDay(historyAccount)
+        : null;
+    const historyAccountIsSalary = historyAccount ? isSalaryAccount(historyAccount) : false;
+    const historyAccountSalaryPeriod = historyAccountIsSalary
+        ? getSalaryPeriod(historyAccount, selectedPeriod)
+        : null;
 
-    const selectedAccountMovements = historyAccount ? getAccountMovements(historyAccount.id) : [];
+    const getAccountMovements = (account) => {
+        if (!account) return [];
+        const seen = new Map();
+        const isCreditCard = account.hesapTipi === 'krediKarti';
+        const useSalaryPeriod = isSalaryAccount(account) && salaryHistoryMode === 'salary' && historyAccountSalaryPeriod;
+
+        (tumIslemler || []).forEach((transaction) => {
+            const transactionDate = toDateSafe(transaction.tarih);
+            if (!transactionDate) return;
+            const isLinkedToAccount = transaction.hesapId === account.id ||
+                transaction.kaynakId === account.id ||
+                transaction.hedefId === account.id;
+            if (!isLinkedToAccount) return;
+
+            const isInPeriod = isCreditCard && historyAccountStatementPeriod
+                ? transactionDate >= historyAccountStatementPeriod.start && transactionDate < historyAccountStatementPeriod.end
+                : useSalaryPeriod
+                    ? isDateInSalaryPeriod(transactionDate, historyAccountSalaryPeriod)
+                : isDateInPeriod(transactionDate, selectedPeriod);
+            if (!isInPeriod) return;
+
+            seen.set(transaction.id || `${transactionDate.getTime()}-${transaction.tutar}-${transaction.aciklama}`, transaction);
+        });
+
+        return Array.from(seen.values())
+            .sort((a, b) => (toDateSafe(b.tarih)?.getTime() || 0) - (toDateSafe(a.tarih)?.getTime() || 0));
+    };
+
+    const selectedAccountMovements = historyAccount ? getAccountMovements(historyAccount) : [];
+    const selectedSalarySummary = historyAccountIsSalary && salaryHistoryMode === 'salary'
+        ? summarizeSalaryPeriod({ transactions: selectedAccountMovements, account: historyAccount, accounts: hesaplar })
+        : null;
+    const salaryAnalysisTotal = selectedSalarySummary
+        ? selectedSalarySummary.expense + selectedSalarySummary.transfer + selectedSalarySummary.investment + Math.max(0, selectedSalarySummary.remaining)
+        : 0;
+    const salaryAnalysisRows = selectedSalarySummary ? [
+        { label: 'Gerçek Harcama', value: selectedSalarySummary.expense, tone: 'danger' },
+        { label: 'Yatırım', value: selectedSalarySummary.investment, tone: 'info' },
+        { label: 'Transfer', value: selectedSalarySummary.transfer, tone: 'purple' },
+        { label: 'Kalan', value: Math.max(0, selectedSalarySummary.remaining), tone: 'success' },
+    ].filter((row) => row.value > 0 || salaryAnalysisTotal === 0) : [];
+    const salaryFlowData = (() => {
+        if (!selectedSalarySummary || !historyAccountSalaryPeriod) return [];
+        const buckets = [];
+        const cursor = new Date(historyAccountSalaryPeriod.start);
+        while (cursor < historyAccountSalaryPeriod.end) {
+            buckets.push({
+                key: cursor.toISOString().slice(0, 10),
+                name: cursor.getDate(),
+                income: 0,
+                expense: 0,
+                investment: 0,
+                transfer: 0,
+            });
+            cursor.setDate(cursor.getDate() + 1);
+        }
+        const bucketMap = new Map(buckets.map((bucket) => [bucket.key, bucket]));
+        selectedSalarySummary.movements.forEach(({ transaction, bucket }) => {
+            const date = toDateSafe(transaction.tarih);
+            if (!date) return;
+            const target = bucketMap.get(date.toISOString().slice(0, 10));
+            if (!target) return;
+            const amount = parseAmount(transaction.tutar);
+            if (bucket === 'income' || bucket === 'refund') target.income += amount;
+            if (bucket === 'expense') target.expense += amount;
+            if (bucket === 'investment') target.investment += amount;
+            if (bucket === 'transfer') target.transfer += amount;
+        });
+        return buckets;
+    })();
+    const statementExpenseTotal = historyAccount?.hesapTipi === 'krediKarti'
+        ? selectedAccountMovements
+            .filter((transaction) => transaction.islemTipi === 'gider' && transaction.hesapId === historyAccount.id)
+            .reduce((sum, transaction) => sum + parseAmount(transaction.tutar), 0)
+        : 0;
+    const statementRefundTotal = historyAccount?.hesapTipi === 'krediKarti'
+        ? selectedAccountMovements
+            .filter((transaction) => ['gelir', 'yatirim_satis', 'cari_iade'].includes(transaction.islemTipi) && transaction.hesapId === historyAccount.id)
+            .reduce((sum, transaction) => sum + parseAmount(transaction.tutar), 0)
+        : 0;
+    const statementPaymentTotal = historyAccount?.hesapTipi === 'krediKarti'
+        ? selectedAccountMovements
+            .filter((transaction) => transaction.islemTipi === 'transfer' && transaction.hedefId === historyAccount.id)
+            .reduce((sum, transaction) => sum + parseAmount(transaction.tutar), 0)
+        : 0;
+    const statementNetTotal = statementExpenseTotal - statementRefundTotal;
+    const historySubtitle = (() => {
+        if (!historyAccount) return '';
+        if (historyAccountIsSalary && salaryHistoryMode === 'salary' && historyAccountSalaryPeriod) {
+            return `${selectedAccountMovements.length} hareket · ${historyAccountSalaryPeriod.label} · ${formatSalaryPeriodRange(historyAccountSalaryPeriod)}`;
+        }
+        if (historyAccount.hesapTipi !== 'krediKarti') return `${selectedAccountMovements.length} hareket`;
+        if (!historyAccountBillingDay) return `${selectedAccountMovements.length} hareket · Ekstre dönemini hesaplamak için kesim günü tanımlayın.`;
+        const statementMonthName = MONTH_NAMES[historyAccountStatementPeriod?.statementMonth] || '';
+        return `${selectedAccountMovements.length} hareket · ${statementMonthName} ekstresi · ${formatStatementRange(historyAccountStatementPeriod)}`;
+    })();
 
     const getAccountMovementMeta = (transaction, accountId) => {
         if (transaction.islemTipi !== 'transfer') return `${transaction.kategori || 'Kategori yok'} · ${tarihFormatla(transaction.tarih)}`;
@@ -709,7 +990,7 @@ const BudgetDashboard = ({
                                     icon={transactionIcon(transaction)}
                                     tone={transactionTone(transaction)}
                                     title={transaction.aciklama || transaction.kategori || 'İşlem'}
-                                    meta={`${transaction.kategori || 'Kategori yok'} · ${tarihFormatla(transaction.tarih)}`}
+                                    meta={getTransactionMeta(transaction)}
                                     amount={`${prefix}${formatPara(transaction.tutar)}`}
                                     amountTone={amountTone}
                                     onClick={() => modalAc('duzenle_islem', transaction)}
@@ -729,8 +1010,8 @@ const BudgetDashboard = ({
                         {recentTransactions.length === 0 && <EmptyState title="İşlem bulunamadı" description="Arama veya kategori filtrenizi değiştirin." icon={Search} />}
                     </div>
                     <div className="qw-card-sticky-footer">
-                        <span>Net nakit akışı (bu ay)</span>
-                        <strong className={`is-${getFinancialTone(currentMonthNet)}`}>{formatPara(currentMonthNet)}</strong>
+                        <span>Filtrelenen işlemler toplamı</span>
+                        <strong className={`is-${getFinancialTone(filteredTransactionsNet)}`}>{formatPara(filteredTransactionsNet)}</strong>
                     </div>
                 </PremiumCard>
 
@@ -742,7 +1023,7 @@ const BudgetDashboard = ({
                     />
                     <div className="qw-account-list">
                         {siraliHesaplar.map((account) => (
-                            <button key={account.id} type="button" className="qw-account-row" title={account.hesapAdi} onClick={() => setHistoryAccount(account)}>
+                            <button key={account.id} type="button" className="qw-account-row" title={account.hesapAdi} onClick={() => { setSalaryHistoryMode('calendar'); setHistoryAccount(account); }}>
                                 <IconTile icon={Landmark} tone={account.hesapTipi === 'krediKarti' ? 'warning' : 'accent'} />
                                 <span>
                                     <strong>{account.hesapAdi}</strong>
@@ -994,8 +1275,9 @@ const BudgetDashboard = ({
                     </div>
                     <div className="qw-module-list">
                         {installmentRows.map((installment) => {
-                            const paid = parseInt(installment.odenmisTaksit) || 0;
+                            const paid = getInstallmentPaidCount(installment);
                             const count = parseInt(installment.taksitSayisi) || 0;
+                            const installmentForPayment = { ...installment, odenmisTaksit: paid };
                             return (
                                 <ModuleRow
                                     key={installment.id}
@@ -1004,7 +1286,7 @@ const BudgetDashboard = ({
                                     title={installment.baslik || 'Taksit'}
                                     meta={`${paid}/${count || '-'} taksit`}
                                     amount={formatPara(installment.aylikTutar)}
-                                    onClick={() => taksitOde(installment)}
+                                    onClick={() => taksitOde(installmentForPayment)}
                                     actions={(
                                         <>
                                             <button type="button" className="qw-mini-icon-button" aria-label="Düzenle" onClick={(event) => { event.stopPropagation(); modalAc('duzenle_taksit', installment); }}>
@@ -1024,6 +1306,39 @@ const BudgetDashboard = ({
             </div>
 
             <div className="qw-debt-grid">
+                <PremiumCard className="qw-module-card">
+                    <SectionHeader
+                        title="Maaşlar & Gelirler"
+                        description={`${(maaslar || []).length} gelir kaydı`}
+                        action={<QuickActionButton icon={Plus} onClick={() => modalAc('maas_ekle')}>Gelir</QuickActionButton>}
+                    />
+                    <div className="qw-summary-lines">
+                        <SummaryLine label="Toplam düzenli gelir" value={formatPara(salaryExpectedTotal)} tone="success" />
+                        <SummaryLine label="Bu ay beklenen" value={formatPara(salaryExpectedTotal)} />
+                        <SummaryLine label="Bu ay gelen" value={formatPara(salaryReceivedThisMonth)} tone="success" />
+                        <SummaryLine label="Sonraki gelir" value={nextSalary ? formatDayMonth(nextSalary.status.dueDate) : 'Yok'} />
+                    </div>
+                    <div className="qw-module-list">
+                        {salaryRows.map((salary) => {
+                            const status = getSalaryStatus(salary);
+                            return (
+                                <ModuleRow
+                                    key={salary.id}
+                                    icon={ArrowDownRight}
+                                    tone="success"
+                                    title={salary.ad || 'Gelir'}
+                                    meta={`Her ayın ${salary.gun || '-'} günü`}
+                                    amount={formatPara(salary.tutar)}
+                                    amountTone="success"
+                                    onClick={() => modalAc('duzenle_maas', salary)}
+                                    actions={<StatusBadge tone={status.tone}>{status.label}</StatusBadge>}
+                                />
+                            );
+                        })}
+                        {salaryRows.length === 0 && <EmptyState title="Gelir kaydı yok" description="Düzenli gelir ekleyerek takip edebilirsiniz." icon={ArrowDownRight} />}
+                    </div>
+                </PremiumCard>
+
                 <PremiumCard className="qw-module-card">
                     <SectionHeader
                         title="Borçlar"
@@ -1058,7 +1373,7 @@ const BudgetDashboard = ({
                 isOpen={Boolean(historyAccount)}
                 onClose={() => setHistoryAccount(null)}
                 title={historyAccount?.hesapAdi || ''}
-                subtitle={`${selectedAccountMovements.length} hareket`}
+                subtitle={historySubtitle}
                 width="min(760px, calc(100vw - 48px))"
                 maxHeight="min(760px, calc(100vh - 80px))"
                 className="qw-account-history-modal"
@@ -1084,6 +1399,78 @@ const BudgetDashboard = ({
                     minHeight: 0
                 }}
             >
+                {historyAccountIsSalary && (
+                    <div style={{ padding: '18px 28px 0' }}>
+                        <div className="qw-form-tabs" style={{ marginBottom: '16px' }}>
+                            <button type="button" className={salaryHistoryMode === 'calendar' ? 'is-active' : ''} onClick={() => setSalaryHistoryMode('calendar')}>Takvim Ayı</button>
+                            <button type="button" className={salaryHistoryMode === 'salary' ? 'is-active' : ''} onClick={() => setSalaryHistoryMode('salary')}>Maaş Dönemi</button>
+                        </div>
+                        {salaryHistoryMode === 'salary' && !historyAccountSalaryPeriod && (
+                            <div className="qw-empty-state" style={{ padding: '16px', alignItems: 'flex-start', textAlign: 'left' }}>
+                                <strong>Maaş günü eksik</strong>
+                                <span>Maaş dönemi analizi için hesap düzenleme alanından maaş günü tanımlayın.</span>
+                            </div>
+                        )}
+                        {salaryHistoryMode === 'salary' && historyAccountSalaryPeriod && selectedSalarySummary && (
+                            <>
+                                <div className="qw-summary-lines qw-summary-lines--wide" style={{ marginBottom: '16px' }}>
+                                    <SummaryLine label="Toplam Gelir" value={formatPara(selectedSalarySummary.income + selectedSalarySummary.refund)} tone="success" />
+                                    <SummaryLine label="Toplam Harcama" value={formatPara(selectedSalarySummary.expense)} tone="danger" />
+                                    <SummaryLine label="Transfer" value={formatPara(selectedSalarySummary.transfer)} tone="purple" />
+                                    <SummaryLine label="Yatırıma Aktarılan" value={formatPara(selectedSalarySummary.investment)} tone="info" />
+                                    <SummaryLine label="Dönem Sonu Kalan" value={formatPara(selectedSalarySummary.remaining)} tone={getFinancialTone(selectedSalarySummary.remaining)} />
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '16px', marginBottom: '16px' }}>
+                                    <div style={{ padding: '16px', borderRadius: '18px', background: '#f8fafc' }}>
+                                        <strong style={{ display: 'block', marginBottom: '12px', color: '#0f172a' }}>Bu maaş nereye gitti?</strong>
+                                        {salaryAnalysisRows.map((row) => {
+                                            const percent = salaryAnalysisTotal > 0 ? Math.round((row.value / salaryAnalysisTotal) * 100) : 0;
+                                            return (
+                                                <div key={row.label} style={{ marginBottom: '12px' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '6px', fontSize: '13px', fontWeight: 700, color: '#475569' }}>
+                                                        <span>%{percent} {row.label}</span>
+                                                        <span>{formatPara(row.value)}</span>
+                                                    </div>
+                                                    <div className="qw-progress-track">
+                                                        <span className={row.tone === 'danger' ? 'is-warning' : ''} style={{ width: `${Math.min(percent, 100)}%` }} />
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    <div style={{ padding: '16px', borderRadius: '18px', background: '#f8fafc', minHeight: '190px' }}>
+                                        <strong style={{ display: 'block', marginBottom: '12px', color: '#0f172a' }}>Maaş Akışı</strong>
+                                        <ResponsiveContainer width="100%" height={145}>
+                                            <AreaChart data={salaryFlowData}>
+                                                <Area type="monotone" dataKey="income" stroke="#10b981" fill="#d1fae5" strokeWidth={2} />
+                                                <Area type="monotone" dataKey="expense" stroke="#ef4444" fill="#fee2e2" strokeWidth={2} />
+                                                <Area type="monotone" dataKey="investment" stroke="#3b82f6" fill="#dbeafe" strokeWidth={2} />
+                                                <Area type="monotone" dataKey="transfer" stroke="#8b5cf6" fill="#ede9fe" strokeWidth={2} />
+                                            </AreaChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                )}
+                {historyAccount?.hesapTipi === 'krediKarti' && (
+                    <div style={{ padding: '18px 28px 0' }}>
+                        {!historyAccountBillingDay ? (
+                            <div className="qw-empty-state" style={{ padding: '16px', alignItems: 'flex-start', textAlign: 'left' }}>
+                                <strong>Ekstre kesim günü eksik</strong>
+                                <span>Ekstre dönemini hesaplamak için hesap düzenleme alanından kesim günü tanımlayın. Şimdilik seçili takvim dönemi gösteriliyor.</span>
+                            </div>
+                        ) : (
+                            <div className="qw-summary-lines qw-summary-lines--wide">
+                                <SummaryLine label="Ekstre Harcamaları" value={formatPara(statementExpenseTotal)} tone="danger" />
+                                <SummaryLine label="İadeler" value={statementRefundTotal > 0 ? `-${formatPara(statementRefundTotal)}` : formatPara(0)} tone={statementRefundTotal > 0 ? 'success' : 'neutral'} />
+                                <SummaryLine label="Net Ekstre Tutarı" value={formatPara(statementNetTotal)} tone={getFinancialTone(-statementNetTotal)} />
+                                <SummaryLine label="Kart Ödemeleri" value={formatPara(statementPaymentTotal)} tone="info" />
+                            </div>
+                        )}
+                    </div>
+                )}
                 <div className="qw-transaction-list qw-account-history-list">
                     {historyAccount && selectedAccountMovements.map((transaction) => {
                         const movementAmount = getAccountMovementAmount(transaction, historyAccount.id);
