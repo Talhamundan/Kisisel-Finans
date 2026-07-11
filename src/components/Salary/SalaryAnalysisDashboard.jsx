@@ -38,6 +38,8 @@ import {
     getSalaryPeriod,
     isDateInSalaryPeriod,
     isSalaryAccount,
+    resolveTransactionFlow,
+    summarizeDebtPayments,
     summarizeSalaryPeriod,
 } from '../../utils/salaryPeriod';
 import {
@@ -109,46 +111,7 @@ const getTransactionIncomeType = (transaction) => transaction.gelirTuru || trans
 
 const getLinkedSalaryId = (transaction) => String(transaction.bagliMaasId || transaction.maasId || transaction.recurringIncomeId || transaction.gelirId || transaction.sourceId || '').trim();
 
-const isNearAmount = (left, right) => {
-    const a = Math.abs(parseAmount(left));
-    const b = Math.abs(parseAmount(right));
-    return Math.abs(a - b) <= Math.max(1, Math.max(a, b) * 0.01);
-};
-
-const findStrongFlowTarget = ({ transfer, transactions, accounts }) => {
-    if (transfer?.islemTipi !== 'transfer' || !transfer?.hedefId) return null;
-    const transferDate = toDateSafe(transfer.tarih);
-    if (!transferDate) return null;
-    const maxDate = new Date(transferDate);
-    maxDate.setDate(maxDate.getDate() + 3);
-    const candidates = (transactions || [])
-        .filter((transaction) => {
-            if (!transaction || transaction.id === transfer.id) return false;
-            const date = toDateSafe(transaction.tarih);
-            if (!date || date < transferDate || date > maxDate) return false;
-            if (!isNearAmount(transaction.tutar, transfer.tutar)) return false;
-            const startsFromTarget = transaction.hesapId === transfer.hedefId || transaction.kaynakId === transfer.hedefId;
-            if (!startsFromTarget) return false;
-            const targetAccount = accounts.find((account) => account.id === transaction.hedefId);
-            const text = normalizeText(`${transaction.kategori || ''} ${transaction.aciklama || ''}`);
-            return targetAccount?.hesapTipi === 'krediKarti' ||
-                targetAccount?.hesapTipi === 'yatirim' ||
-                transaction.taksitId ||
-                transaction.borcId ||
-                transaction.islemTipi === 'yatirim_alis' ||
-                transaction.islemTipi === 'gider' ||
-                transaction.islemTipi === 'transfer' ||
-                text.includes('kredi') ||
-                text.includes('kart') ||
-                text.includes('taksit') ||
-                text.includes('yatırım');
-        })
-        .sort((a, b) => (toDateSafe(a.tarih)?.getTime() || 0) - (toDateSafe(b.tarih)?.getTime() || 0));
-
-    return candidates.length === 1 ? candidates[0] : null;
-};
-
-const buildPeriodMovements = ({ transactions, account, accounts, period }) => {
+const buildPeriodMovements = ({ transactions, account, accounts, period, installmentPlans = [] }) => {
     const periodKey = getPeriodKey(period);
     const primaryRows = (transactions || [])
         .filter((transaction) => {
@@ -158,11 +121,11 @@ const buildPeriodMovements = ({ transactions, account, accounts, period }) => {
         })
         .sort((a, b) => (toDateSafe(a.tarih)?.getTime() || 0) - (toDateSafe(b.tarih)?.getTime() || 0));
     const downstreamRows = primaryRows
-        .map((transaction) => findStrongFlowTarget({ transfer: transaction, transactions, accounts }))
+        .map((transaction) => resolveTransactionFlow({ transfer: transaction, transactions, accounts, sourceAccountId: account.id, installmentPlans })?.finalPaymentTransaction)
         .filter(Boolean);
     const rows = Array.from(new Map([...primaryRows, ...downstreamRows].map((transaction) => [transaction.id, transaction])).values())
         .sort((a, b) => (toDateSafe(a.tarih)?.getTime() || 0) - (toDateSafe(b.tarih)?.getTime() || 0));
-    return { rows, summary: summarizeSalaryPeriod({ transactions: rows, account, accounts }) };
+    return { rows, summary: summarizeSalaryPeriod({ transactions: rows, account, accounts, installmentPlans }) };
 };
 
 const estimateBalances = ({ transactions, account, period, periodAccountNet }) => {
@@ -420,6 +383,7 @@ const SalaryTooltip = ({ active, payload }) => {
 const SalaryAnalysisDashboard = ({
     hesaplar = [],
     maaslar = [],
+    taksitler = [],
     tumIslemler = [],
     selectedPeriod,
     modalAc,
@@ -443,10 +407,10 @@ const SalaryAnalysisDashboard = ({
     const previousSalaryPeriod = selectedAccount ? getSalaryPeriod(selectedAccount, previousPeriod) : null;
 
     const { rows: periodTransactions, summary } = selectedAccount && period
-        ? buildPeriodMovements({ transactions: tumIslemler, account: selectedAccount, accounts: hesaplar, period })
-        : { rows: [], summary: summarizeSalaryPeriod({ transactions: [], account: selectedAccount, accounts: hesaplar }) };
+        ? buildPeriodMovements({ transactions: tumIslemler, account: selectedAccount, accounts: hesaplar, period, installmentPlans: taksitler })
+        : { rows: [], summary: summarizeSalaryPeriod({ transactions: [], account: selectedAccount, accounts: hesaplar, installmentPlans: taksitler }) };
     const { rows: previousTransactions, summary: previousSummary } = selectedAccount && previousSalaryPeriod
-        ? buildPeriodMovements({ transactions: tumIslemler, account: selectedAccount, accounts: hesaplar, period: previousSalaryPeriod })
+        ? buildPeriodMovements({ transactions: tumIslemler, account: selectedAccount, accounts: hesaplar, period: previousSalaryPeriod, installmentPlans: taksitler })
         : { rows: [], summary: null };
 
     const periodIncome = summary.income + summary.refund;
@@ -479,10 +443,19 @@ const SalaryAnalysisDashboard = ({
     }, period?.start || null);
     const chartPeriod = period ? { ...period, start: chartStart || period.start } : null;
     const dailyRemaining = chartPeriod ? buildDailyRemaining({ period: chartPeriod, movements: summary.movements, startBalance: balances.startBalance, accountId: selectedAccount?.id }) : [];
+    const debtSummary = summarizeDebtPayments(summary);
+    const debtDetailGroups = [
+        { title: 'Kredi Kartı Ödemeleri', subtype: 'creditCard', tone: 'warning', icon: CreditCard, empty: 'Kredi kartı ödemesi yok' },
+        { title: 'Kredi Taksitleri', subtype: 'loan', tone: 'warning', icon: Landmark, empty: 'Kredi taksiti yok' },
+        { title: 'Taksitli Alışverişler', subtype: 'installmentPurchase', tone: 'purple', icon: ReceiptText, empty: 'Taksitli alışveriş yok' },
+    ].map((group) => ({
+        ...group,
+        items: debtSummary.items.filter((item) => item.subtype === group.subtype),
+    }));
 
     const distributionRows = [
         { key: 'realExpense', label: 'Gerçek Harcama', value: summary.realExpense, description: 'Market, fatura, ulaşım ve benzeri günlük harcamalar' },
-        { key: 'debtPayment', label: 'Kredi ve Kart Ödemeleri', value: summary.debtPayment, description: 'Kart borcu, kredi taksiti ve nakit avans geri ödemeleri' },
+        { key: 'debtPayment', label: 'Kredi ve Kart Ödemeleri', value: debtSummary.total, description: 'Kart borcu, kredi taksiti ve taksitli alışveriş ödemeleri' },
         { key: 'investment', label: 'Yatırım', value: summary.investment, description: 'Yatırım hesapları ve varlık alımları' },
         { key: 'transfer', label: 'Diğer Transferler', value: summary.transfer, description: 'Maaş dışı hesaplar arası aktarımlar' },
         { key: 'remaining', label: 'Kalan', value: Math.max(0, periodNet), description: periodNet < 0 ? 'Negatif kalan dönem başı bakiyeden kullanıldı' : 'Dönem içinde kalan tutar' },
@@ -528,7 +501,7 @@ const SalaryAnalysisDashboard = ({
     const last6Periods = Array.from({ length: 6 }, (_, index) => addMonths(analysisPeriod, index - 5)).map((periodItem) => {
         const salaryPeriod = selectedAccount ? getSalaryPeriod(selectedAccount, periodItem) : null;
         const data = selectedAccount && salaryPeriod
-            ? buildPeriodMovements({ transactions: tumIslemler, account: selectedAccount, accounts: hesaplar, period: salaryPeriod }).summary
+            ? buildPeriodMovements({ transactions: tumIslemler, account: selectedAccount, accounts: hesaplar, period: salaryPeriod, installmentPlans: taksitler }).summary
             : null;
         return {
             name: `${MONTH_NAMES[periodItem.month - 1].slice(0, 3)} Maaş`,
@@ -549,11 +522,14 @@ const SalaryAnalysisDashboard = ({
         'İade': 'refund',
         'İncelenmemiş': 'neutral',
     };
+    const movementByTransactionId = new Map(summary.movements
+        .filter((movement) => movement.transaction?.id)
+        .map((movement) => [movement.transaction.id, movement]));
     const categories = Array.from(new Set(periodTransactions.map((transaction) => transaction.kategori).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'tr-TR'));
     const filteredTransactions = periodTransactions
         .map((transaction) => {
-            const movement = summary.movements.find((item) => item.transaction === transaction);
-            return { transaction, bucket: movement?.bucket || 'neutral' };
+            const movement = movementByTransactionId.get(transaction.id) || summary.movements.find((item) => item.transaction === transaction);
+            return { transaction, bucket: movement?.bucket || 'neutral', movement };
         })
         .filter(({ transaction, bucket }) => {
             const classMatch = classFilter === 'Tümü' || bucket === classMap[classFilter];
@@ -577,11 +553,28 @@ const SalaryAnalysisDashboard = ({
             : periodKey;
         return `${getTransactionIncomeType(transaction) || 'Gelir'} · ${salary?.ad || 'Bağlı maaş'} · ${periodLabel}`;
     };
+    const getFlowAnalysisLabel = (movement) => {
+        if (movement?.resolvedFlow && movement.transaction?.islemTipi === 'transfer') {
+            if (movement.resolvedFlow.resolvedPurpose === 'CREDIT_CARD_PAYMENT') return 'Kredi kartı ödemesine aktarılan ara transfer';
+            if (movement.resolvedFlow.resolvedPurpose === 'LOAN_PAYMENT') return 'Kredi ödemesine aktarılan ara transfer';
+            if (movement.resolvedFlow.resolvedPurpose === 'INSTALLMENT_PURCHASE') return 'Taksitli alışverişe aktarılan ara transfer';
+            if (movement.resolvedFlow.resolvedPurpose === 'INVESTMENT') return 'Yatırıma aktarılan ara transfer';
+        }
+        if (movement?.flowChild) {
+            if (movement.bucket === 'debtPayment') {
+                const subtype = summary.debtPaymentBreakdown.items.find((item) => item.finalTransaction?.id === movement.transaction?.id)?.subtype;
+                if (subtype === 'creditCard') return 'Nihai kredi kartı ödemesi';
+                if (subtype === 'installmentPurchase') return 'Nihai taksitli alışveriş ödemesi';
+                return 'Nihai kredi taksiti';
+            }
+            if (movement.bucket === 'investment') return 'Nihai yatırım hareketi';
+        }
+        return '';
+    };
 
     const largestExpenses = summary.movements.filter((item) => item.counted !== false && item.bucket === 'realExpense').sort((a, b) => parseAmount(b.transaction.tutar) - parseAmount(a.transaction.tutar)).slice(0, 5);
     const largestInvestments = summary.movements.filter((item) => item.counted !== false && item.bucket === 'investment').sort((a, b) => parseAmount(b.transaction.tutar) - parseAmount(a.transaction.tutar)).slice(0, 3);
     const largestDebt = summary.movements.filter((item) => item.counted !== false && item.bucket === 'debtPayment').sort((a, b) => parseAmount(b.transaction.tutar) - parseAmount(a.transaction.tutar)).slice(0, 3);
-    const largestDebtPayment = largestDebt[0];
     const debtRatio = periodIncome > 0 ? Math.round((summary.debtPayment / periodIncome) * 100) : 0;
     const investmentRatio = periodIncome > 0 ? Math.round((summary.investment / periodIncome) * 100) : 0;
     const expenseTotal = expenseByCategory.reduce((sum, item) => sum + item.value, 0);
@@ -831,13 +824,13 @@ const SalaryAnalysisDashboard = ({
                 </PremiumCard>
 
                 <PremiumCard className="salary-card">
-                    <SectionHeader title="Kredi ve Kart Yükü" description={`Bu maaşın %${debtRatio}'i borç ödemelerine gitti.`} />
+                    <SectionHeader title="Kredi ve Kart Yükü" description="Kart, kredi ve taksitli alışveriş ödemeleri." />
                     <div className="salary-metric-list">
-                        <SummaryTile label="Kredi kartı / kredi / taksit" value={formatPara(summary.debtPayment)} tone="warning" />
-                        <SummaryTile label="Dönem gelirine oran" value={`%${debtRatio}`} />
-                        <SummaryTile label="En büyük borç ödemesi" value={largestDebtPayment ? formatPara(largestDebtPayment.transaction.tutar) : '-'} />
+                        <SummaryTile label="Kredi kartı ödemeleri" value={formatPara(debtSummary.creditCard)} tone="warning" />
+                        <SummaryTile label="Kredi taksitleri" value={formatPara(debtSummary.loan)} tone="warning" />
+                        <SummaryTile label="Taksitli alışverişler" value={formatPara(debtSummary.installmentPurchase)} tone="purple" />
+                        <SummaryTile label="Toplam borç ödemesi" value={formatPara(debtSummary.total)} tone="warning" />
                     </div>
-                    <div className="salary-wide-progress"><span style={{ width: `${Math.min(debtRatio, 100)}%` }} /></div>
                 </PremiumCard>
 
                 <PremiumCard className="salary-card">
@@ -906,50 +899,91 @@ const SalaryAnalysisDashboard = ({
                 </div>
             </PremiumCard>
 
-            <PremiumCard className="salary-card salary-card--compact salary-transactions-card">
-                <SectionHeader title="Dönem İşlemleri" description={`${filteredTransactions.length} hareket`} />
-                <div className="salary-transaction-toolbar">
-                    <label className="qw-search-field">
-                        <Search size={17} strokeWidth={2.3} />
-                        <input type="text" placeholder="İşlem, kategori veya tutar ara" value={searchText} onChange={(event) => setSearchText(event.target.value)} />
-                    </label>
-                    <select value={classFilter} onChange={(event) => setClassFilter(event.target.value)}>
-                        {['Tümü', 'Gelir', 'Gerçek Harcama', 'Borç Ödemesi', 'Yatırım', 'Transfer', 'İade', 'İncelenmemiş'].map((item) => <option key={item} value={item}>{item}</option>)}
-                    </select>
-                    <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
-                        <option value="Tümü">Tüm kategoriler</option>
-                        {categories.map((category) => <option key={category} value={category}>{category}</option>)}
-                    </select>
-                </div>
-                <div className="qw-transaction-list qw-transaction-list--scroll salary-transactions">
-                    {filteredTransactions.map(({ transaction, bucket }) => {
-                        const amount = getAccountMovementAmount(transaction, selectedAccount.id);
-                        const meta = bucketMeta[bucket] || bucketMeta.neutral;
-                        return (
-                            <TransactionRow
-                                key={transaction.id}
-                                icon={meta.icon}
-                                tone={meta.tone}
-                                title={transaction.aciklama || transaction.kategori || 'İşlem'}
-                                meta={`${getSalaryRelationMeta(transaction) || `${meta.label} · ${transaction.kategori || 'Kategori yok'}`} · ${tarihFormatla(transaction.tarih)}`}
-                                amount={`${amount > 0 ? '+' : amount < 0 ? '-' : ''}${formatPara(Math.abs(amount))}`}
-                                amountTone={moneyTone(amount)}
-                                onClick={() => modalAc?.('duzenle_islem', transaction)}
-                                actions={islemSil ? (
-                                    <button type="button" className="qw-mini-icon-button is-danger" aria-label="Sil" onClick={(event) => { event.stopPropagation(); islemSil(transaction.id); }}>
-                                        <Trash2 size={15} />
-                                    </button>
-                                ) : null}
-                            />
-                        );
-                    })}
-                    {filteredTransactions.length === 0 && <EmptyState title="Bu dönemde hareket yok" description="Filtreleri değiştirin veya farklı bir maaş dönemi seçin." icon={Search} />}
-                </div>
-                <div className="qw-card-sticky-footer">
-                    <span>Filtrelenen işlemler neti</span>
-                    <strong className={`is-${moneyTone(filteredTransactionsNet)}`}>{formatPara(filteredTransactionsNet)}</strong>
-                </div>
-            </PremiumCard>
+            <div className="salary-bottom-grid">
+                <PremiumCard className="salary-card salary-card--compact salary-debt-details-card">
+                    <SectionHeader title="Borç Ödeme Detayları" description="Bu maaş dönemindeki kart, kredi ve taksit ödemeleri." />
+                    <div className="salary-debt-breakdown salary-debt-breakdown--details">
+                        {debtDetailGroups.map((group) => (
+                            <div className="salary-debt-group" key={group.subtype}>
+                                <strong>{group.title}</strong>
+                                <div className="salary-debt-detail-list">
+                                    {group.items.map((item) => {
+                                        const transaction = item.finalTransaction || item.transaction;
+                                        return (
+                                            <button
+                                                type="button"
+                                                className="salary-debt-detail-row"
+                                                key={`${transaction?.id || item.transaction?.id}-${item.subtype}`}
+                                                onClick={() => transaction && modalAc?.('duzenle_islem', transaction)}
+                                            >
+                                                <IconTile icon={group.icon} tone={group.tone} />
+                                                <span>
+                                                    <b>{transaction?.aciklama || transaction?.kategori || item.transaction?.aciklama || 'Borç ödemesi'}</b>
+                                                    <small>{group.title}</small>
+                                                </span>
+                                                <em>{formatPara(item.amount)}</em>
+                                            </button>
+                                        );
+                                    })}
+                                    {group.items.length === 0 && (
+                                        <div className="salary-debt-detail-row is-empty">
+                                            <IconTile icon={group.icon} tone="neutral" />
+                                            <span><b>{group.empty}</b><small>Bu dönemde kayıt yok</small></span>
+                                            <em>{formatPara(0)}</em>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </PremiumCard>
+
+                <PremiumCard className="salary-card salary-card--compact salary-transactions-card">
+                    <SectionHeader title="Dönem İşlemleri" description={`${filteredTransactions.length} hareket`} />
+                    <div className="salary-transaction-toolbar">
+                        <label className="qw-search-field">
+                            <Search size={17} strokeWidth={2.3} />
+                            <input type="text" placeholder="İşlem, kategori veya tutar ara" value={searchText} onChange={(event) => setSearchText(event.target.value)} />
+                        </label>
+                        <select value={classFilter} onChange={(event) => setClassFilter(event.target.value)}>
+                            {['Tümü', 'Gelir', 'Gerçek Harcama', 'Borç Ödemesi', 'Yatırım', 'Transfer', 'İade', 'İncelenmemiş'].map((item) => <option key={item} value={item}>{item}</option>)}
+                        </select>
+                        <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
+                            <option value="Tümü">Tüm kategoriler</option>
+                            {categories.map((category) => <option key={category} value={category}>{category}</option>)}
+                        </select>
+                    </div>
+                    <div className="qw-transaction-list qw-transaction-list--scroll salary-transactions">
+                        {filteredTransactions.map(({ transaction, bucket, movement }) => {
+                            const amount = getAccountMovementAmount(transaction, selectedAccount.id);
+                            const meta = bucketMeta[bucket] || bucketMeta.neutral;
+                            const flowLabel = getFlowAnalysisLabel(movement);
+                            return (
+                                <TransactionRow
+                                    key={transaction.id}
+                                    icon={meta.icon}
+                                    tone={meta.tone}
+                                    title={transaction.aciklama || transaction.kategori || 'İşlem'}
+                                    meta={`${flowLabel || getSalaryRelationMeta(transaction) || `${meta.label} · ${transaction.kategori || 'Kategori yok'}`} · ${tarihFormatla(transaction.tarih)}`}
+                                    amount={`${amount > 0 ? '+' : amount < 0 ? '-' : ''}${formatPara(Math.abs(amount))}`}
+                                    amountTone={moneyTone(amount)}
+                                    onClick={() => modalAc?.('duzenle_islem', transaction)}
+                                    actions={islemSil ? (
+                                        <button type="button" className="qw-mini-icon-button is-danger" aria-label="Sil" onClick={(event) => { event.stopPropagation(); islemSil(transaction.id); }}>
+                                            <Trash2 size={15} />
+                                        </button>
+                                    ) : null}
+                                />
+                            );
+                        })}
+                        {filteredTransactions.length === 0 && <EmptyState title="Bu dönemde hareket yok" description="Filtreleri değiştirin veya farklı bir maaş dönemi seçin." icon={Search} />}
+                    </div>
+                    <div className="qw-card-sticky-footer">
+                        <span>Filtrelenen işlemler neti</span>
+                        <strong className={`is-${moneyTone(filteredTransactionsNet)}`}>{formatPara(filteredTransactionsNet)}</strong>
+                    </div>
+                </PremiumCard>
+            </div>
         </div>
     );
 };

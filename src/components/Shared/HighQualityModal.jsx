@@ -58,7 +58,7 @@ const HighQualityModal = ({
             onClick={onClose}
         >
             <div
-                className={className}
+                className={['hq-modal', className].filter(Boolean).join(' ')}
                 style={{
                     background: 'var(--surface-solid, #ffffff)',
                     width: '100%',

@@ -9,8 +9,8 @@ import {
     KeyRound,
     LogOut,
     Moon,
-    Search,
     Settings,
+    Sun,
     Target,
     UserRound,
     WalletCards,
@@ -46,7 +46,9 @@ const Header = ({
     selectedPeriod,
     setSelectedPeriod,
     availablePeriods,
-    showPeriodFilter = true
+    showPeriodFilter = true,
+    theme = 'light',
+    onThemeToggle
 }) => {
     const years = availablePeriods?.years?.length ? availablePeriods.years : [selectedPeriod.year];
     const availableMonths = availablePeriods?.monthsByYear?.[selectedPeriod.year] || [];
@@ -98,11 +100,6 @@ const Header = ({
                 </div>
 
                 <div className="qw-topbar-actions">
-                    <label className="qw-global-search hide-on-mobile">
-                        <Search size={17} strokeWidth={2.25} />
-                        <input type="search" placeholder="Global arama" aria-label="Global arama" />
-                    </label>
-
                     {showPeriodFilter && (
                         <div className="period-filter qw-period-filter" aria-label="Dönem filtresi">
                             <select
@@ -150,8 +147,15 @@ const Header = ({
                     >
                         {gizliMod ? <EyeOff size={18} strokeWidth={2.25} /> : <Eye size={18} strokeWidth={2.25} />}
                     </button>
-                    <button type="button" className="qw-icon-button" aria-label="Tema">
-                        <Moon size={18} strokeWidth={2.25} />
+                    <button
+                        type="button"
+                        className="qw-icon-button"
+                        aria-label={theme === 'dark' ? 'Açık temaya geç' : 'Koyu temaya geç'}
+                        onClick={onThemeToggle}
+                    >
+                        {theme === 'dark'
+                            ? <Sun size={18} strokeWidth={2.25} />
+                            : <Moon size={18} strokeWidth={2.25} />}
                     </button>
                     <button type="button" className="qw-profile-pill" onClick={() => setAktifModal('ayarlar_yonetim')}>
                         <span className="qw-avatar">{initial}</span>

@@ -338,6 +338,7 @@ const BudgetDashboard = ({
 }) => {
     const [historyAccount, setHistoryAccount] = useState(null);
     const [salaryHistoryMode, setSalaryHistoryMode] = useState('calendar');
+    const [flowChartMode, setFlowChartMode] = useState('expense');
     const isNestedModalOpen = Boolean(historyAccount && aktifModal);
     const formatPara = (tutar) => gizliMod ? '****' : formatCurrencyPlain(parseAmount(tutar));
     const siraliKategoriListesi = sortTurkishText(kategoriListesi || []);
@@ -352,7 +353,7 @@ const BudgetDashboard = ({
         }
     };
 
-    const cashFlowData = useMemo(() => {
+    const cashflowDataset = useMemo(() => {
         const buckets = getVisibleRange(selectedPeriod || {});
         const bucketMap = new Map(buckets.map((item, index) => [item.key, { item, index }]));
 
@@ -378,6 +379,9 @@ const BudgetDashboard = ({
         name: item.name,
         value: parseAmount(item.value),
     })), [gunlukVeri]);
+    const dailyExpenseTotal = useMemo(() => (
+        (gunlukVeri || []).reduce((sum, item) => sum + parseAmount(item.value), 0)
+    ), [gunlukVeri]);
 
     const todayStats = useMemo(() => {
         const today = new Date();
@@ -850,21 +854,45 @@ const BudgetDashboard = ({
 
             <div className="qw-priority-grid">
                 <FinancialTrendChart
-                        title="Nakit Akışı"
-                        subtitle={`${aktifAy} hareket görünümü`}
-                        data={cashFlowData}
-                        series={[
+                        title={flowChartMode === 'cashflow' ? 'Nakit Akışı' : 'Günlük Harcama'}
+                        subtitle={flowChartMode === 'cashflow' ? `${aktifAy} hareket görünümü` : `${aktifAy} gerçek tüketim görünümü`}
+                        data={flowChartMode === 'cashflow' ? cashflowDataset : gunlukVeri}
+                        headerControl={(
+                            <div className="qw-chart-tabs" aria-label="Grafik türü">
+                                <button
+                                    type="button"
+                                    className={flowChartMode === 'expense' ? 'is-active' : ''}
+                                    onClick={() => setFlowChartMode('expense')}
+                                >
+                                    Günlük Harcama
+                                </button>
+                                <button
+                                    type="button"
+                                    className={flowChartMode === 'cashflow' ? 'is-active' : ''}
+                                    onClick={() => setFlowChartMode('cashflow')}
+                                >
+                                    Nakit Akışı
+                                </button>
+                            </div>
+                        )}
+                        series={flowChartMode === 'cashflow' ? [
                             { key: 'gelir', label: 'Gelir', tone: 'success', color: '#16a36a' },
                             { key: 'gider', label: 'Gider', tone: 'danger', color: '#e25555', fillOpacity: 0.14, fillOpacityEnd: 0.01 },
+                        ] : [
+                            { key: 'value', label: 'Gerçek Harcama', tone: 'danger', color: '#e25555', fillOpacity: 0.16, fillOpacityEnd: 0.01 },
                         ]}
-                        summary={{
+                        summary={flowChartMode === 'cashflow' ? {
                             label: 'Net',
                             value: formatPara(selectedPeriodNet),
                             tone: getFinancialTone(selectedPeriodNet),
+                        } : {
+                            label: 'Toplam',
+                            value: formatPara(dailyExpenseTotal),
+                            tone: 'danger',
                         }}
                         valueFormatter={(value) => gizliMod ? '****' : formatCurrencyPlain(value)}
                         yTickFormatter={(value) => gizliMod ? '****' : `${new Intl.NumberFormat('tr-TR', { notation: 'compact', maximumFractionDigits: 1 }).format(value)} ₺`}
-                        tooltipRows={(item, formatter) => {
+                        tooltipRows={flowChartMode === 'cashflow' ? ((item, formatter) => {
                             const income = parseAmount(item?.gelir);
                             const expense = -Math.abs(parseAmount(item?.gider));
                             const net = parseAmount(item?.net);
@@ -873,9 +901,11 @@ const BudgetDashboard = ({
                                 { label: 'Gider', value: formatter(expense), tone: 'danger' },
                                 { label: 'Net', value: formatter(net), tone: getFinancialTone(net) },
                             ];
-                        }}
-                        emptyTitle="Nakit akışı oluşmadı"
-                        emptyDescription="Seçili dönemde gelir veya gider hareketi yok."
+                        }) : ((item, formatter) => [
+                            { label: 'Gerçek Harcama', value: formatter(parseAmount(item?.value)), tone: 'danger' },
+                        ])}
+                        emptyTitle={flowChartMode === 'cashflow' ? 'Nakit akışı oluşmadı' : 'Günlük harcama yok'}
+                        emptyDescription={flowChartMode === 'cashflow' ? 'Seçili dönemde gelir veya gider hareketi yok.' : 'Seçili dönemde gerçek tüketim harcaması görünmüyor.'}
                         emptyIcon={LineChart}
                     />
 
@@ -915,7 +945,7 @@ const BudgetDashboard = ({
             <div className="qw-transactions-accounts-grid">
                 <PremiumCard className="qw-transactions-card">
                     <SectionHeader
-                        title="Son İşlemler"
+                        title="Hareket geçmişi"
                         description={transactionDescription}
                         action={(
                             <div className="qw-export-actions">

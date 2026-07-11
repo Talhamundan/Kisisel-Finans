@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { ayIsmiGetir, normalizeAssetType, toDateSafe } from '../utils/helpers';
 import { useNotifications } from './useNotifications';
 import { isDateInPeriod, MONTH_NAMES, periodLabel } from '../utils/period';
+import { classifySalaryMovement } from '../utils/salaryPeriod';
 
 export const useCalculations = (
     data, // { hesaplar, islemler, portfoy, abonelikler, taksitler, maaslar, bekleyenFaturalar, tanimliFaturalar, besVerisi, satislar, borclar }
@@ -112,7 +113,10 @@ export const useCalculations = (
 
     // Charts
     const kategoriVerisi = filtrelenmisIslemler.filter(i => i.islemTipi === 'gider' && i.kategori !== 'Transfer').reduce((acc, curr) => { const mevcut = acc.find(item => item.name === curr.kategori); if (mevcut) { mevcut.value += curr.tutar; } else { acc.push({ name: curr.kategori, value: curr.tutar }); } return acc; }, []);
-    const gunlukVeri = (() => {
+    const realExpenseTransactions = filtrelenmisIslemler.filter((transaction) => (
+        classifySalaryMovement(transaction, transaction.hesapId || transaction.kaynakId, hesaplar) === 'realExpense'
+    ));
+    const dailyExpenseDataset = (() => {
         const today = new Date();
         const isCurrentYear = selectedPeriod.year === today.getFullYear();
         const isFutureYear = selectedPeriod.year > today.getFullYear();
@@ -153,9 +157,7 @@ export const useCalculations = (
                 };
             });
 
-        filtrelenmisIslemler
-            .filter(i => i.islemTipi === 'gider')
-            .forEach((curr) => {
+        realExpenseTransactions.forEach((curr) => {
                 const d = toDateSafe(curr.tarih);
                 if (!d) return;
                 const index = selectedPeriod.month === 'all' ? d.getMonth() : d.getDate() - 1;
@@ -165,14 +167,17 @@ export const useCalculations = (
         return buckets;
     })();
 
+    const gunlukVeri = dailyExpenseDataset;
+
     let gunlukOrtalama = 0;
     {
+        const realExpenseTotal = realExpenseTransactions.reduce((acc, item) => acc + (parseFloat(item.tutar) || 0), 0);
         if (selectedPeriod.month === 'all') {
             const veriBulunanAySayisi = gunlukVeri.filter((item) => item.value > 0).length || 1;
-            gunlukOrtalama = toplamGider / veriBulunanAySayisi;
+            gunlukOrtalama = realExpenseTotal / veriBulunanAySayisi;
         } else {
             const gunSayisi = Math.max(1, gunlukVeri.length || 1);
-            gunlukOrtalama = toplamGider / gunSayisi;
+            gunlukOrtalama = realExpenseTotal / gunSayisi;
         }
     }
 
@@ -282,7 +287,7 @@ export const useCalculations = (
         // Data
         filtrelenmisIslemler, yatirimIslemleri,
         bugunGider, toplamGelir, toplamGider, harcananLimit, limitYuzdesi, limitRenk,
-        kategoriVerisi, gunlukVeri, gunlukOrtalama,
+        kategoriVerisi, gunlukVeri, dailyExpenseDataset, gunlukOrtalama,
 
         // Investment Stats
         portfoyGuncelDegeri, toplamKarZarar, portfoyVerisi,

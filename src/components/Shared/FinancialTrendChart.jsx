@@ -49,6 +49,7 @@ const FinancialTrendChart = ({
     emptyIcon = LineChart,
     className = '',
     areaClassName = 'qw-chart-area',
+    headerControl,
 }) => {
     const visibleSeries = series.filter((item) => item?.key);
     const hasData = data.some((item) => visibleSeries.some((serie) => Math.abs(Number(item[serie.key]) || 0) > 0));
@@ -66,24 +67,27 @@ const FinancialTrendChart = ({
                 title={title}
                 description={subtitle}
                 action={(
-                    <div className="qw-chart-legend">
-                        {visibleSeries.map((serie) => (
-                            <span
-                                key={serie.key}
-                                className={typeof serie.tone === 'string' ? `is-${serie.tone}` : ''}
-                                style={{ '--legend-color': serie.color }}
-                            >
-                                {serie.legendLabel || serie.label}
-                            </span>
-                        ))}
-                        {summary && (
-                            <span
-                                className={summary.tone ? `is-${summary.tone}` : ''}
-                                style={{ '--legend-color': summary.color }}
-                            >
-                                {summary.label} {summary.value}
-                            </span>
-                        )}
+                    <div className="qw-chart-header-action">
+                        {headerControl}
+                        <div className="qw-chart-legend">
+                            {visibleSeries.map((serie) => (
+                                <span
+                                    key={serie.key}
+                                    className={typeof serie.tone === 'string' ? `is-${serie.tone}` : ''}
+                                    style={{ '--legend-color': serie.color }}
+                                >
+                                    {serie.legendLabel || serie.label}
+                                </span>
+                            ))}
+                            {summary && (
+                                <span
+                                    className={summary.tone ? `is-${summary.tone}` : ''}
+                                    style={{ '--legend-color': summary.color }}
+                                >
+                                    {summary.label} {summary.value}
+                                </span>
+                            )}
+                        </div>
                     </div>
                 )}
             />

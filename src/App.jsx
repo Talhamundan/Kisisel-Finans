@@ -30,6 +30,15 @@ import Feedback from './components/Feedback';
 import { formatMoneyInputValue, inputStyle } from './utils/helpers';
 import { buildAvailablePeriods, getDefaultPeriod, getLatestAvailablePeriod, isDateInPeriod, isPeriodAvailable, readInitialPeriod } from './utils/period';
 
+const getInitialTheme = () => {
+    if (typeof window === 'undefined') return 'light';
+
+    const storedTheme = window.localStorage.getItem('theme');
+    if (storedTheme === 'light' || storedTheme === 'dark') return storedTheme;
+
+    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+};
+
 function App() {
     // 1. AUTH
     const { user, loading, girisYap, cikisYap: authLogout } = useAuth();
@@ -41,6 +50,7 @@ function App() {
     const [seciliVeri, setSeciliVeri] = useState(null);
     const [formTab, setFormTab] = useState("islem");
     const [selectedPeriod, setSelectedPeriod] = useState(readInitialPeriod);
+    const [theme, setTheme] = useState(getInitialTheme);
 
     // Login / Code Login
     const [alanKodu, setAlanKodu] = useState(localStorage.getItem("alan_kodu") || "");
@@ -56,6 +66,17 @@ function App() {
     const calculations = useCalculations(data, gizliMod, data.aylikLimit, selectedPeriod);
     const budgetActions = useBudgetActions(user, alanKodu, data.hesaplar, data.kategoriListesi, data.tanimliFaturalar);
     const investmentActions = useInvestmentActions(user, alanKodu);
+
+    useEffect(() => {
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+        localStorage.setItem('theme', theme);
+
+        const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+        if (themeColorMeta) {
+            themeColorMeta.setAttribute('content', theme === 'dark' ? '#111318' : '#6d5dfc');
+        }
+    }, [theme]);
 
     const availablePeriods = useMemo(() => {
         const dates = data.islemler.map((item) => item.tarih);
@@ -471,7 +492,7 @@ function App() {
 
     return (
         <div className="app-shell">
-            <ToastContainer position="top-right" autoClose={2000} theme="light" />
+            <ToastContainer position="top-right" autoClose={2000} theme={theme === 'dark' ? 'dark' : 'light'} />
 
             <ModalManager
                 aktifModal={aktifModal} setAktifModal={setAktifModal}
@@ -594,6 +615,8 @@ function App() {
                 setSelectedPeriod={setSelectedPeriod}
                 availablePeriods={availablePeriods}
                 showPeriodFilter={!['hedefler', 'takvim', 'maasAnalizi'].includes(anaSekme)}
+                theme={theme}
+                onThemeToggle={() => setTheme((currentTheme) => currentTheme === 'dark' ? 'light' : 'dark')}
             />
 
             <Notifications
@@ -723,6 +746,7 @@ function App() {
                 <SalaryAnalysisDashboard
                     hesaplar={data.hesaplar}
                     maaslar={data.maaslar}
+                    taksitler={data.taksitler}
                     tumIslemler={data.islemler}
                     selectedPeriod={selectedPeriod}
                     modalAc={modalAc}
