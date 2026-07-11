@@ -280,7 +280,6 @@ const BudgetDashboard = ({
     netVarlik,
     tanimliFaturalar,
     bekleyenFaturalar,
-    maaslar,
     taksitler,
     taksitOde,
     toplamKalanTaksitBorcu,
@@ -319,7 +318,8 @@ const BudgetDashboard = ({
     borclar,
     excelIndir,
     excelYukle,
-    islemSil
+    islemSil,
+    setAnaSekme
 }) => {
     const [historyAccount, setHistoryAccount] = useState(null);
     const [salaryHistoryMode, setSalaryHistoryMode] = useState('calendar');
@@ -386,38 +386,6 @@ const BudgetDashboard = ({
                 return acc;
             }, { income: 0, expense: 0, count: 0 });
     }, [tumIslemler]);
-
-    const getSalaryStatus = (salary) => {
-        const today = new Date();
-        const day = parseInt(salary?.gun);
-        const dueDate = Number.isFinite(day) && day >= 1 && day <= 31
-            ? new Date(today.getFullYear(), today.getMonth(), Math.min(day, new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()))
-            : null;
-        const paid = (tumIslemler || []).some((transaction) => {
-            const date = toDateSafe(transaction.tarih);
-            if (!date || !isSameCalendarMonth(date, today)) return false;
-            return transaction.islemTipi === 'gelir' &&
-                transaction.hesapId === salary.hesapId &&
-                (transaction.aciklama || '').toLocaleLowerCase('tr-TR').includes((salary.ad || '').toLocaleLowerCase('tr-TR'));
-        });
-
-        if (paid) return { label: 'Yattı', tone: 'success', dueDate };
-        if (dueDate && startOfDay(today) > startOfDay(dueDate)) return { label: 'Gecikti', tone: 'danger', dueDate };
-        return { label: 'Bekleniyor', tone: 'warning', dueDate };
-    };
-
-    const salaryRows = [...(maaslar || [])]
-        .sort((a, b) => (parseInt(a.gun) || 32) - (parseInt(b.gun) || 32))
-        .slice(0, 6);
-    const salaryExpectedTotal = (maaslar || []).reduce((sum, salary) => sum + parseAmount(salary.tutar), 0);
-    const salaryReceivedThisMonth = (maaslar || []).reduce((sum, salary) => {
-        const status = getSalaryStatus(salary);
-        return status.label === 'Yattı' ? sum + parseAmount(salary.tutar) : sum;
-    }, 0);
-    const nextSalary = [...(maaslar || [])]
-        .map((salary) => ({ salary, status: getSalaryStatus(salary) }))
-        .filter((item) => item.status.dueDate && item.status.label !== 'Yattı')
-        .sort((a, b) => a.status.dueDate - b.status.dueDate)[0];
 
     const kategoriToplam = (kategoriVerisi || []).reduce((sum, item) => sum + parseAmount(item.value), 0);
     const donutData = useMemo(() => {
@@ -770,44 +738,6 @@ const BudgetDashboard = ({
     const selectedSalarySummary = historyAccountIsSalary && salaryHistoryMode === 'salary'
         ? summarizeSalaryPeriod({ transactions: selectedAccountMovements, account: historyAccount, accounts: hesaplar })
         : null;
-    const salaryAnalysisTotal = selectedSalarySummary
-        ? selectedSalarySummary.expense + selectedSalarySummary.transfer + selectedSalarySummary.investment + Math.max(0, selectedSalarySummary.remaining)
-        : 0;
-    const salaryAnalysisRows = selectedSalarySummary ? [
-        { label: 'Gerçek Harcama', value: selectedSalarySummary.expense, tone: 'danger' },
-        { label: 'Yatırım', value: selectedSalarySummary.investment, tone: 'info' },
-        { label: 'Transfer', value: selectedSalarySummary.transfer, tone: 'purple' },
-        { label: 'Kalan', value: Math.max(0, selectedSalarySummary.remaining), tone: 'success' },
-    ].filter((row) => row.value > 0 || salaryAnalysisTotal === 0) : [];
-    const salaryFlowData = (() => {
-        if (!selectedSalarySummary || !historyAccountSalaryPeriod) return [];
-        const buckets = [];
-        const cursor = new Date(historyAccountSalaryPeriod.start);
-        while (cursor < historyAccountSalaryPeriod.end) {
-            buckets.push({
-                key: cursor.toISOString().slice(0, 10),
-                name: cursor.getDate(),
-                income: 0,
-                expense: 0,
-                investment: 0,
-                transfer: 0,
-            });
-            cursor.setDate(cursor.getDate() + 1);
-        }
-        const bucketMap = new Map(buckets.map((bucket) => [bucket.key, bucket]));
-        selectedSalarySummary.movements.forEach(({ transaction, bucket }) => {
-            const date = toDateSafe(transaction.tarih);
-            if (!date) return;
-            const target = bucketMap.get(date.toISOString().slice(0, 10));
-            if (!target) return;
-            const amount = parseAmount(transaction.tutar);
-            if (bucket === 'income' || bucket === 'refund') target.income += amount;
-            if (bucket === 'expense') target.expense += amount;
-            if (bucket === 'investment') target.investment += amount;
-            if (bucket === 'transfer') target.transfer += amount;
-        });
-        return buckets;
-    })();
     const statementExpenseTotal = historyAccount?.hesapTipi === 'krediKarti'
         ? selectedAccountMovements
             .filter((transaction) => transaction.islemTipi === 'gider' && transaction.hesapId === historyAccount.id)
@@ -1305,40 +1235,7 @@ const BudgetDashboard = ({
                 </PremiumCard>
             </div>
 
-            <div className="qw-debt-grid">
-                <PremiumCard className="qw-module-card">
-                    <SectionHeader
-                        title="Maaşlar & Gelirler"
-                        description={`${(maaslar || []).length} gelir kaydı`}
-                        action={<QuickActionButton icon={Plus} onClick={() => modalAc('maas_ekle')}>Gelir</QuickActionButton>}
-                    />
-                    <div className="qw-summary-lines">
-                        <SummaryLine label="Toplam düzenli gelir" value={formatPara(salaryExpectedTotal)} tone="success" />
-                        <SummaryLine label="Bu ay beklenen" value={formatPara(salaryExpectedTotal)} />
-                        <SummaryLine label="Bu ay gelen" value={formatPara(salaryReceivedThisMonth)} tone="success" />
-                        <SummaryLine label="Sonraki gelir" value={nextSalary ? formatDayMonth(nextSalary.status.dueDate) : 'Yok'} />
-                    </div>
-                    <div className="qw-module-list">
-                        {salaryRows.map((salary) => {
-                            const status = getSalaryStatus(salary);
-                            return (
-                                <ModuleRow
-                                    key={salary.id}
-                                    icon={ArrowDownRight}
-                                    tone="success"
-                                    title={salary.ad || 'Gelir'}
-                                    meta={`Her ayın ${salary.gun || '-'} günü`}
-                                    amount={formatPara(salary.tutar)}
-                                    amountTone="success"
-                                    onClick={() => modalAc('duzenle_maas', salary)}
-                                    actions={<StatusBadge tone={status.tone}>{status.label}</StatusBadge>}
-                                />
-                            );
-                        })}
-                        {salaryRows.length === 0 && <EmptyState title="Gelir kaydı yok" description="Düzenli gelir ekleyerek takip edebilirsiniz." icon={ArrowDownRight} />}
-                    </div>
-                </PremiumCard>
-
+            <div className="qw-debt-grid qw-debt-grid--single">
                 <PremiumCard className="qw-module-card">
                     <SectionHeader
                         title="Borçlar"
@@ -1412,45 +1309,23 @@ const BudgetDashboard = ({
                             </div>
                         )}
                         {salaryHistoryMode === 'salary' && historyAccountSalaryPeriod && selectedSalarySummary && (
-                            <>
-                                <div className="qw-summary-lines qw-summary-lines--wide" style={{ marginBottom: '16px' }}>
-                                    <SummaryLine label="Toplam Gelir" value={formatPara(selectedSalarySummary.income + selectedSalarySummary.refund)} tone="success" />
-                                    <SummaryLine label="Toplam Harcama" value={formatPara(selectedSalarySummary.expense)} tone="danger" />
-                                    <SummaryLine label="Transfer" value={formatPara(selectedSalarySummary.transfer)} tone="purple" />
-                                    <SummaryLine label="Yatırıma Aktarılan" value={formatPara(selectedSalarySummary.investment)} tone="info" />
-                                    <SummaryLine label="Dönem Sonu Kalan" value={formatPara(selectedSalarySummary.remaining)} tone={getFinancialTone(selectedSalarySummary.remaining)} />
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '16px', marginBottom: '16px' }}>
-                                    <div style={{ padding: '16px', borderRadius: '18px', background: '#f8fafc' }}>
-                                        <strong style={{ display: 'block', marginBottom: '12px', color: '#0f172a' }}>Bu maaş nereye gitti?</strong>
-                                        {salaryAnalysisRows.map((row) => {
-                                            const percent = salaryAnalysisTotal > 0 ? Math.round((row.value / salaryAnalysisTotal) * 100) : 0;
-                                            return (
-                                                <div key={row.label} style={{ marginBottom: '12px' }}>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '6px', fontSize: '13px', fontWeight: 700, color: '#475569' }}>
-                                                        <span>%{percent} {row.label}</span>
-                                                        <span>{formatPara(row.value)}</span>
-                                                    </div>
-                                                    <div className="qw-progress-track">
-                                                        <span className={row.tone === 'danger' ? 'is-warning' : ''} style={{ width: `${Math.min(percent, 100)}%` }} />
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                    <div style={{ padding: '16px', borderRadius: '18px', background: '#f8fafc', minHeight: '190px' }}>
-                                        <strong style={{ display: 'block', marginBottom: '12px', color: '#0f172a' }}>Maaş Akışı</strong>
-                                        <ResponsiveContainer width="100%" height={145}>
-                                            <AreaChart data={salaryFlowData}>
-                                                <Area type="monotone" dataKey="income" stroke="#10b981" fill="#d1fae5" strokeWidth={2} />
-                                                <Area type="monotone" dataKey="expense" stroke="#ef4444" fill="#fee2e2" strokeWidth={2} />
-                                                <Area type="monotone" dataKey="investment" stroke="#3b82f6" fill="#dbeafe" strokeWidth={2} />
-                                                <Area type="monotone" dataKey="transfer" stroke="#8b5cf6" fill="#ede9fe" strokeWidth={2} />
-                                            </AreaChart>
-                                        </ResponsiveContainer>
-                                    </div>
-                                </div>
-                            </>
+                            <div className="qw-summary-lines qw-summary-lines--wide" style={{ marginBottom: '16px' }}>
+                                <SummaryLine label="Gelir" value={formatPara(selectedSalarySummary.income + selectedSalarySummary.refund)} tone="success" />
+                                <SummaryLine label="Harcama" value={formatPara(selectedSalarySummary.expense)} tone="danger" />
+                                <SummaryLine label="Transfer" value={formatPara(selectedSalarySummary.transfer)} tone="purple" />
+                                <SummaryLine label="Yatırım" value={formatPara(selectedSalarySummary.investment)} tone="info" />
+                                <SummaryLine label="Kalan" value={formatPara(selectedSalarySummary.remaining)} tone={getFinancialTone(selectedSalarySummary.remaining)} />
+                                <button
+                                    type="button"
+                                    className="qw-submit-button"
+                                    onClick={() => {
+                                        setHistoryAccount(null);
+                                        setAnaSekme?.('maasAnalizi');
+                                    }}
+                                >
+                                    Detaylı Maaş Analizi
+                                </button>
+                            </div>
                         )}
                     </div>
                 )}

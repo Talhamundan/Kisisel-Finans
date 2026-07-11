@@ -61,7 +61,8 @@ export const classifySalaryMovement = (transaction, accountId, accounts = []) =>
     }
 
     if (type === 'transfer') {
-        if (transaction?.kaynakId !== accountId) return 'income';
+        if (transaction?.kaynakId !== accountId) return 'neutral';
+        if (targetType === 'krediKarti' || category.includes('kredi') || description.includes('kredi') || description.includes('kart')) return 'debtPayment';
         if (targetType === 'yatirim' || category.includes('yatırım') || description.includes('yatırım')) return 'investment';
         return 'transfer';
     }
@@ -70,17 +71,32 @@ export const classifySalaryMovement = (transaction, accountId, accounts = []) =>
         return 'investment';
     }
 
-    if (type === 'gider') return 'expense';
-    return 'expense';
+    if (
+        transaction?.taksitId ||
+        category.includes('taksit') ||
+        category.includes('kredi') ||
+        category.includes('nakit avans') ||
+        description.includes('taksit') ||
+        description.includes('kredi kartı') ||
+        description.includes('kredi karti')
+    ) {
+        return 'debtPayment';
+    }
+
+    if (type === 'gider') return 'realExpense';
+    return 'neutral';
 };
 
 export const summarizeSalaryPeriod = ({ transactions = [], account, accounts = [] }) => {
     const summary = {
         income: 0,
+        realExpense: 0,
+        debtPayment: 0,
         expense: 0,
         transfer: 0,
         investment: 0,
         refund: 0,
+        neutral: 0,
         remaining: 0,
         totalOutflow: 0,
         movements: [],
@@ -93,13 +109,16 @@ export const summarizeSalaryPeriod = ({ transactions = [], account, accounts = [
 
         summary.movements.push({ transaction, bucket, signedAmount });
         if (bucket === 'income') summary.income += amount;
-        if (bucket === 'expense') summary.expense += amount;
+        if (bucket === 'realExpense') summary.realExpense += amount;
+        if (bucket === 'debtPayment') summary.debtPayment += amount;
         if (bucket === 'transfer') summary.transfer += amount;
         if (bucket === 'investment') summary.investment += amount;
         if (bucket === 'refund') summary.refund += amount;
+        if (bucket === 'neutral') summary.neutral += amount;
     });
 
-    summary.totalOutflow = summary.expense + summary.transfer + summary.investment;
+    summary.expense = summary.realExpense + summary.debtPayment;
+    summary.totalOutflow = summary.realExpense + summary.debtPayment + summary.transfer + summary.investment;
     summary.remaining = summary.income + summary.refund - summary.totalOutflow;
     return summary;
 };

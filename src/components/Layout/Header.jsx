@@ -1,6 +1,7 @@
 import React from 'react';
 import {
     Bell,
+    Banknote,
     CalendarDays,
     Eye,
     EyeOff,
@@ -19,6 +20,7 @@ import AppLogo from '../Shared/AppLogo';
 
 const navItems = [
     { id: 'butcem', label: 'Bütçem', icon: Home },
+    { id: 'maasAnalizi', label: 'Maaş Analizi', icon: Banknote },
     { id: 'yatirimlar', label: 'Yatırımlar', icon: WalletCards },
     { id: 'hedefler', label: 'Hedefler', icon: Target },
     { id: 'takvim', label: 'Takvim', icon: CalendarDays },
@@ -26,6 +28,7 @@ const navItems = [
 
 const pageMeta = {
     butcem: ['Bütçem', 'Finansal durumuna genel bakış'],
+    maasAnalizi: ['Maaş Analizi', 'Maaş dönemindeki gelir, harcama ve kalan tutarı incele'],
     yatirimlar: ['Yatırımlar', 'Portföy ve varlık performansı'],
     hedefler: ['Hedefler', 'Envanter ve birikim planları'],
     takvim: ['Finans Takvimi', 'Yaklaşan hareketlerini izle'],

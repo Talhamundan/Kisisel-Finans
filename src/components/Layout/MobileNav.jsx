@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Briefcase, Target, CalendarDays } from 'lucide-react';
+import { Home, Briefcase, Target, CalendarDays, Banknote } from 'lucide-react';
 
 const MobileNav = ({ anaSekme, setAnaSekme }) => {
     return (
@@ -35,6 +35,24 @@ const MobileNav = ({ anaSekme, setAnaSekme }) => {
             >
                 <Home size={22} strokeWidth={anaSekme === 'butcem' ? 3 : 2} />
                 <span style={{ fontSize: 10, fontWeight: anaSekme === 'butcem' ? 'bold' : 'normal' }}>Ana Sayfa</span>
+            </button>
+
+            <button
+                onClick={() => setAnaSekme('maasAnalizi')}
+                style={{
+                    background: 'transparent',
+                    border: 'none',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 4,
+                    color: anaSekme === 'maasAnalizi' ? '#805ad5' : '#a0aec0',
+                    padding: 0,
+                    flex: 1
+                }}
+            >
+                <Banknote size={22} strokeWidth={anaSekme === 'maasAnalizi' ? 3 : 2} />
+                <span style={{ fontSize: 10, fontWeight: anaSekme === 'maasAnalizi' ? 'bold' : 'normal' }}>Maaş</span>
             </button>
 
             <button

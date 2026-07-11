@@ -12,6 +12,7 @@ import BudgetDashboard from './components/Budget/BudgetDashboard';
 import InvestmentDashboard from './components/Investment/InvestmentDashboard';
 import GoalsInventory from './components/Budget/GoalsInventory';
 import FinanceCalendarDashboard from './components/Calendar/FinanceCalendarDashboard';
+import SalaryAnalysisDashboard from './components/Salary/SalaryAnalysisDashboard';
 import ModalManager from './components/Modals/ModalManager';
 import MobileNav from './components/Layout/MobileNav';
 import AppLogo from './components/Shared/AppLogo';
@@ -588,7 +589,7 @@ function App() {
                 selectedPeriod={selectedPeriod}
                 setSelectedPeriod={setSelectedPeriod}
                 availablePeriods={availablePeriods}
-                showPeriodFilter={!['hedefler', 'takvim'].includes(anaSekme)}
+                showPeriodFilter={!['hedefler', 'takvim', 'maasAnalizi'].includes(anaSekme)}
             />
 
             <Notifications
@@ -706,6 +707,20 @@ function App() {
                     excelIndir={() => budgetActions.excelIndir(data.islemler)}
                     excelYukle={budgetActions.excelYukle}
                     islemSil={budgetActions.islemSil}
+                    setAnaSekme={setAnaSekme}
+                />
+            )}
+
+            {/* MAAŞ ANALİZİ */}
+            {anaSekme === "maasAnalizi" && (
+                <SalaryAnalysisDashboard
+                    hesaplar={data.hesaplar}
+                    maaslar={data.maaslar}
+                    tumIslemler={data.islemler}
+                    selectedPeriod={selectedPeriod}
+                    modalAc={modalAc}
+                    islemSil={budgetActions.islemSil}
+                    normalSil={budgetActions.normalSil}
                 />
             )}
 
