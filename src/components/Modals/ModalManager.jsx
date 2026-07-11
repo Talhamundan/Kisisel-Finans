@@ -4,6 +4,7 @@ import DescriptionInput from '../Shared/DescriptionInput';
 import { formatCurrencyPlain, inputStyle, tarihSadeceGunAyYil, sortTurkishText } from '../../utils/helpers';
 import { toast } from 'react-toastify';
 import Swal from 'sweetalert2';
+import { MONTH_NAMES } from '../../utils/period';
 
 const FieldLabel = ({ children }) => (
     <label style={{ display: 'block', margin: '0 0 6px', fontSize: '12px', fontWeight: 700, color: '#64748b' }}>
@@ -11,25 +12,56 @@ const FieldLabel = ({ children }) => (
     </label>
 );
 
+const salaryPaymentTypes = ["Maaş Ödemesi", "Maaş Avansı", "Maaş Farkı", "Ek Maaş"];
+const incomeTypes = [...salaryPaymentTypes, "Prim / İkramiye", "Masraf İadesi", "Diğer Gelir"];
+const getPeriodOptions = (dateValue = new Date()) => {
+    const date = dateValue ? new Date(dateValue) : new Date();
+    const base = Number.isNaN(date.getTime()) ? new Date() : date;
+    return [-1, 0, 1, 2].map((offset) => {
+        const optionDate = new Date(base.getFullYear(), base.getMonth() + offset, 1);
+        const value = `${optionDate.getFullYear()}-${String(optionDate.getMonth() + 1).padStart(2, '0')}`;
+        return { value, label: `${MONTH_NAMES[optionDate.getMonth()]} ${optionDate.getFullYear()} Maaş Dönemi` };
+    });
+};
+
 // Sub-component to handle Portföy Düzenleme with own state
-const IslemEkleMobilModal = ({ close, islemEkle, hesaplar, kategoriListesi, inputStyle, tumIslemler }) => {
+const IslemEkleMobilModal = ({ close, islemEkle, hesaplar, kategoriListesi, inputStyle, tumIslemler, maaslar = [] }) => {
     const [hesapId, setHesapId] = useState("");
     const [islemTipi, setIslemTipi] = useState("gider");
     const [kategori, setKategori] = useState(kategoriListesi && kategoriListesi[0] ? kategoriListesi[0] : "");
     const [aciklama, setAciklama] = useState("");
     const [tutar, setTutar] = useState("");
+    const [gelirTuru, setGelirTuru] = useState("Diğer Gelir");
+    const [bagliMaasId, setBagliMaasId] = useState("");
 
     // Default to current date and time
     const tzOffset = (new Date()).getTimezoneOffset() * 60000;
     const localISOTime = (new Date(Date.now() - tzOffset)).toISOString().slice(0, 16);
     const [tarih, setTarih] = useState(localISOTime);
+    const [maasDonemi, setMaasDonemi] = useState(getPeriodOptions(localISOTime)[1]?.value || getPeriodOptions(localISOTime)[0]?.value || "");
 
     const [isProcessing, setIsProcessing] = useState(false);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        const needsSalaryLink = islemTipi === 'gelir' && salaryPaymentTypes.includes(gelirTuru);
+        if (needsSalaryLink && (!bagliMaasId || !maasDonemi)) {
+            toast.warning("Maaş ödeme türleri için bağlı maaş ve maaş dönemi seçiniz.");
+            return;
+        }
         setIsProcessing(true);
-        const success = await islemEkle(e, { hesapId, islemTipi, kategori, aciklama, tutar, tarih });
+        const success = await islemEkle(e, {
+            hesapId,
+            islemTipi,
+            kategori,
+            aciklama,
+            tutar,
+            tarih,
+            gelirTuru: islemTipi === 'gelir' ? gelirTuru : undefined,
+            bagliMaasId: needsSalaryLink ? bagliMaasId : undefined,
+            maasDonemi: needsSalaryLink ? maasDonemi : undefined,
+            salaryPeriod: needsSalaryLink ? maasDonemi : undefined,
+        });
         setIsProcessing(false);
         if (success !== false) close();
     }
@@ -50,6 +82,24 @@ const IslemEkleMobilModal = ({ close, islemEkle, hesaplar, kategoriListesi, inpu
                 <select value={kategori} onChange={e => setKategori(e.target.value)} style={{ ...inputStyle }}>
                     {sortTurkishText(kategoriListesi || []).map(k => <option key={k} value={k}>{k}</option>)}
                 </select>
+                {islemTipi === 'gelir' && (
+                    <>
+                        <select value={gelirTuru} onChange={e => setGelirTuru(e.target.value)} style={{ ...inputStyle }}>
+                            {incomeTypes.map(tur => <option key={tur} value={tur}>{tur}</option>)}
+                        </select>
+                        {salaryPaymentTypes.includes(gelirTuru) && (
+                            <>
+                                <select value={bagliMaasId} onChange={e => setBagliMaasId(e.target.value)} style={{ ...inputStyle }} required>
+                                    <option value="">Bağlı Maaş</option>
+                                    {(maaslar || []).map(maas => <option key={maas.id} value={maas.id}>{maas.ad}</option>)}
+                                </select>
+                                <select value={maasDonemi} onChange={e => setMaasDonemi(e.target.value)} style={{ ...inputStyle }} required>
+                                    {getPeriodOptions(tarih).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                                </select>
+                            </>
+                        )}
+                    </>
+                )}
                 <div style={{ display: 'flex', gap: '10px' }}>
                     <DescriptionInput
                         value={aciklama}
@@ -210,7 +260,11 @@ const ModalManager = ({
     maasTutar, setMaasTutar,
     maasGun, setMaasGun,
     maasHesapId, setMaasHesapId,
+    maasTur, setMaasTur,
     maasDuzenle,
+    islemGelirTuru, setIslemGelirTuru,
+    islemBagliMaasId, setIslemBagliMaasId,
+    islemMaasDonemi, setIslemMaasDonemi,
     maaslar = [],
     kkOdemeKartId,
     kkOdemeKaynakId, setKkOdemeKaynakId,
@@ -288,6 +342,14 @@ const ModalManager = ({
         }
     }, [aktifModal]);
 
+    useEffect(() => {
+        if (aktifModal !== 'duzenle_islem') return;
+        const isIncomeTransaction = seciliVeri?.islemTipi === 'gelir';
+        if (!isIncomeTransaction || !salaryPaymentTypes.includes(islemGelirTuru) || islemMaasDonemi) return;
+        const suggestedPeriod = getPeriodOptions(islemTarihi || seciliVeri?.tarih || new Date())[1]?.value;
+        if (suggestedPeriod) setIslemMaasDonemi(suggestedPeriod);
+    }, [aktifModal, seciliVeri, islemGelirTuru, islemMaasDonemi, islemTarihi, setIslemMaasDonemi]);
+
     const formatPara = (tutar) => gizliMod ? "**** ₺" : formatCurrencyPlain(tutar);
 
     if (!aktifModal) return null;
@@ -302,6 +364,7 @@ const ModalManager = ({
     let customWidth = undefined;
     let customMinHeight = undefined;
     const siraliKategoriListesi = sortTurkishText(kategoriListesi || []);
+    const gelirTurleri = ["Maaş", "Maaş Avansı", "Prim / İkramiye", "Masraf İadesi", "Diğer Gelir"];
 
     // 0. YENİ EKLEME MODALLARI
     if (aktifModal === 'maas_ekle') {
@@ -316,6 +379,9 @@ const ModalManager = ({
                 if (success) close();
             }}>
                 <input placeholder="Gelir Adı (Maaş vb.)" value={maasAd} onChange={e => setMaasAd(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} />
+                <select value={maasTur || "Maaş"} onChange={e => setMaasTur(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }}>
+                    {gelirTurleri.map(tur => <option key={tur} value={tur}>{tur}</option>)}
+                </select>
                 <input placeholder="Tutar" type="number" value={maasTutar} onChange={e => setMaasTutar(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} />
                 <input placeholder="Gün (1-31)" type="number" value={maasGun} onChange={e => setMaasGun(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} />
                 <select value={maasHesapId} onChange={e => setMaasHesapId(e.target.value)} style={{ ...inputStyle, marginBottom: '20px' }}><option value="">Hesap Seç</option>{hesaplar.map(h => <option key={h.id} value={h.id}>{h.hesapAdi}</option>)}</select>
@@ -583,6 +649,9 @@ const ModalManager = ({
         title = "İşlemi Düzenle";
         const isInvestment = (seciliVeri.islemTipi && seciliVeri.islemTipi.includes('yatirim')) || seciliVeri.kategori === 'Yatırım';
         const isTransfer = seciliVeri.islemTipi === 'transfer' || seciliVeri.kategori === 'Transfer';
+        const isIncome = seciliVeri.islemTipi === 'gelir';
+        const needsSalaryLink = isIncome && salaryPaymentTypes.includes(islemGelirTuru);
+        const periodOptions = getPeriodOptions(islemTarihi || seciliVeri.tarih || new Date());
         const seciliKategori = kategori || seciliVeri.kategori || "";
         const normalKategoriOpsiyonlari = (kategoriListesi || []).includes(seciliKategori)
             ? siraliKategoriListesi
@@ -683,6 +752,34 @@ const ModalManager = ({
                     </div>
                 )}
 
+                {isIncome && (
+                    <div style={{ display: 'grid', gridTemplateColumns: needsSalaryLink ? '1fr 1fr' : '1fr', gap: '12px', marginBottom: '15px' }}>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '12px', color: '#4a5568', fontWeight: 'bold', marginBottom: '5px' }}>Gelir Türü</label>
+                            <select value={islemGelirTuru} onChange={e => setIslemGelirTuru(e.target.value)} style={{ ...inputStyle, padding: '12px 15px', fontSize: '14px' }}>
+                                {incomeTypes.map(tur => <option key={tur} value={tur}>{tur}</option>)}
+                            </select>
+                        </div>
+                        {needsSalaryLink && (
+                            <div>
+                                <label style={{ display: 'block', fontSize: '12px', color: '#4a5568', fontWeight: 'bold', marginBottom: '5px' }}>Bağlı Maaş</label>
+                                <select value={islemBagliMaasId} onChange={e => setIslemBagliMaasId(e.target.value)} style={{ ...inputStyle, padding: '12px 15px', fontSize: '14px' }} required>
+                                    <option value="">Maaş seç</option>
+                                    {(maaslar || []).map(maas => <option key={maas.id} value={maas.id}>{maas.ad}</option>)}
+                                </select>
+                            </div>
+                        )}
+                        {needsSalaryLink && (
+                            <div style={{ gridColumn: '1 / -1' }}>
+                                <label style={{ display: 'block', fontSize: '12px', color: '#4a5568', fontWeight: 'bold', marginBottom: '5px' }}>Ait Olduğu Maaş Dönemi</label>
+                                <select value={islemMaasDonemi || periodOptions[1]?.value || ''} onChange={e => setIslemMaasDonemi(e.target.value)} style={{ ...inputStyle, padding: '12px 15px', fontSize: '14px' }} required>
+                                    {periodOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                                </select>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 <div style={{ marginBottom: '25px' }}>
                     <label style={{ display: 'block', fontSize: '12px', color: '#4a5568', fontWeight: 'bold', marginBottom: '5px' }}>Kategori</label>
                     {seciliVeri.kategori === 'BES' ? (
@@ -724,6 +821,9 @@ const ModalManager = ({
         content = (
             <form onSubmit={(e) => maasDuzenle(e, seciliVeri.id).then(res => res && close())}>
                 <input value={maasAd} onChange={e => setMaasAd(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} placeholder="Gelir Adı" />
+                <select value={maasTur || "Maaş"} onChange={e => setMaasTur(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }}>
+                    {gelirTurleri.map(tur => <option key={tur} value={tur}>{tur}</option>)}
+                </select>
                 <input type="number" value={maasTutar} onChange={e => setMaasTutar(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} placeholder="Tutar" />
                 <input type="number" value={maasGun} onChange={e => setMaasGun(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} placeholder="Gün (1-31)" />
                 <select value={maasHesapId} onChange={e => setMaasHesapId(e.target.value)} style={{ ...inputStyle, marginBottom: '20px' }}><option value="">Hesap Seç</option>{hesaplar.map(h => <option key={h.id} value={h.id}>{h.hesapAdi}</option>)}</select>

@@ -24,6 +24,9 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
     const [islemTipi, setIslemTipi] = useState("gider");
     const [kategori, setKategori] = useState("");
     const [islemTarihi, setIslemTarihi] = useState("");
+    const [islemGelirTuru, setIslemGelirTuru] = useState("Diğer Gelir");
+    const [islemBagliMaasId, setIslemBagliMaasId] = useState("");
+    const [islemMaasDonemi, setIslemMaasDonemi] = useState("");
     // NEW: Unit Price & Quantity for editing
     const [islemAdet, setIslemAdet] = useState("");
     const [islemBirimFiyat, setIslemBirimFiyat] = useState("");
@@ -55,6 +58,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
     const [maasTutar, setMaasTutar] = useState("");
     const [maasGun, setMaasGun] = useState("");
     const [maasHesapId, setMaasHesapId] = useState("");
+    const [maasTur, setMaasTur] = useState("Maaş");
 
     // Borç
     const [borcAd, setBorcAd] = useState("");
@@ -197,6 +201,10 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
             const hedefAciklama = manualData ? manualData.aciklama : islemAciklama;
             const hedefKategori = manualData ? manualData.kategori : (kategori || (kategoriListesi && kategoriListesi[0]) || "Diğer");
             const hedefTipi = manualData ? manualData.islemTipi : islemTipi;
+            const hedefGelirTuru = manualData ? manualData.gelirTuru : islemGelirTuru;
+            const hedefBagliMaasId = manualData ? manualData.bagliMaasId : islemBagliMaasId;
+            const hedefMaasDonemi = manualData ? (manualData.salaryPeriod || manualData.maasDonemi) : islemMaasDonemi;
+            const maasOdemeTurleri = ["Maaş Ödemesi", "Maaş Avansı", "Maaş Farkı", "Ek Maaş"];
 
             if (!hedefHesapId) {
                 toast.warning("Lütfen hesap seçimi yapınız.");
@@ -212,6 +220,16 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
                 toast.warning("Geçerli bir tutar giriniz.");
                 return false;
             }
+            if (hedefTipi === 'gelir' && maasOdemeTurleri.includes(hedefGelirTuru)) {
+                if (!hedefBagliMaasId) {
+                    toast.warning("Bu gelir türü için bağlı maaş seçiniz.");
+                    return false;
+                }
+                if (!hedefMaasDonemi) {
+                    toast.warning("Bu gelir türü için ait olduğu maaş dönemini seçiniz.");
+                    return false;
+                }
+            }
 
             const tarih = (manualData && manualData.tarih) ? new Date(manualData.tarih) : (islemTarihi ? new Date(islemTarihi) : new Date());
             const yeniIslem = {
@@ -224,6 +242,20 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
                 aciklama: hedefAciklama || "",
                 tarih
             };
+            if (hedefTipi === 'gelir') {
+                yeniIslem.gelirTuru = hedefGelirTuru || "Diğer Gelir";
+                yeniIslem.incomeType = yeniIslem.gelirTuru;
+                if (hedefBagliMaasId) yeniIslem.bagliMaasId = hedefBagliMaasId;
+                if (hedefMaasDonemi) {
+                    yeniIslem.maasDonemi = hedefMaasDonemi;
+                    yeniIslem.salaryPeriod = hedefMaasDonemi;
+                }
+            }
+            if (manualData) {
+                ['gelirTuru', 'incomeType', 'maasOdemeTuru', 'salaryPartType', 'bagliMaasId', 'recurringIncomeId', 'gelirId', 'sourceId', 'maasDonemi', 'salaryPeriod'].forEach((field) => {
+                    if (manualData[field] !== undefined && manualData[field] !== '') yeniIslem[field] = manualData[field];
+                });
+            }
 
             const batch = writeBatch(db);
             batch.set(doc(collection(db, "nakit_islemleri")), yeniIslem);
@@ -234,7 +266,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
             await batch.commit();
 
             if (!manualData) {
-                setIslemTutar(""); setIslemAciklama(""); setIslemTarihi("");
+                setIslemTutar(""); setIslemAciklama(""); setIslemTarihi(""); setIslemGelirTuru("Diğer Gelir"); setIslemBagliMaasId(""); setIslemMaasDonemi("");
             }
             toast.success("İşlem kaydedildi!");
             return true;
@@ -328,6 +360,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
 
             const guncelTarih = islemTarihi ? new Date(islemTarihi) : new Date();
             const isTransfer = veriler.islemTipi === 'transfer' || veriler.kategori === 'Transfer';
+            const maasOdemeTurleri = ["Maaş Ödemesi", "Maaş Avansı", "Maaş Farkı", "Ek Maaş"];
             const eskiTutar = parseFloat(veriler.tutar || 0);
             const eskiHesapId = veriler.hesapId || "";
             const yeniHesapId = isTransfer ? "" : (secilenHesapId || eskiHesapId);
@@ -335,6 +368,16 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
             if (!isTransfer && !yeniHesapId) {
                 toast.warning("Lütfen ödeme aracı seçiniz.");
                 return false;
+            }
+            if (veriler.islemTipi === 'gelir' && maasOdemeTurleri.includes(islemGelirTuru)) {
+                if (!islemBagliMaasId) {
+                    toast.warning("Bu gelir türü için bağlı maaş seçiniz.");
+                    return false;
+                }
+                if (!islemMaasDonemi) {
+                    toast.warning("Bu gelir türü için ait olduğu maaş dönemini seçiniz.");
+                    return false;
+                }
             }
 
             const updateData = { aciklama: islemAciklama, tutar: yeniTutar, tarih: guncelTarih };
@@ -344,6 +387,13 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
                 updateData.birimFiyat = islemBirimFiyat ? parseFloat(islemBirimFiyat) : 0;
             } else {
                 updateData.kategori = kategori;
+            }
+            if (veriler.islemTipi === 'gelir') {
+                updateData.gelirTuru = islemGelirTuru || "Diğer Gelir";
+                updateData.incomeType = updateData.gelirTuru;
+                updateData.bagliMaasId = maasOdemeTurleri.includes(updateData.gelirTuru) ? islemBagliMaasId : "";
+                updateData.maasDonemi = maasOdemeTurleri.includes(updateData.gelirTuru) ? islemMaasDonemi : "";
+                updateData.salaryPeriod = maasOdemeTurleri.includes(updateData.gelirTuru) ? islemMaasDonemi : "";
             }
 
             const batch = writeBatch(db);
@@ -604,8 +654,8 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
                 toast.error("Geçersiz tutar");
                 return false;
             }
-            await addDoc(collection(db, "maaslar"), { uid: user.uid, alanKodu, ad: maasAd, tutar: tutar, gun: maasGun, hesapId: maasHesapId });
-            setMaasAd(""); setMaasTutar(""); setMaasGun(""); setMaasHesapId("");
+            await addDoc(collection(db, "maaslar"), { uid: user.uid, alanKodu, ad: maasAd, tutar: tutar, gun: maasGun, hesapId: maasHesapId, tur: maasTur || "Maaş" });
+            setMaasAd(""); setMaasTutar(""); setMaasGun(""); setMaasHesapId(""); setMaasTur("Maaş");
             toast.success("Gelir kalemi eklendi.");
             return true;
         } catch (err) {
@@ -615,7 +665,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
         }
     }
     const maasYatir = async (maas) => { const result = await Swal.fire({ title: 'Maaş Yatırılsın mı?', html: `💰 <b>${maas.ad}</b> tutarı (${formatCurrencyPlain(maas.tutar)}) hesaba işlensin mi?`, icon: 'question', showCancelButton: true, confirmButtonText: 'Evet, Yatır', confirmButtonColor: 'green' }); if (!result.isConfirmed) return; const batch = writeBatch(db); batch.set(doc(collection(db, "nakit_islemleri")), { uid: user.uid, alanKodu, hesapId: maas.hesapId, islemTipi: "gelir", kategori: "Maaş/Gelir", tutar: maas.tutar, aciklama: `${maas.ad} (Otomatik)`, tarih: new Date() }); batch.update(doc(db, "hesaplar", maas.hesapId), { guncelBakiye: increment(maas.tutar) }); await batch.commit(); toast.success("Gelir hesaba işlendi!"); }
-    const maasDuzenle = async (e, id) => { e.preventDefault(); await updateDoc(doc(db, "maaslar", id), { ad: maasAd, tutar: parseFloat(maasTutar), gun: maasGun, hesapId: maasHesapId }); toast.success("Gelir kalemi güncellendi."); return true; }
+    const maasDuzenle = async (e, id) => { e.preventDefault(); await updateDoc(doc(db, "maaslar", id), { ad: maasAd, tutar: parseFloat(maasTutar), gun: maasGun, hesapId: maasHesapId, tur: maasTur || "Maaş" }); toast.success("Gelir kalemi güncellendi."); return true; }
 
     // --- BORÇ ---
     const borcEkle = async (e, close) => {
@@ -1266,15 +1316,19 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
         setIslemAciklama(v.aciklama);
         setIslemTutar(formatMoneyInputValue(v.tutar));
         setSecilenHesapId(v.hesapId || "");
+        setIslemTipi(v.islemTipi || "gider");
         setIslemAdet(v.adet || ""); // Fill Quantity
         setIslemBirimFiyat(formatMoneyInputValue(v.birimFiyat)); // Fill Unit Price
         if (v.islemTipi?.includes('yatirim')) { setKategori(v.yatirimTuru || "Hisse"); }
         else { setKategori(v.kategori || ""); }
         if (v.tarih) { const date = new Date(v.tarih.seconds * 1000); const isoString = new Date(date.getTime() - (date.getTimezoneOffset() * 60000)).toISOString().slice(0, 16); setIslemTarihi(isoString); }
+        setIslemGelirTuru(v.gelirTuru || v.incomeType || "Diğer Gelir");
+        setIslemBagliMaasId(v.bagliMaasId || v.recurringIncomeId || v.gelirId || "");
+        setIslemMaasDonemi(v.salaryPeriod || v.maasDonemi || "");
     }
     const fillSubscriptionForm = (v) => { setAboAd(v.ad); setAboTutar(formatMoneyInputValue(v.tutar)); setAboGun(v.gun); setAboHesapId(v.hesapId); setAboKategori(v.kategori); }
     const fillInstallmentForm = (v) => { setTaksitBaslik(v.baslik); setTaksitToplamTutar(formatMoneyInputValue(v.toplamTutar)); setTaksitSayisi(v.taksitSayisi); setTaksitHesapId(v.hesapId); setTaksitKategori(v.kategori); if (v.alisTarihi) { const d = new Date(v.alisTarihi.seconds * 1000); setTaksitAlisTarihi(d.toISOString().split('T')[0]); } }
-    const fillSalaryForm = (v) => { setMaasAd(v.ad); setMaasTutar(formatMoneyInputValue(v.tutar)); setMaasGun(v.gun); setMaasHesapId(v.hesapId); }
+    const fillSalaryForm = (v) => { setMaasAd(v.ad); setMaasTutar(formatMoneyInputValue(v.tutar)); setMaasGun(v.gun); setMaasHesapId(v.hesapId); setMaasTur(v.tur || v.gelirTuru || "Maaş"); }
     const fillBorcForm = (v) => { setBorcAd(v.ad); setBorcTutar(formatMoneyInputValue(v.toplamTutar)); setBorcKalanTutar(formatMoneyInputValue(v.kalanTutar)); setBorcTarih(v.sonOdemeTarihi || ""); setBorcKategori(v.kategori || (kategoriListesi && kategoriListesi[0] ? kategoriListesi[0] : "")); }
     const resetBorcForm = () => { setBorcAd(""); setBorcTutar(""); setBorcKalanTutar(""); setBorcTarih(""); setBorcKategori(kategoriListesi && kategoriListesi[0] ? kategoriListesi[0] : ""); }
     const fillBillForm = (v) => { setFaturaGirisTutar(formatMoneyInputValue(v.tutar)); setFaturaGirisTarih(v.sonOdemeTarihi); setFaturaGirisAciklama(v.aciklama || ""); }
@@ -1286,11 +1340,12 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
         hesapAdi, setHesapAdi, hesapTipi, setHesapTipi, baslangicBakiye, setBaslangicBakiye, hesapKesimGunu, setHesapKesimGunu,
         maasHesabi, setMaasHesabi, anaMaasHesabi, setAnaMaasHesabi, hesapMaasGunu, setHesapMaasGunu, bagliMaasId, setBagliMaasId,
         secilenHesapId, setSecilenHesapId, islemTutar, setIslemTutar, islemAciklama, setIslemAciklama, islemTipi, setIslemTipi, kategori, setKategori, islemTarihi, setIslemTarihi,
+        islemGelirTuru, setIslemGelirTuru, islemBagliMaasId, setIslemBagliMaasId, islemMaasDonemi, setIslemMaasDonemi,
         islemAdet, setIslemAdet, islemBirimFiyat, setIslemBirimFiyat, // Return new states
         transferKaynakId, setTransferKaynakId, transferHedefId, setTransferHedefId, transferTutar, setTransferTutar, transferUcreti, setTransferUcreti, transferTarihi, setTransferTarihi,
         aboAd, setAboAd, aboTutar, setAboTutar, aboGun, setAboGun, aboHesapId, setAboHesapId, aboKategori, setAboKategori,
         taksitBaslik, setTaksitBaslik, taksitToplamTutar, setTaksitToplamTutar, taksitSayisi, setTaksitSayisi, taksitHesapId, setTaksitHesapId, taksitKategori, setTaksitKategori, taksitAlisTarihi, setTaksitAlisTarihi,
-        maasAd, setMaasAd, maasTutar, setMaasTutar, maasGun, setMaasGun, maasHesapId, setMaasHesapId,
+        maasAd, setMaasAd, maasTutar, setMaasTutar, maasGun, setMaasGun, maasHesapId, setMaasHesapId, maasTur, setMaasTur,
         borcAd, setBorcAd, borcTutar, setBorcTutar, borcKalanTutar, setBorcKalanTutar, borcTarih, setBorcTarih, borcKategori, setBorcKategori,
         cariBaslik, setCariBaslik, cariTutar, setCariTutar, cariHesapId, setCariHesapId, cariKategori, setCariKategori, cariTarih, setCariTarih, cariNot, setCariNot,
         cariIadeTutar, setCariIadeTutar, cariIadeHesapId, setCariIadeHesapId,

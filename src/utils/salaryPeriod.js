@@ -48,6 +48,68 @@ export const formatSalaryPeriodRange = (period) => {
 
 const normalizeText = (value) => String(value || '').toLocaleLowerCase('tr-TR');
 
+const parseAmount = (value) => parseFloat(value) || 0;
+
+const isNearAmount = (left, right) => {
+    const a = Math.abs(parseAmount(left));
+    const b = Math.abs(parseAmount(right));
+    return Math.abs(a - b) <= Math.max(1, Math.max(a, b) * 0.01);
+};
+
+const getTransactionTime = (transaction) => toDateSafe(transaction?.tarih)?.getTime() || 0;
+
+const isDebtLike = (transaction, accounts = []) => {
+    const category = normalizeText(transaction?.kategori);
+    const description = normalizeText(transaction?.aciklama);
+    const targetAccount = accounts.find((account) => account.id === transaction?.hedefId);
+    return Boolean(
+        transaction?.taksitId ||
+        transaction?.borcId ||
+        targetAccount?.hesapTipi === 'krediKarti' ||
+        category.includes('kredi') ||
+        category.includes('taksit') ||
+        category.includes('nakit avans') ||
+        description.includes('kredi kartı') ||
+        description.includes('kredi karti') ||
+        description.includes('kredi') ||
+        description.includes('taksit') ||
+        description.includes('borç ödeme') ||
+        description.includes('borc odeme')
+    );
+};
+
+export const getDebtPaymentSubtype = (transaction, accounts = []) => {
+    const category = normalizeText(transaction?.kategori);
+    const description = normalizeText(transaction?.aciklama);
+    const targetAccount = accounts.find((account) => account.id === transaction?.hedefId);
+    if (category.includes('nakit avans') || description.includes('nakit avans')) return 'cashAdvance';
+    if (targetAccount?.hesapTipi === 'krediKarti' || category.includes('kredi kart') || description.includes('kredi kart')) return 'creditCard';
+    if (transaction?.taksitId || category.includes('taksit') || description.includes('taksit') || category.includes('kredi') || description.includes('kredi')) return 'loan';
+    return 'other';
+};
+
+const findStrongFlowTarget = ({ transfer, transactions, accounts }) => {
+    if (transfer?.islemTipi !== 'transfer' || !transfer?.hedefId) return null;
+    const transferDate = toDateSafe(transfer.tarih);
+    if (!transferDate) return null;
+    const maxDate = new Date(transferDate);
+    maxDate.setDate(maxDate.getDate() + 3);
+    const candidates = (transactions || [])
+        .filter((transaction) => {
+            if (!transaction || transaction.id === transfer.id) return false;
+            const date = toDateSafe(transaction.tarih);
+            if (!date || date < transferDate || date > maxDate) return false;
+            if (!isNearAmount(transaction.tutar, transfer.tutar)) return false;
+            const startsFromTarget = transaction.hesapId === transfer.hedefId || transaction.kaynakId === transfer.hedefId;
+            if (!startsFromTarget) return false;
+            const targetBucket = classifySalaryMovement(transaction, transfer.hedefId, accounts);
+            return ['debtPayment', 'investment', 'realExpense', 'transfer'].includes(targetBucket);
+        })
+        .sort((a, b) => getTransactionTime(a) - getTransactionTime(b));
+
+    return candidates.length === 1 ? candidates[0] : null;
+};
+
 export const classifySalaryMovement = (transaction, accountId, accounts = []) => {
     const type = transaction?.islemTipi;
     const category = normalizeText(transaction?.kategori);
@@ -71,15 +133,7 @@ export const classifySalaryMovement = (transaction, accountId, accounts = []) =>
         return 'investment';
     }
 
-    if (
-        transaction?.taksitId ||
-        category.includes('taksit') ||
-        category.includes('kredi') ||
-        category.includes('nakit avans') ||
-        description.includes('taksit') ||
-        description.includes('kredi kartı') ||
-        description.includes('kredi karti')
-    ) {
+    if (isDebtLike(transaction, accounts)) {
         return 'debtPayment';
     }
 
@@ -92,6 +146,13 @@ export const summarizeSalaryPeriod = ({ transactions = [], account, accounts = [
         income: 0,
         realExpense: 0,
         debtPayment: 0,
+        debtPaymentBreakdown: {
+            creditCard: 0,
+            loan: 0,
+            cashAdvance: 0,
+            other: 0,
+            items: [],
+        },
         expense: 0,
         transfer: 0,
         investment: 0,
@@ -101,20 +162,43 @@ export const summarizeSalaryPeriod = ({ transactions = [], account, accounts = [
         totalOutflow: 0,
         movements: [],
     };
+    const flowChildren = new Set();
 
     transactions.forEach((transaction) => {
-        const amount = parseFloat(transaction?.tutar) || 0;
-        const bucket = classifySalaryMovement(transaction, account?.id, accounts);
+        if (flowChildren.has(transaction?.id)) return;
+        const amount = parseAmount(transaction?.tutar);
+        let bucket = classifySalaryMovement(transaction, account?.id, accounts);
+        let finalTransaction = transaction;
+        let flowTarget = null;
+        if (bucket === 'transfer' && transaction?.islemTipi === 'transfer' && transaction?.kaynakId === account?.id) {
+            flowTarget = findStrongFlowTarget({ transfer: transaction, transactions, accounts });
+            if (flowTarget) {
+                bucket = classifySalaryMovement(flowTarget, transaction.hedefId, accounts);
+                finalTransaction = flowTarget;
+                if (flowTarget.id) flowChildren.add(flowTarget.id);
+            }
+        }
         const signedAmount = bucket === 'income' || bucket === 'refund' ? amount : -amount;
 
-        summary.movements.push({ transaction, bucket, signedAmount });
+        summary.movements.push({ transaction, bucket, signedAmount, amount, finalTransaction, flowTarget, counted: true });
         if (bucket === 'income') summary.income += amount;
         if (bucket === 'realExpense') summary.realExpense += amount;
-        if (bucket === 'debtPayment') summary.debtPayment += amount;
+        if (bucket === 'debtPayment') {
+            const subtype = getDebtPaymentSubtype(finalTransaction, accounts);
+            summary.debtPayment += amount;
+            summary.debtPaymentBreakdown[subtype] = (summary.debtPaymentBreakdown[subtype] || 0) + amount;
+            summary.debtPaymentBreakdown.items.push({ transaction, finalTransaction, amount, subtype });
+        }
         if (bucket === 'transfer') summary.transfer += amount;
         if (bucket === 'investment') summary.investment += amount;
         if (bucket === 'refund') summary.refund += amount;
         if (bucket === 'neutral') summary.neutral += amount;
+    });
+
+    transactions.forEach((transaction) => {
+        if (!flowChildren.has(transaction?.id)) return;
+        const bucket = classifySalaryMovement(transaction, transaction.hesapId || transaction.kaynakId, accounts);
+        summary.movements.push({ transaction, bucket, signedAmount: 0, amount: 0, finalTransaction: transaction, counted: false, flowChild: true });
     });
 
     summary.expense = summary.realExpense + summary.debtPayment;

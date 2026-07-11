@@ -491,6 +491,9 @@ function App() {
                 islemAciklama={budgetActions.islemAciklama} setIslemAciklama={budgetActions.setIslemAciklama}
                 islemTutar={budgetActions.islemTutar} setIslemTutar={budgetActions.setIslemTutar}
                 islemTarihi={budgetActions.islemTarihi} setIslemTarihi={budgetActions.setIslemTarihi}
+                islemGelirTuru={budgetActions.islemGelirTuru} setIslemGelirTuru={budgetActions.setIslemGelirTuru}
+                islemBagliMaasId={budgetActions.islemBagliMaasId} setIslemBagliMaasId={budgetActions.setIslemBagliMaasId}
+                islemMaasDonemi={budgetActions.islemMaasDonemi} setIslemMaasDonemi={budgetActions.setIslemMaasDonemi}
                 // NEW: Quantity & Unit Price Props
                 islemAdet={budgetActions.islemAdet} setIslemAdet={budgetActions.setIslemAdet}
                 islemBirimFiyat={budgetActions.islemBirimFiyat} setIslemBirimFiyat={budgetActions.setIslemBirimFiyat}
@@ -515,6 +518,7 @@ function App() {
                 maasTutar={budgetActions.maasTutar} setMaasTutar={budgetActions.setMaasTutar}
                 maasGun={budgetActions.maasGun} setMaasGun={budgetActions.setMaasGun}
                 maasHesapId={budgetActions.maasHesapId} setMaasHesapId={budgetActions.setMaasHesapId}
+                maasTur={budgetActions.maasTur} setMaasTur={budgetActions.setMaasTur}
                 maasDuzenle={budgetActions.maasDuzenle}
                 maaslar={data.maaslar}
                 kkOdemeKartId={budgetActions.kkOdemeKartId}
@@ -682,6 +686,9 @@ function App() {
                     islemAciklama={budgetActions.islemAciklama} setIslemAciklama={budgetActions.setIslemAciklama}
                     islemTutar={budgetActions.islemTutar} setIslemTutar={budgetActions.setIslemTutar}
                     islemTarihi={budgetActions.islemTarihi} setIslemTarihi={budgetActions.setIslemTarihi}
+                    islemGelirTuru={budgetActions.islemGelirTuru} setIslemGelirTuru={budgetActions.setIslemGelirTuru}
+                    islemBagliMaasId={budgetActions.islemBagliMaasId} setIslemBagliMaasId={budgetActions.setIslemBagliMaasId}
+                    islemMaasDonemi={budgetActions.islemMaasDonemi} setIslemMaasDonemi={budgetActions.setIslemMaasDonemi}
                     transferKaynakId={budgetActions.transferKaynakId} setTransferKaynakId={budgetActions.setTransferKaynakId}
                     transferHedefId={budgetActions.transferHedefId} setTransferHedefId={budgetActions.setTransferHedefId}
                     transferTutar={budgetActions.transferTutar} setTransferTutar={budgetActions.setTransferTutar}

@@ -48,6 +48,17 @@ import {
 } from '../Shared/PremiumUI';
 
 const parseAmount = (value) => parseFloat(value) || 0;
+const salaryPaymentTypes = ["Maaş Ödemesi", "Maaş Avansı", "Maaş Farkı", "Ek Maaş"];
+const incomeTypes = [...salaryPaymentTypes, "Prim / İkramiye", "Masraf İadesi", "Diğer Gelir"];
+const getSalaryPeriodOptions = (dateValue = new Date()) => {
+    const date = dateValue ? new Date(dateValue) : new Date();
+    const base = Number.isNaN(date.getTime()) ? new Date() : date;
+    return [-1, 0, 1, 2].map((offset) => {
+        const optionDate = new Date(base.getFullYear(), base.getMonth() + offset, 1);
+        const value = `${optionDate.getFullYear()}-${String(optionDate.getMonth() + 1).padStart(2, '0')}`;
+        return { value, label: `${MONTH_NAMES[optionDate.getMonth()]} ${optionDate.getFullYear()} Maaş Dönemi` };
+    });
+};
 
 const formatDayMonth = (date) => {
     if (!date) return 'Tarih yok';
@@ -294,6 +305,9 @@ const BudgetDashboard = ({
     faturaGir,
     secilenHesapId, setSecilenHesapId,
     islemTipi, setIslemTipi,
+    islemGelirTuru, setIslemGelirTuru,
+    islemBagliMaasId, setIslemBagliMaasId,
+    islemMaasDonemi, setIslemMaasDonemi,
     kategori, setKategori,
     islemAciklama, setIslemAciklama,
     islemTutar, setIslemTutar,
@@ -316,6 +330,7 @@ const BudgetDashboard = ({
     aramaMetni, setAramaMetni,
     filtreKategori, setFiltreKategori,
     borclar,
+    maaslar = [],
     excelIndir,
     excelYukle,
     islemSil,
@@ -329,6 +344,13 @@ const BudgetDashboard = ({
     const siraliHesaplar = [...(hesaplar || [])].sort((a, b) =>
         String(a?.hesapAdi || '').localeCompare(String(b?.hesapAdi || ''), 'tr-TR', { sensitivity: 'base' })
     );
+    const quickSalaryPeriodOptions = getSalaryPeriodOptions(islemTarihi || new Date());
+    const quickNeedsSalaryLink = islemTipi === 'gelir' && salaryPaymentTypes.includes(islemGelirTuru);
+    const ensureQuickSalaryPeriod = (dateValue = islemTarihi || new Date()) => {
+        if (!islemMaasDonemi) {
+            setIslemMaasDonemi(getSalaryPeriodOptions(dateValue)[1]?.value || getSalaryPeriodOptions(dateValue)[0]?.value || "");
+        }
+    };
 
     const cashFlowData = useMemo(() => {
         const buckets = getVisibleRange(selectedPeriod || {});
@@ -588,12 +610,15 @@ const BudgetDashboard = ({
         .slice(0, 8);
 
     const installmentRows = [...(taksitler || [])]
-        .filter((item) => {
+        .map((item) => {
             const paid = getInstallmentPaidCount(item);
             const count = parseInt(item.taksitSayisi) || 0;
-            return !(count > 0 && paid >= count);
+            const baseDate = toDateSafe(item.alisTarihi || item.olusturmaTarihi);
+            const dueDate = addMonthsClamped(baseDate, paid);
+            return { ...item, nextDueDate: dueDate, paidCount: paid, installmentCount: count };
         })
-        .sort((a, b) => (toDateSafe(a.alisTarihi || a.olusturmaTarihi)?.getTime() || Number.MAX_SAFE_INTEGER) - (toDateSafe(b.alisTarihi || b.olusturmaTarihi)?.getTime() || Number.MAX_SAFE_INTEGER))
+        .filter((item) => !(item.installmentCount > 0 && item.paidCount >= item.installmentCount))
+        .sort((a, b) => (a.nextDueDate?.getTime() || Number.MAX_SAFE_INTEGER) - (b.nextDueDate?.getTime() || Number.MAX_SAFE_INTEGER))
         .slice(0, 8);
 
     const selectedPeriodNet = toplamGelir - toplamGider;
@@ -1038,6 +1063,31 @@ const BudgetDashboard = ({
                                     <option value="gelir">Gelir</option>
                                 </select>
                             </div>
+                            {islemTipi === 'gelir' && (
+                                <>
+                                    <select
+                                        value={islemGelirTuru}
+                                        onChange={e => {
+                                            setIslemGelirTuru(e.target.value);
+                                            if (salaryPaymentTypes.includes(e.target.value)) ensureQuickSalaryPeriod();
+                                        }}
+                                        style={inputStyle}
+                                    >
+                                        {incomeTypes.map(tur => <option key={tur} value={tur}>{tur}</option>)}
+                                    </select>
+                                    {quickNeedsSalaryLink && (
+                                        <div className="qw-form-row">
+                                            <select value={islemBagliMaasId} onChange={e => setIslemBagliMaasId(e.target.value)} style={inputStyle} required>
+                                                <option value="">Bağlı maaş</option>
+                                                {(maaslar || []).map(maas => <option key={maas.id} value={maas.id}>{maas.ad}</option>)}
+                                            </select>
+                                            <select value={islemMaasDonemi || quickSalaryPeriodOptions[1]?.value || ''} onChange={e => setIslemMaasDonemi(e.target.value)} style={inputStyle} required>
+                                                {quickSalaryPeriodOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                                            </select>
+                                        </div>
+                                    )}
+                                </>
+                            )}
                             <select value={kategori || (siraliKategoriListesi && siraliKategoriListesi[0])} onChange={e => setKategori(e.target.value)} style={inputStyle}>
                                 {siraliKategoriListesi.map(k => <option key={k} value={k}>{k}</option>)}
                             </select>
@@ -1051,7 +1101,15 @@ const BudgetDashboard = ({
                                 />
                                 <input type="number" placeholder="Tutar" value={islemTutar} onChange={e => setIslemTutar(e.target.value)} style={inputStyle} />
                             </div>
-                            <input type="datetime-local" value={islemTarihi} onChange={e => setIslemTarihi(e.target.value)} style={inputStyle} />
+                            <input
+                                type="datetime-local"
+                                value={islemTarihi}
+                                onChange={e => {
+                                    setIslemTarihi(e.target.value);
+                                    if (quickNeedsSalaryLink && !islemMaasDonemi) ensureQuickSalaryPeriod(e.target.value);
+                                }}
+                                style={inputStyle}
+                            />
                             <button type="submit" className="qw-submit-button">Kaydet</button>
                         </form>
                     )}
@@ -1198,15 +1256,17 @@ const BudgetDashboard = ({
                 </PremiumCard>
 
                 <PremiumCard className="qw-module-card">
-                    <SectionHeader title="Taksitler" description={`${installmentRows.length} aktif plan`} />
+                    <SectionHeader title="Taksitler" description={`${installmentRows.length} taksit`} />
                     <div className="qw-summary-lines">
                         <SummaryLine label="Kalan taksit borcu" value={formatPara(toplamKalanTaksitBorcu)} tone="purple" />
                         <SummaryLine label="Bu ay taksitler" value={formatPara(monthlyInstallmentLoad)} />
                     </div>
                     <div className="qw-module-list">
                         {installmentRows.map((installment) => {
-                            const paid = getInstallmentPaidCount(installment);
-                            const count = parseInt(installment.taksitSayisi) || 0;
+                            const paid = installment.paidCount;
+                            const count = installment.installmentCount;
+                            const dueDate = installment.nextDueDate;
+                            const dueText = dueDate ? `${formatDayMonth(dueDate)} · ` : '';
                             const installmentForPayment = { ...installment, odenmisTaksit: paid };
                             return (
                                 <ModuleRow
@@ -1214,7 +1274,7 @@ const BudgetDashboard = ({
                                     icon={CalendarClock}
                                     tone="purple"
                                     title={installment.baslik || 'Taksit'}
-                                    meta={`${paid}/${count || '-'} taksit`}
+                                    meta={`${dueText}${paid}/${count || '-'} taksit`}
                                     amount={formatPara(installment.aylikTutar)}
                                     onClick={() => taksitOde(installmentForPayment)}
                                     actions={(

@@ -1646,6 +1646,46 @@ button:active {
   padding-bottom: 42px;
 }
 
+.salary-control-bar {
+  order: 1;
+}
+
+.salary-summary-grid {
+  order: 2;
+}
+
+.salary-income-card {
+  order: 4;
+}
+
+.salary-main-grid--analysis {
+  order: 3;
+}
+
+.salary-three-grid {
+  order: 6;
+}
+
+.salary-realized-income-card {
+  order: 5;
+}
+
+.salary-speed-comparison-grid {
+  order: 8;
+}
+
+.salary-periods-card {
+  order: 9;
+}
+
+.salary-largest-card {
+  order: 10;
+}
+
+.salary-transactions-card {
+  order: 11;
+}
+
 .salary-page-header {
   display: flex;
   align-items: flex-start;
@@ -2025,6 +2065,42 @@ button:active {
   min-height: auto;
 }
 
+.salary-income-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 18px 0 8px;
+  color: var(--text-primary);
+}
+
+.salary-income-section-title:first-child {
+  margin-top: 0;
+}
+
+.salary-income-section-title strong {
+  font-size: 14px;
+  font-weight: 820;
+}
+
+.salary-income-section-title span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.salary-income-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  border-radius: 16px;
+  color: var(--success);
+  background: var(--success-soft);
+}
+
 .salary-income-summary,
 .salary-speed-grid {
   display: grid;
@@ -2103,6 +2179,53 @@ button:active {
   font-size: 13px;
   font-style: normal;
   font-weight: 780;
+}
+
+.salary-income-breakdown {
+  grid-column: 2 / -1;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.1);
+}
+
+.salary-income-breakdown > span {
+  display: grid;
+  gap: 3px;
+}
+
+.salary-income-breakdown small {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 720;
+}
+
+.salary-income-breakdown b {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.salary-payment-parts {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.salary-payment-parts em {
+  margin: 0;
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: rgba(109, 93, 252, 0.08);
+  color: var(--accent-purple);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 760;
 }
 
 .salary-donut-layout {
@@ -2720,9 +2843,14 @@ button:active {
   .salary-income-row > div:nth-of-type(2),
   .salary-income-row > div:nth-of-type(3),
   .salary-income-row > div:nth-of-type(4),
+  .salary-income-breakdown,
   .salary-income-row > .qw-badge,
   .salary-income-row > .qw-row-actions {
     grid-column: 2 / -1;
+  }
+
+  .salary-income-breakdown {
+    grid-template-columns: 1fr 1fr;
   }
 
   .salary-comparison-row {
