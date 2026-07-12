@@ -724,93 +724,101 @@
 .cal-cashflow-shell {
     position: relative;
     display: grid;
-    gap: 16px;
+    gap: 18px;
+    padding-bottom: 4px;
 }
 
 .cal-cashflow-track-wrap {
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding: 28px 4px 8px;
-    scrollbar-width: thin;
+    overflow: visible;
+    padding: 22px 16px 24px;
 }
 
 .cal-cashflow-track {
     position: relative;
-    height: 128px;
+    height: 124px;
+    width: 100%;
 }
 
 .cal-cashflow-axis {
     position: absolute;
-    left: 0;
-    right: 0;
-    top: 58px;
-    height: 2px;
+    left: 12px;
+    right: 12px;
+    top: 62px;
+    height: 1px;
     border-radius: 999px;
-    background: linear-gradient(90deg, rgba(148, 163, 184, 0.16), rgba(99, 102, 241, 0.24), rgba(148, 163, 184, 0.16));
+    background: linear-gradient(90deg, rgba(148, 163, 184, 0.16), rgba(99, 102, 241, 0.28), rgba(148, 163, 184, 0.16));
 }
 
 .cal-cashflow-node {
     --node-color: #ef4444;
     position: absolute;
-    top: 34px;
+    top: 36px;
     transform: translateX(-50%);
-    width: 78px;
+    width: 44px;
+    height: 78px;
     border: 0;
     background: transparent;
     color: var(--cal-text);
-    display: grid;
-    justify-items: center;
-    gap: 7px;
     padding: 0;
     cursor: pointer;
     opacity: 1;
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.cal-cashflow-node:active {
+    transform: translateX(-50%) !important;
 }
 
 .cal-cashflow-node.is-past {
-    opacity: 0.48;
+    opacity: 1;
 }
 
-.cal-cashflow-node__summary {
-    min-height: 32px;
-    display: grid;
-    justify-items: center;
-    gap: 2px;
+.cal-cashflow-node__date {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
     color: var(--cal-muted);
     font-size: 11px;
-    font-weight: 800;
-    line-height: 1.1;
+    font-weight: 850;
+    line-height: 1;
     white-space: nowrap;
+    letter-spacing: 0;
+    transition: color 160ms ease;
 }
 
-.cal-cashflow-node__summary strong {
-    font-size: 11px;
-    font-weight: 900;
+.cal-cashflow-node__date {
+    top: 44px;
 }
 
 .cal-cashflow-node__dot {
-    width: 15px;
-    height: 15px;
+    position: absolute;
+    left: 50%;
+    top: 26px;
+    transform: translate(-50%, -50%);
+    width: 14px;
+    height: 14px;
     border-radius: 999px;
     background: var(--node-color);
-    box-shadow: 0 0 0 6px color-mix(in srgb, var(--node-color) 12%, transparent);
-    transition: transform 220ms ease, box-shadow 220ms ease;
+    border: 3px solid var(--cal-bg);
+    box-shadow: 0 10px 24px color-mix(in srgb, var(--node-color) 22%, transparent), 0 0 0 6px color-mix(in srgb, var(--node-color) 10%, transparent);
+    transform-origin: center;
 }
 
 .cal-cashflow-node:hover .cal-cashflow-node__dot,
 .cal-cashflow-node.is-selected .cal-cashflow-node__dot {
-    transform: scale(1.22);
-    box-shadow: 0 0 0 9px color-mix(in srgb, var(--node-color) 18%, transparent);
+    transform: translate(-50%, -50%);
+    box-shadow: 0 10px 24px color-mix(in srgb, var(--node-color) 22%, transparent), 0 0 0 6px color-mix(in srgb, var(--node-color) 10%, transparent);
+}
+
+.cal-cashflow-node:hover .cal-cashflow-node__date,
+.cal-cashflow-node.is-selected .cal-cashflow-node__date {
+    color: var(--cal-text);
 }
 
 .cal-cashflow-node.is-today .cal-cashflow-node__dot {
     outline: 2px solid var(--cal-text);
-    outline-offset: 4px;
-}
-
-.cal-cashflow-node__day {
-    color: var(--cal-faint);
-    font-size: 11px;
-    font-weight: 850;
+    outline-offset: 5px;
 }
 
 .cal-cashflow-node--income {
@@ -825,68 +833,32 @@
     --node-color: #8b5cf6;
 }
 
-.cal-cashflow-balance-wrap {
-    height: 92px;
-    padding: 6px 2px 2px;
-    border-radius: 18px;
-    background: rgba(15, 23, 42, 0.025);
-}
-
-.cal-cashflow-balance-chart {
-    width: 100%;
-    height: 100%;
-    overflow: visible;
-}
-
-.cal-cashflow-zero-line {
-    stroke: rgba(148, 163, 184, 0.55);
-    stroke-width: 0.6;
-    stroke-dasharray: 2 2;
-}
-
-.cal-cashflow-balance-line {
-    stroke-width: 1.8;
-    stroke-linecap: round;
-    vector-effect: non-scaling-stroke;
-}
-
-.cal-cashflow-balance-line--positive {
-    stroke: #16a34a;
-}
-
-.cal-cashflow-balance-line--negative {
-    stroke: #ef4444;
-}
-
-.cal-cashflow-balance-dot {
-    vector-effect: non-scaling-stroke;
-    stroke: #fff;
-    stroke-width: 1.4;
-}
-
-.cal-cashflow-balance-dot--positive {
-    fill: #16a34a;
-}
-
-.cal-cashflow-balance-dot--negative {
-    fill: #ef4444;
-}
-
-.cal-cashflow-balance-dot--neutral {
-    fill: #64748b;
-}
-
 .cal-cashflow-popover {
     position: absolute;
-    right: 18px;
-    top: 76px;
+    left: clamp(190px, var(--popover-left), calc(100% - 190px));
+    top: 146px;
+    transform: translateX(-50%);
     z-index: 12;
-    width: min(420px, calc(100% - 36px));
-    padding: 18px;
+    width: min(420px, calc(100% - 32px));
+    padding: 18px 18px 20px;
     border: 1px solid var(--cal-border);
-    border-radius: 22px;
+    border-radius: 24px;
     background: rgba(255, 255, 255, 0.98);
-    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.16);
+    box-shadow: 0 28px 70px rgba(15, 23, 42, 0.18);
+    animation: calCashflowPopoverIn 220ms ease both;
+}
+
+.cal-cashflow-popover::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: -7px;
+    width: 14px;
+    height: 14px;
+    transform: translateX(-50%) rotate(45deg);
+    background: inherit;
+    border-left: 1px solid var(--cal-border);
+    border-top: 1px solid var(--cal-border);
 }
 
 html[data-theme="dark"] .cal-cashflow-popover {
@@ -896,24 +868,64 @@ html[data-theme="dark"] .cal-cashflow-popover {
 
 .cal-cashflow-popover__close {
     position: absolute;
-    top: 12px;
-    right: 12px;
-    width: 32px;
-    height: 32px;
-    border: 0;
+    top: 14px;
+    right: 14px;
+    z-index: 3;
+    width: 34px;
+    height: 34px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
     border-radius: 999px;
-    background: rgba(148, 163, 184, 0.12);
-    color: var(--cal-muted);
+    background: #e2e8f0;
+    color: #0f172a;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1;
+    transition:
+        background-color 160ms ease,
+        color 160ms ease,
+        transform 160ms ease,
+        border-color 160ms ease;
+}
+
+.cal-cashflow-popover__close:hover {
+    background: #cbd5e1;
+    border-color: rgba(15, 23, 42, 0.12);
+    color: #0f172a;
+}
+
+.cal-cashflow-popover__close span {
+    display: block;
+    color: currentColor;
+    font-size: 26px;
+    font-weight: 800;
+    line-height: 1;
+    margin-top: -2px;
+}
+
+.cal-cashflow-popover__close:focus-visible {
+    outline: 3px solid rgba(99, 102, 241, 0.22);
+    outline-offset: 2px;
+}
+
+html[data-theme="dark"] .cal-cashflow-popover__close {
+    border-color: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.16);
+    color: #ffffff;
+}
+
+html[data-theme="dark"] .cal-cashflow-popover__close:hover {
+    background: rgba(255, 255, 255, 0.16);
+    color: #ffffff;
 }
 
 .cal-cashflow-popover h3 {
     margin: 0 42px 14px 0;
     color: var(--cal-text);
-    font-size: 18px;
+    font-size: 20px;
     font-weight: 900;
 }
 
@@ -1014,6 +1026,29 @@ html[data-theme="dark"] .cal-cashflow-popover {
     font-weight: 800;
 }
 
+.cal-cashflow-popover__balance {
+    display: grid;
+    gap: 6px;
+    margin-top: 16px;
+    padding: 16px;
+    border-radius: 18px;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(16, 185, 129, 0.08));
+}
+
+.cal-cashflow-popover__balance span {
+    color: var(--cal-muted);
+    font-size: 12px;
+    font-weight: 850;
+}
+
+.cal-cashflow-popover__balance strong {
+    color: var(--cal-text);
+    font-size: 28px;
+    font-weight: 950;
+    letter-spacing: 0;
+    line-height: 1.05;
+}
+
 .cal-cashflow-month-summary {
     display: grid;
     gap: 9px;
@@ -1027,6 +1062,18 @@ html[data-theme="dark"] .cal-cashflow-popover {
     color: var(--cal-text);
     font-size: 15px;
     font-weight: 900;
+}
+
+@keyframes calCashflowPopoverIn {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(8px) scale(0.98);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0) scale(1);
+    }
 }
 
 .is-positive {
@@ -1122,27 +1169,27 @@ html[data-theme="dark"] .cal-cashflow-popover {
 
     .cal-cashflow-track-wrap {
         margin: 0 -4px;
-        padding-top: 22px;
+        padding: 18px 10px 22px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        scrollbar-width: none;
+    }
+
+    .cal-cashflow-track-wrap::-webkit-scrollbar {
+        display: none;
     }
 
     .cal-cashflow-track {
         height: 120px;
+        min-width: 640px;
     }
 
     .cal-cashflow-node {
-        width: 64px;
+        width: 44px;
     }
 
-    .cal-cashflow-node__summary {
+    .cal-cashflow-node__date {
         font-size: 10px;
-    }
-
-    .cal-cashflow-node__summary strong {
-        display: none;
-    }
-
-    .cal-cashflow-balance-wrap {
-        height: 76px;
     }
 
     .cal-cashflow-popover {
@@ -1151,12 +1198,21 @@ html[data-theme="dark"] .cal-cashflow-popover {
         right: 12px;
         bottom: calc(78px + env(safe-area-inset-bottom));
         top: auto;
+        transform: none;
         width: auto;
         max-height: min(72vh, 560px);
         overflow-y: auto;
         border-radius: 24px;
         padding: 18px 16px 16px;
         z-index: 120;
+    }
+
+    .cal-cashflow-popover::before {
+        display: none;
+    }
+
+    .cal-cashflow-popover__balance strong {
+        font-size: 24px;
     }
 
     .cal-cashflow-month-summary {

@@ -1,12 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { toast } from 'react-toastify';
 
-const Feedback = ({ userEmail }) => {
-    const [isOpen, setIsOpen] = useState(false);
+const Feedback = ({ userEmail, isOpen, onClose }) => {
     const [text, setText] = useState('');
     const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        if (!isOpen) {
+            // Modal kapandığında state'i sıfırla
+            setText('');
+            setLoading(false);
+        }
+    }, [isOpen]);
 
     const handleSend = async (e) => {
         e.preventDefault();
@@ -21,8 +28,7 @@ const Feedback = ({ userEmail }) => {
             });
 
             toast.success('Mesajınız iletildi, teşekkürler!');
-            setText('');
-            setIsOpen(false);
+            onClose();
         } catch (error) {
             console.error("Error sending feedback: ", error);
             toast.error('Bir hata oluştu, tekrar deneyin.');
@@ -31,51 +37,25 @@ const Feedback = ({ userEmail }) => {
         }
     };
 
+    if (!isOpen) {
+        return null;
+    }
+
     return (
         <>
-            {/* Floating Action Button */}
-            <button
-                onClick={() => setIsOpen(true)}
-                className="feedback-fab"
-                style={{
-                    position: 'fixed',
-                    bottom: '20px',
-                    right: '20px',
-                    width: '60px',
-                    height: '60px',
-                    borderRadius: '50%',
-                    backgroundColor: '#2d3748',
-                    color: 'white',
-                    border: 'none',
-                    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '24px',
-                    cursor: 'pointer',
-                    zIndex: 9999,
-                    transition: 'transform 0.2s',
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
-                onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-            >
-                💬
-            </button>
-
             {/* Modal */}
-            {isOpen && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: '100%',
-                    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 10000,
-                }}>
+            <div style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 10000,
+            }}>
                     <div style={{
                         backgroundColor: 'white',
                         padding: '30px',
@@ -87,7 +67,7 @@ const Feedback = ({ userEmail }) => {
                         animation: 'fadeIn 0.3s ease-out'
                     }}>
                         <button
-                            onClick={() => setIsOpen(false)}
+                            onClick={onClose}
                             style={{
                                 position: 'absolute',
                                 top: '10px',
@@ -162,8 +142,7 @@ const Feedback = ({ userEmail }) => {
                             </button>
                         </form>
                     </div>
-                </div>
-            )}
+            </div>
             <style>{`
                 @keyframes fadeIn {
                     from { opacity: 0; transform: translateY(20px); }

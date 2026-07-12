@@ -1420,7 +1420,7 @@ html[data-theme="dark"] .mobile-bottom-nav {
 .global-quick-fab {
   position: fixed;
   right: 24px;
-  bottom: 94px;
+  bottom: 18px;
   z-index: 9998;
   min-height: 52px;
   display: inline-flex;
@@ -3743,7 +3743,7 @@ html[data-theme="dark"] ::placeholder {
 
   .global-quick-fab {
     right: 16px;
-    bottom: calc(92px + env(safe-area-inset-bottom));
+    bottom: calc(72px + env(safe-area-inset-bottom));
     min-width: 56px;
     min-height: 56px;
     justify-content: center;

@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { X } from 'lucide-react';
 import { EVENT_TYPE_META, formatDayHeading, formatEventAmount, todayKey } from '../../modules/calendar';
 import { toDateSafe } from '../../utils/helpers';
 
@@ -11,8 +10,6 @@ const CASHFLOW_TYPES = new Set([
     'bill',
     'installment',
 ]);
-
-const MONTH_SHORT = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
 
 const typeToTone = {
     salary: 'income',
@@ -257,51 +254,6 @@ const buildPlan = ({ events, sourceData, gizliMod, year, month }) => {
     };
 };
 
-const balanceToY = (balance, min, max) => {
-    if (max === min) return 50;
-    return 92 - ((balance - min) / (max - min)) * 74;
-};
-
-const BalanceChart = ({ points, selectedDate, daysInMonth }) => {
-    if (!points.length) return null;
-    const balances = points.map((point) => point.balance);
-    const min = Math.min(0, ...balances);
-    const max = Math.max(0, ...balances);
-    const zeroY = balanceToY(0, min, max);
-
-    const getX = (day) => ((day - 1) / Math.max(daysInMonth - 1, 1)) * 100;
-    const pointMap = new Map(points.map((point) => [point.date, point]));
-    const selectedPoint = selectedDate ? pointMap.get(selectedDate) : null;
-
-    return (
-        <svg className="cal-cashflow-balance-chart" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-            <line x1="0" x2="100" y1={zeroY} y2={zeroY} className="cal-cashflow-zero-line" />
-            {points.slice(1).map((point, index) => {
-                const previous = points[index];
-                const strokeTone = point.balance < 0 || previous.balance < 0 ? 'negative' : 'positive';
-                return (
-                    <line
-                        key={point.date}
-                        x1={getX(previous.day)}
-                        y1={balanceToY(previous.balance, min, max)}
-                        x2={getX(point.day)}
-                        y2={balanceToY(point.balance, min, max)}
-                        className={`cal-cashflow-balance-line cal-cashflow-balance-line--${strokeTone}`}
-                    />
-                );
-            })}
-            {selectedPoint && (
-                <circle
-                    cx={getX(selectedPoint.day)}
-                    cy={balanceToY(selectedPoint.balance, min, max)}
-                    r="2.1"
-                    className={`cal-cashflow-balance-dot cal-cashflow-balance-dot--${getFinancialTone(selectedPoint.balance)}`}
-                />
-            )}
-        </svg>
-    );
-};
-
 const DetailSection = ({ title, items, direction, gizliMod }) => {
     if (!items.length) return null;
     return (
@@ -337,7 +289,6 @@ const DetailSection = ({ title, items, direction, gizliMod }) => {
 const CashFlowPlan = ({ events = [], sourceData = {}, gizliMod = false, year, month }) => {
     const [selectedDate, setSelectedDate] = useState(null);
     const timelineRef = useRef(null);
-    const nodeRefs = useRef(new Map());
     const plan = useMemo(
         () => buildPlan({ events, sourceData, gizliMod, year, month }),
         [events, gizliMod, month, sourceData, year]
@@ -352,18 +303,14 @@ const CashFlowPlan = ({ events = [], sourceData = {}, gizliMod = false, year, mo
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
 
-    useEffect(() => {
-        if (!selectedDate) return;
-        nodeRefs.current.get(selectedDate)?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-    }, [selectedDate]);
-
     const handleOutsideClick = (event) => {
         if (!selectedDate) return;
         if (timelineRef.current && !timelineRef.current.contains(event.target)) setSelectedDate(null);
     };
 
-    const firstGroupDate = plan.groups[0]?.date || null;
-    const effectiveSelectedDate = selectedDate || firstGroupDate;
+    const selectedLeft = selectedGroup
+        ? ((selectedGroup.day - 1) / Math.max(plan.daysInMonth - 1, 1)) * 100
+        : 50;
 
     return (
         <section className="cal-cashflow-card" aria-labelledby="cashflow-plan-title" onMouseDown={handleOutsideClick}>
@@ -385,18 +332,14 @@ const CashFlowPlan = ({ events = [], sourceData = {}, gizliMod = false, year, mo
             ) : (
                 <div className="cal-cashflow-shell" ref={timelineRef}>
                     <div className="cal-cashflow-track-wrap">
-                        <div className="cal-cashflow-track" style={{ minWidth: `${Math.max(760, plan.daysInMonth * 34)}px` }}>
+                        <div className="cal-cashflow-track">
                             <div className="cal-cashflow-axis" />
                             {plan.groups.map((group) => {
                                 const left = `${((group.day - 1) / Math.max(plan.daysInMonth - 1, 1)) * 100}%`;
-                                const isSelected = group.date === effectiveSelectedDate;
+                                const isSelected = group.date === selectedDate;
                                 return (
                                     <button
                                         key={group.date}
-                                        ref={(node) => {
-                                            if (node) nodeRefs.current.set(group.date, node);
-                                            else nodeRefs.current.delete(group.date);
-                                        }}
                                         type="button"
                                         className={[
                                             'cal-cashflow-node',
@@ -409,28 +352,23 @@ const CashFlowPlan = ({ events = [], sourceData = {}, gizliMod = false, year, mo
                                         onClick={() => setSelectedDate(group.date)}
                                         title={`${formatDayHeading(group.date)} · ${formatSignedAmount(Math.abs(group.dailyNet), group.dailyNet >= 0 ? 'income' : 'expense', gizliMod)}`}
                                     >
-                                        <span className="cal-cashflow-node__summary">
-                                            {group.day} {MONTH_SHORT[month] || ''}
-                                            <strong className={`is-${getFinancialTone(group.dailyNet)}`}>
-                                                {formatSignedAmount(Math.abs(group.dailyNet), group.dailyNet >= 0 ? 'income' : 'expense', gizliMod)}
-                                            </strong>
-                                        </span>
+                                        <span className="cal-cashflow-node__date">{group.day}</span>
                                         <span className="cal-cashflow-node__dot" />
-                                        <span className="cal-cashflow-node__day">{group.day}</span>
                                     </button>
                                 );
                             })}
                         </div>
                     </div>
 
-                    <div className="cal-cashflow-balance-wrap">
-                        <BalanceChart points={plan.chartPoints} selectedDate={effectiveSelectedDate} daysInMonth={plan.daysInMonth} />
-                    </div>
-
                     {selectedGroup && (
-                        <div className="cal-cashflow-popover" role="dialog" aria-label={`${formatDayHeading(selectedGroup.date)} nakit akışı`}>
-                            <button type="button" className="cal-cashflow-popover__close" onClick={() => setSelectedDate(null)} aria-label="Kapat">
-                                <X size={16} />
+                        <div
+                            className="cal-cashflow-popover"
+                            style={{ '--popover-left': `${selectedLeft}%` }}
+                            role="dialog"
+                            aria-label={`${formatDayHeading(selectedGroup.date)} nakit akışı`}
+                        >
+                            <button type="button" className="cal-cashflow-popover__close" onClick={() => setSelectedDate(null)} aria-label="Detay penceresini kapat">
+                                <span aria-hidden="true">×</span>
                             </button>
                             <h3>{formatDayHeading(selectedGroup.date)}</h3>
                             <DetailSection title="Gelirler" items={selectedGroup.items.filter((item) => item.direction === 'income')} direction="income" gizliMod={gizliMod} />
@@ -443,7 +381,10 @@ const CashFlowPlan = ({ events = [], sourceData = {}, gizliMod = false, year, mo
                                     <div><span>Toplam gider</span><strong className="is-negative">-{formatPlainAmount(selectedGroup.expenseTotal, gizliMod)}</strong></div>
                                 )}
                                 <div><span>Günlük net</span><strong className={`is-${getFinancialTone(selectedGroup.dailyNet)}`}>{formatSignedAmount(Math.abs(selectedGroup.dailyNet), selectedGroup.dailyNet >= 0 ? 'income' : 'expense', gizliMod)}</strong></div>
-                                <div><span>Tahmini gün sonu bakiye</span><strong className={`is-${getFinancialTone(selectedGroup.endBalance)}`}>{selectedGroup.endBalance < 0 ? '-' : ''}{formatPlainAmount(selectedGroup.endBalance, gizliMod)}</strong></div>
+                            </div>
+                            <div className="cal-cashflow-popover__balance">
+                                <span>Tahmini Gün Sonu Bakiye</span>
+                                <strong className={`is-${getFinancialTone(selectedGroup.endBalance)}`}>{selectedGroup.endBalance < 0 ? '-' : ''}{formatPlainAmount(selectedGroup.endBalance, gizliMod)}</strong>
                             </div>
                         </div>
                     )}
