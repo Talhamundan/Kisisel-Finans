@@ -22,7 +22,7 @@ import {
     Upload,
     Wallet,
 } from 'lucide-react';
-import { inputStyle, formatCurrencyPlain, tarihFormatla, toDateSafe, sortTurkishText } from '../../utils/helpers';
+import { formatCurrencyPlain, tarihFormatla, toDateSafe, sortTurkishText } from '../../utils/helpers';
 import { isDateInPeriod, MONTH_NAMES } from '../../utils/period';
 import {
     formatSalaryPeriodRange,
@@ -46,19 +46,10 @@ import {
     TransactionRow,
     UpcomingPaymentRow,
 } from '../Shared/PremiumUI';
+import QuickTransactionForm from './QuickTransactionForm';
+import { getCreditCardPaymentPlan } from '../../utils/creditCardPayments';
 
 const parseAmount = (value) => parseFloat(value) || 0;
-const salaryPaymentTypes = ["Maaş Ödemesi", "Maaş Avansı", "Maaş Farkı", "Ek Maaş"];
-const incomeTypes = [...salaryPaymentTypes, "Prim / İkramiye", "Masraf İadesi", "Diğer Gelir"];
-const getSalaryPeriodOptions = (dateValue = new Date()) => {
-    const date = dateValue ? new Date(dateValue) : new Date();
-    const base = Number.isNaN(date.getTime()) ? new Date() : date;
-    return [-1, 0, 1, 2].map((offset) => {
-        const optionDate = new Date(base.getFullYear(), base.getMonth() + offset, 1);
-        const value = `${optionDate.getFullYear()}-${String(optionDate.getMonth() + 1).padStart(2, '0')}`;
-        return { value, label: `${MONTH_NAMES[optionDate.getMonth()]} ${optionDate.getFullYear()} Maaş Dönemi` };
-    });
-};
 
 const formatDayMonth = (date) => {
     if (!date) return 'Tarih yok';
@@ -298,6 +289,7 @@ const BudgetDashboard = ({
     abonelikOde,
     toplamSabitGider,
     kategoriListesi,
+    defaultPaymentAccountId,
     formTab, setFormTab,
     islemEkle,
     transferYap,
@@ -316,6 +308,7 @@ const BudgetDashboard = ({
     transferHedefId, setTransferHedefId,
     transferTutar, setTransferTutar,
     transferUcreti, setTransferUcreti,
+    transferAciklama, setTransferAciklama,
     transferTarihi, setTransferTarihi,
     taksitBaslik, setTaksitBaslik,
     taksitHesapId, setTaksitHesapId,
@@ -345,12 +338,43 @@ const BudgetDashboard = ({
     const siraliHesaplar = [...(hesaplar || [])].sort((a, b) =>
         String(a?.hesapAdi || '').localeCompare(String(b?.hesapAdi || ''), 'tr-TR', { sensitivity: 'base' })
     );
-    const quickSalaryPeriodOptions = getSalaryPeriodOptions(islemTarihi || new Date());
-    const quickNeedsSalaryLink = islemTipi === 'gelir' && salaryPaymentTypes.includes(islemGelirTuru);
-    const ensureQuickSalaryPeriod = (dateValue = islemTarihi || new Date()) => {
-        if (!islemMaasDonemi) {
-            setIslemMaasDonemi(getSalaryPeriodOptions(dateValue)[1]?.value || getSalaryPeriodOptions(dateValue)[0]?.value || "");
-        }
+    const quickTransactionFormProps = {
+        formTab, setFormTab,
+        hesaplar,
+        kategoriListesi,
+        defaultPaymentAccountId,
+        maaslar,
+        tanimliFaturalar,
+        tumIslemler,
+        islemEkle,
+        transferYap,
+        taksitEkle,
+        faturaGir,
+        secilenHesapId, setSecilenHesapId,
+        islemTipi, setIslemTipi,
+        islemGelirTuru, setIslemGelirTuru,
+        islemBagliMaasId, setIslemBagliMaasId,
+        islemMaasDonemi, setIslemMaasDonemi,
+        kategori, setKategori,
+        islemAciklama, setIslemAciklama,
+        islemTutar, setIslemTutar,
+        islemTarihi, setIslemTarihi,
+        transferKaynakId, setTransferKaynakId,
+        transferHedefId, setTransferHedefId,
+        transferTutar, setTransferTutar,
+        transferUcreti, setTransferUcreti,
+        transferAciklama, setTransferAciklama,
+        transferTarihi, setTransferTarihi,
+        taksitBaslik, setTaksitBaslik,
+        taksitHesapId, setTaksitHesapId,
+        taksitToplamTutar, setTaksitToplamTutar,
+        taksitSayisi, setTaksitSayisi,
+        taksitKategori, setTaksitKategori,
+        taksitAlisTarihi, setTaksitAlisTarihi,
+        secilenTanimId, setSecilenTanimId,
+        faturaGirisTutar, setFaturaGirisTutar,
+        faturaGirisTarih, setFaturaGirisTarih,
+        faturaGirisAciklama, setFaturaGirisAciklama,
     };
 
     const cashflowDataset = useMemo(() => {
@@ -495,6 +519,7 @@ const BudgetDashboard = ({
             : new Date(selectedPeriod.year, selectedPeriod.month - 1, 1);
         const currentYear = periodDate.getFullYear();
         const currentMonth = periodDate.getMonth();
+        const periodKey = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
 
         const rows = [];
 
@@ -537,13 +562,15 @@ const BudgetDashboard = ({
             .forEach((account) => {
                 const day = parseInt(account.kesimGunu) || null;
                 const dueDate = day ? new Date(currentYear, currentMonth, Math.min(day, 28)) : null;
+                const paymentPlan = getCreditCardPaymentPlan(account, periodKey);
+                if (paymentPlan.plannedPayment <= 0) return;
                 rows.push({
                     id: `card-statement-${account.id}`,
                     title: account.hesapAdi || 'Kart ekstresi',
                     type: 'Kart ekstresi',
                     badgeLabel: 'Kart ekstresi',
                     date: dueDate,
-                    amount: Math.abs(parseAmount(account.guncelBakiye)),
+                    amount: paymentPlan.plannedPayment,
                     icon: CreditCard,
                     tone: 'warning',
                     onClick: () => modalAc('kredi_karti_ode', account),
@@ -1011,7 +1038,10 @@ const BudgetDashboard = ({
                             <button key={account.id} type="button" className="qw-account-row" title={account.hesapAdi} onClick={() => { setSalaryHistoryMode('calendar'); setHistoryAccount(account); }}>
                                 <IconTile icon={Landmark} tone={account.hesapTipi === 'krediKarti' ? 'warning' : 'accent'} />
                                 <span>
-                                    <strong>{account.hesapAdi}</strong>
+                                    <strong>
+                                        <span>{account.hesapAdi}</span>
+                                        {account.varsayilanOdemeAraci && <em className="qw-default-account-badge">Varsayılan</em>}
+                                    </strong>
                                     <small>{account.hesapTipi === 'krediKarti' ? 'Kredi kartı' : account.hesapTipi === 'yatirim' ? 'Yatırım hesabı' : 'Vadesiz hesap'}</small>
                                 </span>
                                 <span className="qw-account-row__side">
@@ -1068,147 +1098,7 @@ const BudgetDashboard = ({
 
                 <PremiumCard className="qw-quick-entry-card qw-quick-entry-card--compact">
                     <SectionHeader title="Hızlı İşlem" />
-                    <div className="qw-form-tabs">
-                        {[
-                            ['islem', 'İşlem'],
-                            ['transfer', 'Transfer'],
-                            ['taksit', 'Taksit'],
-                            ['fatura', 'Fatura'],
-                        ].map(([id, label]) => (
-                            <button key={id} type="button" className={formTab === id ? 'is-active' : ''} onClick={() => setFormTab(id)}>
-                                {label}
-                            </button>
-                        ))}
-                    </div>
-
-                    {formTab === 'islem' && (
-                        <form onSubmit={islemEkle} className="qw-quick-form">
-                            <div className="qw-form-row">
-                                <select value={secilenHesapId} onChange={e => setSecilenHesapId(e.target.value)} style={inputStyle}>
-                                    <option value="">Hangi hesaptan?</option>
-                                    {siraliHesaplar.map(h => <option key={h.id} value={h.id}>{h.hesapAdi} ({formatPara(h.guncelBakiye)})</option>)}
-                                </select>
-                                <select value={islemTipi} onChange={e => setIslemTipi(e.target.value)} style={inputStyle}>
-                                    <option value="gider">Gider</option>
-                                    <option value="gelir">Gelir</option>
-                                </select>
-                            </div>
-                            {islemTipi === 'gelir' && (
-                                <>
-                                    <select
-                                        value={islemGelirTuru}
-                                        onChange={e => {
-                                            setIslemGelirTuru(e.target.value);
-                                            if (salaryPaymentTypes.includes(e.target.value)) ensureQuickSalaryPeriod();
-                                        }}
-                                        style={inputStyle}
-                                    >
-                                        {incomeTypes.map(tur => <option key={tur} value={tur}>{tur}</option>)}
-                                    </select>
-                                    {quickNeedsSalaryLink && (
-                                        <div className="qw-form-row">
-                                            <select value={islemBagliMaasId} onChange={e => setIslemBagliMaasId(e.target.value)} style={inputStyle} required>
-                                                <option value="">Bağlı maaş</option>
-                                                {(maaslar || []).map(maas => <option key={maas.id} value={maas.id}>{maas.ad}</option>)}
-                                            </select>
-                                            <select value={islemMaasDonemi || quickSalaryPeriodOptions[1]?.value || ''} onChange={e => setIslemMaasDonemi(e.target.value)} style={inputStyle} required>
-                                                {quickSalaryPeriodOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-                                            </select>
-                                        </div>
-                                    )}
-                                </>
-                            )}
-                            <select value={kategori || (siraliKategoriListesi && siraliKategoriListesi[0])} onChange={e => setKategori(e.target.value)} style={inputStyle}>
-                                {siraliKategoriListesi.map(k => <option key={k} value={k}>{k}</option>)}
-                            </select>
-                            <div className="qw-form-row">
-                                <DescriptionInput
-                                    value={islemAciklama}
-                                    onChange={e => setIslemAciklama(e.target.value)}
-                                    historyItems={tumIslemler}
-                                    inputStyle={inputStyle}
-                                    wrapperStyle={{ flex: 1 }}
-                                />
-                                <input type="number" placeholder="Tutar" value={islemTutar} onChange={e => setIslemTutar(e.target.value)} style={inputStyle} />
-                            </div>
-                            <input
-                                type="datetime-local"
-                                value={islemTarihi}
-                                onChange={e => {
-                                    setIslemTarihi(e.target.value);
-                                    if (quickNeedsSalaryLink && !islemMaasDonemi) ensureQuickSalaryPeriod(e.target.value);
-                                }}
-                                style={inputStyle}
-                            />
-                            <button type="submit" className="qw-submit-button">Kaydet</button>
-                        </form>
-                    )}
-
-                    {formTab === 'transfer' && (
-                        <form onSubmit={transferYap} className="qw-quick-form">
-                            <div className="qw-form-row">
-                                <select value={transferKaynakId} onChange={e => setTransferKaynakId(e.target.value)} style={inputStyle}>
-                                    <option value="">Nereden?</option>
-                                    {siraliHesaplar.map(h => <option key={h.id} value={h.id}>{h.hesapAdi}</option>)}
-                                </select>
-                                <select value={transferHedefId} onChange={e => setTransferHedefId(e.target.value)} style={inputStyle}>
-                                    <option value="">Nereye?</option>
-                                    {siraliHesaplar.map(h => <option key={h.id} value={h.id}>{h.hesapAdi}</option>)}
-                                </select>
-                            </div>
-                            <div className="qw-form-row">
-                                <input type="number" placeholder="İşlem tutarı" value={transferTutar} onChange={e => setTransferTutar(e.target.value)} style={inputStyle} />
-                                <input type="number" placeholder="Ücret" value={transferUcreti} onChange={e => setTransferUcreti(e.target.value)} style={inputStyle} />
-                            </div>
-                            <input type="datetime-local" value={transferTarihi} onChange={e => setTransferTarihi(e.target.value)} style={inputStyle} />
-                            <button type="submit" className="qw-submit-button">Transfer yap</button>
-                        </form>
-                    )}
-
-                    {formTab === 'taksit' && (
-                        <form onSubmit={taksitEkle} className="qw-quick-form">
-                            <div className="qw-form-row">
-                                <select value={taksitHesapId} onChange={e => setTaksitHesapId(e.target.value)} style={inputStyle} required>
-                                    <option value="">Hangi karttan?</option>
-                                    {siraliHesaplar.map(h => <option key={h.id} value={h.id}>{h.hesapAdi}</option>)}
-                                </select>
-                                <input placeholder="Ne aldın?" value={taksitBaslik} onChange={e => setTaksitBaslik(e.target.value)} style={inputStyle} required />
-                            </div>
-                            <div className="qw-form-row">
-                                <input type="number" placeholder="Toplam borç" value={taksitToplamTutar} onChange={e => setTaksitToplamTutar(e.target.value)} style={inputStyle} required />
-                                <input type="number" placeholder="Kaç taksit?" value={taksitSayisi} onChange={e => setTaksitSayisi(e.target.value)} style={inputStyle} required />
-                            </div>
-                            <div className="qw-form-row">
-                                <select value={taksitKategori || (siraliKategoriListesi && siraliKategoriListesi[0])} onChange={e => setTaksitKategori(e.target.value)} style={inputStyle}>
-                                    {siraliKategoriListesi.map(k => <option key={k} value={k}>{k}</option>)}
-                                </select>
-                                <input type="date" value={taksitAlisTarihi} onChange={e => setTaksitAlisTarihi(e.target.value)} style={inputStyle} />
-                            </div>
-                            <StatusBadge tone="purple">Aylık {taksitToplamTutar && taksitSayisi ? formatPara(taksitToplamTutar / taksitSayisi) : formatPara(0)}</StatusBadge>
-                            <button type="submit" className="qw-submit-button">Kaydet</button>
-                        </form>
-                    )}
-
-                    {formTab === 'fatura' && (
-                        <form onSubmit={faturaGir} className="qw-quick-form">
-                            {(tanimliFaturalar || []).length === 0 ? (
-                                <EmptyState title="Fatura tanımı yok" description="Önce bir fatura tanımı ekleyin." icon={ReceiptText} />
-                            ) : (
-                                <>
-                                    <select value={secilenTanimId} onChange={e => setSecilenTanimId(e.target.value)} style={inputStyle} required>
-                                        <option value="">Hangi fatura?</option>
-                                        {(tanimliFaturalar || []).map(t => <option key={t.id} value={t.id}>{t.baslik} ({t.kurum})</option>)}
-                                    </select>
-                                    <div className="qw-form-row">
-                                        <input type="number" placeholder="Tutar" value={faturaGirisTutar} onChange={e => setFaturaGirisTutar(e.target.value)} style={inputStyle} required />
-                                        <input type="date" value={faturaGirisTarih} onChange={e => setFaturaGirisTarih(e.target.value)} style={inputStyle} required />
-                                    </div>
-                                    <input placeholder="Açıklama" value={faturaGirisAciklama} onChange={e => setFaturaGirisAciklama(e.target.value)} style={inputStyle} />
-                                    <button type="submit" className="qw-submit-button">Kaydet</button>
-                                </>
-                            )}
-                        </form>
-                    )}
+                    <QuickTransactionForm {...quickTransactionFormProps} />
                 </PremiumCard>
             </div>
 
@@ -1386,6 +1276,11 @@ const BudgetDashboard = ({
                     minHeight: 0
                 }}
             >
+                {historyAccount?.varsayilanOdemeAraci && (
+                    <div className="qw-account-history-note">
+                        Varsayılan ödeme aracı
+                    </div>
+                )}
                 {historyAccountIsSalary && (
                     <div style={{ padding: '18px 28px 0' }}>
                         <div className="qw-form-tabs" style={{ marginBottom: '16px' }}>

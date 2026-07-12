@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { formatCurrencyPlain, toDateSafe } from '../utils/helpers';
+import { getCreditCardPaymentPlan } from '../utils/creditCardPayments';
 
 export const useNotifications = ({
     hesaplar,
@@ -31,6 +32,7 @@ export const useNotifications = ({
         const mevcutAy = now.getMonth();
         const mevcutYil = now.getFullYear();
         const mevcutGun = now.getDate();
+        const periodKey = `${mevcutYil}-${String(mevcutAy + 1).padStart(2, '0')}`;
         const today0 = startOfDay(now);
         let tempBildirimler = [];
 
@@ -44,7 +46,10 @@ export const useNotifications = ({
                         return t.getMonth() === mevcutAy && t.getFullYear() === mevcutYil && t.getDate() >= kesimGunuInt && (islem.hedefId === h.id || islem.hesapId === h.id) && (islem.islemTipi === 'transfer' || islem.islemTipi === 'gelir');
                     });
                     if (!odemeYapildiMi && h.guncelBakiye < 0) {
-                        tempBildirimler.push({ id: h.id + '_kk', tip: 'kk_hatirlatma', mesaj: `💳 ${h.hesapAdi} ekstresi kesildi!`, tutar: Math.abs(h.guncelBakiye), data: h, renk: 'orange' });
+                        const paymentPlan = getCreditCardPaymentPlan(h, periodKey);
+                        if (paymentPlan.plannedPayment > 0) {
+                            tempBildirimler.push({ id: h.id + '_kk', tip: 'kk_hatirlatma', mesaj: `💳 ${h.hesapAdi} ekstresi kesildi!`, tutar: paymentPlan.plannedPayment, data: h, renk: 'orange' });
+                        }
                     }
                 }
             }

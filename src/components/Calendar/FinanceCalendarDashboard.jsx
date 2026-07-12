@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useCalendarEvents, groupEventsByDate, formatMonthYear, todayKey, dateToKey } from '../../modules/calendar';
 import CalendarGrid from './CalendarGrid';
 import CalendarDayPanel from './CalendarDayPanel';
+import CashFlowPlan from './CashFlowPlan';
 import './calendar.css';
 
 const readInitialCalendarMonth = () => {
@@ -82,6 +83,15 @@ const FinanceCalendarDashboard = ({ user, alanKodu, gizliMod, sourceData = {} })
                         />
                     )}
                 </div>
+            )}
+            {!loading && (
+                <CashFlowPlan
+                    events={events}
+                    sourceData={sourceData}
+                    gizliMod={gizliMod}
+                    year={viewYear}
+                    month={viewMonth}
+                />
             )}
         </div>
     );

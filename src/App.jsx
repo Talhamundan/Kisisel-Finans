@@ -9,6 +9,7 @@ import { Eye, EyeOff, LockKeyhole, Mail, ShieldCheck, TrendingDown, TrendingUp }
 import Header from './components/Layout/Header';
 import Notifications from './components/Shared/Notifications';
 import BudgetDashboard from './components/Budget/BudgetDashboard';
+import GlobalQuickTransaction from './components/Budget/GlobalQuickTransaction';
 import InvestmentDashboard from './components/Investment/InvestmentDashboard';
 import GoalsInventory from './components/Budget/GoalsInventory';
 import FinanceCalendarDashboard from './components/Calendar/FinanceCalendarDashboard';
@@ -16,6 +17,7 @@ import SalaryAnalysisDashboard from './components/Salary/SalaryAnalysisDashboard
 import ModalManager from './components/Modals/ModalManager';
 import MobileNav from './components/Layout/MobileNav';
 import AppLogo from './components/Shared/AppLogo';
+import { useDefaultPaymentAccount } from './utils/defaultPaymentAccount';
 
 // Hooks
 import { useAuth } from './hooks/useAuth';
@@ -49,6 +51,7 @@ function App() {
     const [aktifModal, setAktifModal] = useState(null);
     const [seciliVeri, setSeciliVeri] = useState(null);
     const [formTab, setFormTab] = useState("islem");
+    const [globalQuickOpen, setGlobalQuickOpen] = useState(false);
     const [selectedPeriod, setSelectedPeriod] = useState(readInitialPeriod);
     const [theme, setTheme] = useState(getInitialTheme);
 
@@ -66,6 +69,8 @@ function App() {
     const calculations = useCalculations(data, gizliMod, data.aylikLimit, selectedPeriod);
     const budgetActions = useBudgetActions(user, alanKodu, data.hesaplar, data.kategoriListesi, data.tanimliFaturalar);
     const investmentActions = useInvestmentActions(user, alanKodu);
+    const defaultPaymentAccount = useDefaultPaymentAccount(data.hesaplar);
+    const defaultPaymentAccountId = defaultPaymentAccount?.id || "";
 
     useEffect(() => {
         document.documentElement.dataset.theme = theme;
@@ -209,6 +214,7 @@ function App() {
 
         // Fill Forms based on Type
         if (tip === 'duzenle_hesap') budgetActions.fillAccountForm(veri);
+        if (tip === 'hesap_ekle') budgetActions.setVarsayilanOdemeAraci(false);
         if (tip === 'duzenle_islem') budgetActions.fillTransactionForm(veri);
         if (tip === 'duzenle_abonelik') budgetActions.fillSubscriptionForm(veri);
         if (tip === 'duzenle_taksit') budgetActions.fillInstallmentForm(veri);
@@ -217,9 +223,17 @@ function App() {
         if (tip === 'duzenle_fatura_tanim' || tip === 'fatura_tanim_duzenle') budgetActions.fillBillDefForm(veri); // If exists
         if (tip === 'fatura_ode') {
             const tanim = data.tanimliFaturalar.find(t => t.id === veri?.tanimId);
-            budgetActions.setSecilenHesapId(tanim?.hesapId || "");
+            budgetActions.setSecilenHesapId(tanim?.hesapId || defaultPaymentAccountId || "");
         }
-        if (tip === 'kredi_karti_ode') budgetActions.fillCCForm(veri);
+        if (tip === 'kredi_karti_ode') {
+            budgetActions.fillCCForm(veri);
+            if (defaultPaymentAccountId && defaultPaymentAccountId !== veri?.id) {
+                budgetActions.setKkOdemeKaynakId(defaultPaymentAccountId);
+            }
+        }
+        if (tip === 'abonelik_ekle') budgetActions.setAboHesapId(defaultPaymentAccountId || "");
+        if (tip === 'taksit_ekle') budgetActions.setTaksitHesapId(defaultPaymentAccountId || "");
+        if (tip === 'fatura_tanim_ekle') budgetActions.setTanimHesapId(defaultPaymentAccountId || "");
         if (tip === 'satis') budgetActions.setIslemTutar(formatMoneyInputValue(veri.guncelFiyat || veri.alisFiyati));
         if (tip === 'duzenle_portfoy') investmentActions.fillPortfolioForm(veri);
         if (tip === 'tahsilat_ekle') investmentActions.setTahsilatTutar(formatMoneyInputValue(veri.satisFiyati - veri.tahsilEdilen));
@@ -240,6 +254,70 @@ function App() {
         data.setYatirimTurleri(y);
         setDoc(doc(db, "ayarlar", alanKodu), { yatirimTurleri: y }, { merge: true });
     }
+
+    const quickTransactionFormProps = {
+        formTab, setFormTab,
+        hesaplar: data.hesaplar,
+        kategoriListesi: data.kategoriListesi,
+        maaslar: data.maaslar,
+        tanimliFaturalar: data.tanimliFaturalar,
+        tumIslemler: data.islemler,
+        defaultPaymentAccountId,
+        islemEkle: budgetActions.islemEkle,
+        transferYap: budgetActions.transferYap,
+        taksitEkle: budgetActions.taksitEkle,
+        faturaGir: budgetActions.faturaGir,
+        secilenHesapId: budgetActions.secilenHesapId,
+        setSecilenHesapId: budgetActions.setSecilenHesapId,
+        islemTipi: budgetActions.islemTipi,
+        setIslemTipi: budgetActions.setIslemTipi,
+        islemGelirTuru: budgetActions.islemGelirTuru,
+        setIslemGelirTuru: budgetActions.setIslemGelirTuru,
+        islemBagliMaasId: budgetActions.islemBagliMaasId,
+        setIslemBagliMaasId: budgetActions.setIslemBagliMaasId,
+        islemMaasDonemi: budgetActions.islemMaasDonemi,
+        setIslemMaasDonemi: budgetActions.setIslemMaasDonemi,
+        kategori: budgetActions.kategori,
+        setKategori: budgetActions.setKategori,
+        islemAciklama: budgetActions.islemAciklama,
+        setIslemAciklama: budgetActions.setIslemAciklama,
+        islemTutar: budgetActions.islemTutar,
+        setIslemTutar: budgetActions.setIslemTutar,
+        islemTarihi: budgetActions.islemTarihi,
+        setIslemTarihi: budgetActions.setIslemTarihi,
+        transferKaynakId: budgetActions.transferKaynakId,
+        setTransferKaynakId: budgetActions.setTransferKaynakId,
+        transferHedefId: budgetActions.transferHedefId,
+        setTransferHedefId: budgetActions.setTransferHedefId,
+        transferTutar: budgetActions.transferTutar,
+        setTransferTutar: budgetActions.setTransferTutar,
+        transferUcreti: budgetActions.transferUcreti,
+        setTransferUcreti: budgetActions.setTransferUcreti,
+        transferAciklama: budgetActions.transferAciklama,
+        setTransferAciklama: budgetActions.setTransferAciklama,
+        transferTarihi: budgetActions.transferTarihi,
+        setTransferTarihi: budgetActions.setTransferTarihi,
+        taksitBaslik: budgetActions.taksitBaslik,
+        setTaksitBaslik: budgetActions.setTaksitBaslik,
+        taksitHesapId: budgetActions.taksitHesapId,
+        setTaksitHesapId: budgetActions.setTaksitHesapId,
+        taksitToplamTutar: budgetActions.taksitToplamTutar,
+        setTaksitToplamTutar: budgetActions.setTaksitToplamTutar,
+        taksitSayisi: budgetActions.taksitSayisi,
+        setTaksitSayisi: budgetActions.setTaksitSayisi,
+        taksitKategori: budgetActions.taksitKategori,
+        setTaksitKategori: budgetActions.setTaksitKategori,
+        taksitAlisTarihi: budgetActions.taksitAlisTarihi,
+        setTaksitAlisTarihi: budgetActions.setTaksitAlisTarihi,
+        secilenTanimId: budgetActions.secilenTanimId,
+        setSecilenTanimId: budgetActions.setSecilenTanimId,
+        faturaGirisTutar: budgetActions.faturaGirisTutar,
+        setFaturaGirisTutar: budgetActions.setFaturaGirisTutar,
+        faturaGirisTarih: budgetActions.faturaGirisTarih,
+        setFaturaGirisTarih: budgetActions.setFaturaGirisTarih,
+        faturaGirisAciklama: budgetActions.faturaGirisAciklama,
+        setFaturaGirisAciklama: budgetActions.setFaturaGirisAciklama,
+    };
 
     // --- RENDERING ---
 
@@ -504,6 +582,11 @@ function App() {
                 hesapTipi={budgetActions.hesapTipi} setHesapTipi={budgetActions.setHesapTipi}
                 baslangicBakiye={budgetActions.baslangicBakiye} setBaslangicBakiye={budgetActions.setBaslangicBakiye}
                 hesapKesimGunu={budgetActions.hesapKesimGunu} setHesapKesimGunu={budgetActions.setHesapKesimGunu}
+                kartOdemeStratejisi={budgetActions.kartOdemeStratejisi} setKartOdemeStratejisi={budgetActions.setKartOdemeStratejisi}
+                kartVarsayilanOdemeTutari={budgetActions.kartVarsayilanOdemeTutari} setKartVarsayilanOdemeTutari={budgetActions.setKartVarsayilanOdemeTutari}
+                kartPlanlananOdemeTutari={budgetActions.kartPlanlananOdemeTutari} setKartPlanlananOdemeTutari={budgetActions.setKartPlanlananOdemeTutari}
+                kartAsgariOdemeTutari={budgetActions.kartAsgariOdemeTutari} setKartAsgariOdemeTutari={budgetActions.setKartAsgariOdemeTutari}
+                varsayilanOdemeAraci={budgetActions.varsayilanOdemeAraci} setVarsayilanOdemeAraci={budgetActions.setVarsayilanOdemeAraci}
                 maasHesabi={budgetActions.maasHesabi} setMaasHesabi={budgetActions.setMaasHesabi}
                 anaMaasHesabi={budgetActions.anaMaasHesabi} setAnaMaasHesabi={budgetActions.setAnaMaasHesabi}
                 hesapMaasGunu={budgetActions.hesapMaasGunu} setHesapMaasGunu={budgetActions.setHesapMaasGunu}
@@ -563,6 +646,7 @@ function App() {
                 tasimaIslemiSuruyor={budgetActions.tasimaIslemiSuruyor}
                 satisYap={() => investmentActions.satisYap(seciliVeri, budgetActions.secilenHesapId, budgetActions.islemTutar)}
                 secilenHesapId={budgetActions.secilenHesapId} setSecilenHesapId={budgetActions.setSecilenHesapId}
+                defaultPaymentAccountId={defaultPaymentAccountId}
                 onKategoriUpdate={onKategoriUpdate}
                 onYatirimTuruUpdate={onYatirimTuruUpdate}
                 aylikLimit={data.aylikLimit}
@@ -662,6 +746,7 @@ function App() {
                     abonelikler={data.abonelikler}
                     toplamSabitGider={calculations.toplamSabitGider}
                     kategoriListesi={data.kategoriListesi}
+                    defaultPaymentAccountId={defaultPaymentAccountId}
                     mevcutAylar={calculations.mevcutAylar}
                     aramaMetni={calculations.aramaMetni} setAramaMetni={calculations.setAramaMetni}
                     filtreKategori={calculations.filtreKategori} setFiltreKategori={calculations.setFiltreKategori}
@@ -716,6 +801,7 @@ function App() {
                     transferHedefId={budgetActions.transferHedefId} setTransferHedefId={budgetActions.setTransferHedefId}
                     transferTutar={budgetActions.transferTutar} setTransferTutar={budgetActions.setTransferTutar}
                     transferUcreti={budgetActions.transferUcreti} setTransferUcreti={budgetActions.setTransferUcreti}
+                    transferAciklama={budgetActions.transferAciklama} setTransferAciklama={budgetActions.setTransferAciklama}
                     transferTarihi={budgetActions.transferTarihi} setTransferTarihi={budgetActions.setTransferTarihi}
                     taksitBaslik={budgetActions.taksitBaslik} setTaksitBaslik={budgetActions.setTaksitBaslik}
                     taksitHesapId={budgetActions.taksitHesapId} setTaksitHesapId={budgetActions.setTaksitHesapId}
@@ -834,6 +920,13 @@ function App() {
                     }}
                 />
             )}
+
+            <GlobalQuickTransaction
+                isOpen={globalQuickOpen}
+                onOpen={() => setGlobalQuickOpen(true)}
+                onClose={() => setGlobalQuickOpen(false)}
+                quickFormProps={quickTransactionFormProps}
+            />
 
             {/* Geri Bildirim Butonu */}
             <Feedback userEmail={user?.email} />

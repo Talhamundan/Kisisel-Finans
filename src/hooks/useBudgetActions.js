@@ -4,6 +4,8 @@ import { db } from '../firebase';
 import { toast } from 'react-toastify';
 import Swal from 'sweetalert2';
 import { formatCurrencyPlain, formatMoneyInputValue } from '../utils/helpers';
+import { canBeDefaultPaymentAccount } from '../utils/defaultPaymentAccount';
+import { CREDIT_CARD_PAYMENT_STRATEGIES, getCreditCardPaymentPlan } from '../utils/creditCardPayments';
 
 export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tanimliFaturalar) => {
     // --- FORM STATES ---
@@ -12,6 +14,11 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
     const [hesapTipi, setHesapTipi] = useState("nakit");
     const [baslangicBakiye, setBaslangicBakiye] = useState("");
     const [hesapKesimGunu, setHesapKesimGunu] = useState("");
+    const [kartOdemeStratejisi, setKartOdemeStratejisi] = useState(CREDIT_CARD_PAYMENT_STRATEGIES.FULL);
+    const [kartVarsayilanOdemeTutari, setKartVarsayilanOdemeTutari] = useState("");
+    const [kartPlanlananOdemeTutari, setKartPlanlananOdemeTutari] = useState("");
+    const [kartAsgariOdemeTutari, setKartAsgariOdemeTutari] = useState("");
+    const [varsayilanOdemeAraci, setVarsayilanOdemeAraci] = useState(false);
     const [maasHesabi, setMaasHesabi] = useState(false);
     const [anaMaasHesabi, setAnaMaasHesabi] = useState(false);
     const [hesapMaasGunu, setHesapMaasGunu] = useState("");
@@ -36,6 +43,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
     const [transferHedefId, setTransferHedefId] = useState("");
     const [transferTutar, setTransferTutar] = useState("");
     const [transferUcreti, setTransferUcreti] = useState(""); // NEW: Transfer Fee
+    const [transferAciklama, setTransferAciklama] = useState("");
     const [transferTarihi, setTransferTarihi] = useState("");
 
     // Abonelik
@@ -115,6 +123,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
             }
             const salaryDay = parseInt(hesapMaasGunu);
             const isSalaryAccount = hesapTipi !== 'krediKarti' && maasHesabi;
+            const shouldBeDefaultPaymentAccount = hesapTipi !== 'yatirim' && varsayilanOdemeAraci;
             if (isSalaryAccount && (!Number.isFinite(salaryDay) || salaryDay < 1 || salaryDay > 31)) {
                 toast.warning("Maaş günü 1-31 arasında olmalı.");
                 return false;
@@ -126,18 +135,29 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
                 uid: user.uid, alanKodu, hesapAdi, hesapTipi,
                 guncelBakiye: bakiye,
                 kesimGunu: hesapTipi === 'krediKarti' ? kesimGunu : "",
+                odemeStratejisi: hesapTipi === 'krediKarti' ? (kartOdemeStratejisi || CREDIT_CARD_PAYMENT_STRATEGIES.FULL) : "",
+                varsayilanOdemeTutari: hesapTipi === 'krediKarti' && kartOdemeStratejisi === CREDIT_CARD_PAYMENT_STRATEGIES.FIXED ? (parseFloat(kartVarsayilanOdemeTutari) || 0) : 0,
+                planlananOdemeTutari: hesapTipi === 'krediKarti' && kartOdemeStratejisi === CREDIT_CARD_PAYMENT_STRATEGIES.MANUAL ? (parseFloat(kartPlanlananOdemeTutari) || 0) : 0,
+                asgariOdemeTutari: hesapTipi === 'krediKarti' ? (parseFloat(kartAsgariOdemeTutari) || 0) : 0,
                 maasHesabi: isSalaryAccount,
                 anaMaasHesabi: isSalaryAccount ? Boolean(anaMaasHesabi) : false,
                 maasGunu: isSalaryAccount ? salaryDay : "",
-                bagliMaasId: isSalaryAccount ? (bagliMaasId || "") : ""
+                bagliMaasId: isSalaryAccount ? (bagliMaasId || "") : "",
+                varsayilanOdemeAraci: shouldBeDefaultPaymentAccount,
+                guncellemeTarihi: new Date(),
             });
+            if (shouldBeDefaultPaymentAccount) {
+                hesaplar
+                    .filter((account) => account.id && account.varsayilanOdemeAraci)
+                    .forEach((account) => batch.update(doc(db, "hesaplar", account.id), { varsayilanOdemeAraci: false, guncellemeTarihi: new Date() }));
+            }
             if (isSalaryAccount && anaMaasHesabi) {
                 hesaplar
                     .filter((account) => account.anaMaasHesabi)
                     .forEach((account) => batch.update(doc(db, "hesaplar", account.id), { anaMaasHesabi: false }));
             }
             await batch.commit();
-            setHesapAdi(""); setBaslangicBakiye(""); setHesapKesimGunu("");
+            setHesapAdi(""); setBaslangicBakiye(""); setHesapKesimGunu(""); setKartOdemeStratejisi(CREDIT_CARD_PAYMENT_STRATEGIES.FULL); setKartVarsayilanOdemeTutari(""); setKartPlanlananOdemeTutari(""); setKartAsgariOdemeTutari(""); setVarsayilanOdemeAraci(false);
             setMaasHesabi(false); setAnaMaasHesabi(false); setHesapMaasGunu(""); setBagliMaasId("");
             toast.success("Hesap eklendi.");
             return true;
@@ -163,6 +183,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
             }
             const salaryDay = parseInt(hesapMaasGunu);
             const isSalaryAccount = hesapTipi !== 'krediKarti' && maasHesabi;
+            const shouldBeDefaultPaymentAccount = hesapTipi !== 'yatirim' && varsayilanOdemeAraci;
             if (isSalaryAccount && (!Number.isFinite(salaryDay) || salaryDay < 1 || salaryDay > 31)) {
                 toast.warning("Maaş günü 1-31 arasında olmalı.");
                 return false;
@@ -172,11 +193,22 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
                 hesapAdi, hesapTipi,
                 guncelBakiye: bakiye,
                 kesimGunu: hesapTipi === 'krediKarti' ? kesimGunu : "",
+                odemeStratejisi: hesapTipi === 'krediKarti' ? (kartOdemeStratejisi || CREDIT_CARD_PAYMENT_STRATEGIES.FULL) : "",
+                varsayilanOdemeTutari: hesapTipi === 'krediKarti' && kartOdemeStratejisi === CREDIT_CARD_PAYMENT_STRATEGIES.FIXED ? (parseFloat(kartVarsayilanOdemeTutari) || 0) : 0,
+                planlananOdemeTutari: hesapTipi === 'krediKarti' && kartOdemeStratejisi === CREDIT_CARD_PAYMENT_STRATEGIES.MANUAL ? (parseFloat(kartPlanlananOdemeTutari) || 0) : 0,
+                asgariOdemeTutari: hesapTipi === 'krediKarti' ? (parseFloat(kartAsgariOdemeTutari) || 0) : 0,
                 maasHesabi: isSalaryAccount,
                 anaMaasHesabi: isSalaryAccount ? Boolean(anaMaasHesabi) : false,
                 maasGunu: isSalaryAccount ? salaryDay : "",
-                bagliMaasId: isSalaryAccount ? (bagliMaasId || "") : ""
+                bagliMaasId: isSalaryAccount ? (bagliMaasId || "") : "",
+                varsayilanOdemeAraci: shouldBeDefaultPaymentAccount,
+                guncellemeTarihi: new Date(),
             });
+            if (shouldBeDefaultPaymentAccount) {
+                hesaplar
+                    .filter((account) => account.id !== id && account.varsayilanOdemeAraci)
+                    .forEach((account) => batch.update(doc(db, "hesaplar", account.id), { varsayilanOdemeAraci: false, guncellemeTarihi: new Date() }));
+            }
             if (isSalaryAccount && anaMaasHesabi) {
                 hesaplar
                     .filter((account) => account.id !== id && account.anaMaasHesabi)
@@ -481,9 +513,12 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
             const batch = writeBatch(db);
 
             // 1. Transfer Logic (Money Moved)
+            const transferAciklamaMetni = transferAciklama.trim()
+                || `${k?.hesapAdi} ➝ ${h?.hesapAdi}` + (ucret > 0 ? ` (+${formatCurrencyPlain(ucret)} Komisyon)` : "");
+
             batch.set(doc(collection(db, "nakit_islemleri")), {
                 uid: user.uid, alanKodu, islemTipi: "transfer", kategori: "Transfer",
-                tutar: tutar, aciklama: `${k?.hesapAdi} ➝ ${h?.hesapAdi}` + (ucret > 0 ? ` (+${formatCurrencyPlain(ucret)} Komisyon)` : ""),
+                tutar: tutar, aciklama: transferAciklamaMetni,
                 tarih: tarih, kaynakId: transferKaynakId, hedefId: transferHedefId
             });
 
@@ -509,7 +544,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
             await batch.commit();
 
             toast.success("Transfer (ve varsa ücret) işlendi!");
-            setTransferTutar(""); setTransferUcreti(""); setTransferKaynakId(""); setTransferHedefId(""); setTransferTarihi("");
+            setTransferTutar(""); setTransferUcreti(""); setTransferAciklama(""); setTransferKaynakId(""); setTransferHedefId(""); setTransferTarihi("");
             return true;
         } catch (err) {
             console.error(err);
@@ -1307,6 +1342,11 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
         setHesapTipi(v.hesapTipi || "nakit");
         setBaslangicBakiye(formatMoneyInputValue(v.guncelBakiye));
         setHesapKesimGunu(v.kesimGunu || "");
+        setKartOdemeStratejisi(v.odemeStratejisi || CREDIT_CARD_PAYMENT_STRATEGIES.FULL);
+        setKartVarsayilanOdemeTutari(v.varsayilanOdemeTutari ? formatMoneyInputValue(v.varsayilanOdemeTutari) : "");
+        setKartPlanlananOdemeTutari(v.planlananOdemeTutari || v.manuelOdemeTutari ? formatMoneyInputValue(v.planlananOdemeTutari || v.manuelOdemeTutari) : "");
+        setKartAsgariOdemeTutari(v.asgariOdemeTutari || v.asgariOdeme ? formatMoneyInputValue(v.asgariOdemeTutari || v.asgariOdeme) : "");
+        setVarsayilanOdemeAraci(Boolean(canBeDefaultPaymentAccount(v) && v.varsayilanOdemeAraci));
         setMaasHesabi(Boolean(v.maasHesabi));
         setAnaMaasHesabi(Boolean(v.anaMaasHesabi));
         setHesapMaasGunu(v.maasGunu || "");
@@ -1333,16 +1373,22 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
     const resetBorcForm = () => { setBorcAd(""); setBorcTutar(""); setBorcKalanTutar(""); setBorcTarih(""); setBorcKategori(kategoriListesi && kategoriListesi[0] ? kategoriListesi[0] : ""); }
     const fillBillForm = (v) => { setFaturaGirisTutar(formatMoneyInputValue(v.tutar)); setFaturaGirisTarih(v.sonOdemeTarihi); setFaturaGirisAciklama(v.aciklama || ""); }
     const fillBillDefForm = (v) => { setTanimBaslik(v.baslik); setTanimKurum(v.kurum); setTanimAboneNo(v.aboneNo); setTanimHesapId(v.hesapId || ""); }
-    const fillCCForm = (v) => { setKkOdemeKartId(v.id); }
+    const fillCCForm = (v) => {
+        setKkOdemeKartId(v.id);
+        const paymentPlan = getCreditCardPaymentPlan(v);
+        setKkOdemeTutar(paymentPlan.plannedPayment > 0 ? formatMoneyInputValue(paymentPlan.plannedPayment) : "");
+    }
 
     return {
         // States
         hesapAdi, setHesapAdi, hesapTipi, setHesapTipi, baslangicBakiye, setBaslangicBakiye, hesapKesimGunu, setHesapKesimGunu,
+        kartOdemeStratejisi, setKartOdemeStratejisi, kartVarsayilanOdemeTutari, setKartVarsayilanOdemeTutari, kartPlanlananOdemeTutari, setKartPlanlananOdemeTutari, kartAsgariOdemeTutari, setKartAsgariOdemeTutari,
+        varsayilanOdemeAraci, setVarsayilanOdemeAraci,
         maasHesabi, setMaasHesabi, anaMaasHesabi, setAnaMaasHesabi, hesapMaasGunu, setHesapMaasGunu, bagliMaasId, setBagliMaasId,
         secilenHesapId, setSecilenHesapId, islemTutar, setIslemTutar, islemAciklama, setIslemAciklama, islemTipi, setIslemTipi, kategori, setKategori, islemTarihi, setIslemTarihi,
         islemGelirTuru, setIslemGelirTuru, islemBagliMaasId, setIslemBagliMaasId, islemMaasDonemi, setIslemMaasDonemi,
         islemAdet, setIslemAdet, islemBirimFiyat, setIslemBirimFiyat, // Return new states
-        transferKaynakId, setTransferKaynakId, transferHedefId, setTransferHedefId, transferTutar, setTransferTutar, transferUcreti, setTransferUcreti, transferTarihi, setTransferTarihi,
+        transferKaynakId, setTransferKaynakId, transferHedefId, setTransferHedefId, transferTutar, setTransferTutar, transferUcreti, setTransferUcreti, transferAciklama, setTransferAciklama, transferTarihi, setTransferTarihi,
         aboAd, setAboAd, aboTutar, setAboTutar, aboGun, setAboGun, aboHesapId, setAboHesapId, aboKategori, setAboKategori,
         taksitBaslik, setTaksitBaslik, taksitToplamTutar, setTaksitToplamTutar, taksitSayisi, setTaksitSayisi, taksitHesapId, setTaksitHesapId, taksitKategori, setTaksitKategori, taksitAlisTarihi, setTaksitAlisTarihi,
         maasAd, setMaasAd, maasTutar, setMaasTutar, maasGun, setMaasGun, maasHesapId, setMaasHesapId, maasTur, setMaasTur,

@@ -1,4 +1,5 @@
 import { dateToKey } from './calendarUtils.js';
+import { getCreditCardPaymentPlan } from '../../utils/creditCardPayments.js';
 
 const toDateValue = (value) => {
     if (!value) return null;
@@ -117,7 +118,7 @@ const getInstallmentPaidCount = (installment, paymentCounts) => {
     return totalCount > 0 ? Math.min(paidCount, totalCount) : paidCount;
 };
 
-const buildEvent = ({ title, date, type, amount, currency = 'TRY', source, sourceId, status = 'upcoming', description = '' }) => ({
+const buildEvent = ({ title, date, type, amount, currency = 'TRY', source, sourceId, status = 'upcoming', description = '', meta = {} }) => ({
     id: `${source || 'system'}-${type}-${date}-${title}`,
     title,
     amount,
@@ -128,6 +129,7 @@ const buildEvent = ({ title, date, type, amount, currency = 'TRY', source, sourc
     sourceId,
     status,
     description,
+    meta,
 });
 
 export const buildCalendarEventsFromData = (data, anchorDate = new Date()) => {
@@ -177,14 +179,23 @@ export const buildCalendarEventsFromData = (data, anchorDate = new Date()) => {
             }
 
             if (sameMonth(paymentDate, baseYear, baseMonth)) {
+                const periodKey = `${paymentDate.getFullYear()}-${String(paymentDate.getMonth() + 1).padStart(2, '0')}`;
+                const paymentPlan = getCreditCardPaymentPlan(account, periodKey);
                 events.push(buildEvent({
                     title: `${accountName} Son Ödeme`,
                     date: dateToKey(paymentDate),
                     type: 'credit_card_payment',
-                    amount,
+                    amount: paymentPlan.plannedPayment,
                     source: 'credit_card',
                     sourceId: account.id,
-                    description: 'Son ödeme tarihi',
+                    description: 'Planlanan kredi kartı ödemesi',
+                    meta: {
+                        statementDebt: paymentPlan.statementDebt,
+                        minimumPayment: paymentPlan.minimumPayment,
+                        plannedPayment: paymentPlan.plannedPayment,
+                        carryoverDebt: paymentPlan.carryoverDebt,
+                        strategy: paymentPlan.strategy,
+                    },
                 }));
             }
         });

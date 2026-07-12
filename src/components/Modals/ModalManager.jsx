@@ -5,6 +5,7 @@ import { formatCurrencyPlain, inputStyle, tarihSadeceGunAyYil, sortTurkishText }
 import { toast } from 'react-toastify';
 import Swal from 'sweetalert2';
 import { MONTH_NAMES } from '../../utils/period';
+import { CREDIT_CARD_PAYMENT_STRATEGIES, CREDIT_CARD_PAYMENT_STRATEGY_LABELS, getCreditCardPaymentPlan } from '../../utils/creditCardPayments';
 
 const FieldLabel = ({ children }) => (
     <label style={{ display: 'block', margin: '0 0 6px', fontSize: '12px', fontWeight: 700, color: '#64748b' }}>
@@ -229,6 +230,11 @@ const ModalManager = ({
     hesapTipi, setHesapTipi,
     baslangicBakiye, setBaslangicBakiye,
     hesapKesimGunu, setHesapKesimGunu,
+    kartOdemeStratejisi, setKartOdemeStratejisi,
+    kartVarsayilanOdemeTutari, setKartVarsayilanOdemeTutari,
+    kartPlanlananOdemeTutari, setKartPlanlananOdemeTutari,
+    kartAsgariOdemeTutari, setKartAsgariOdemeTutari,
+    varsayilanOdemeAraci, setVarsayilanOdemeAraci,
     maasHesabi, setMaasHesabi,
     anaMaasHesabi, setAnaMaasHesabi,
     hesapMaasGunu, setHesapMaasGunu,
@@ -287,6 +293,7 @@ const ModalManager = ({
     tasimaIslemiSuruyor,
     satisYap,
     secilenHesapId, setSecilenHesapId,
+    defaultPaymentAccountId,
 
     // NEW PROPS FOR SETTINGS
     // yeniKategoriAdi, setYeniKategoriAdi, -> MOVED TO LOCAL STATE
@@ -338,9 +345,12 @@ const ModalManager = ({
     useEffect(() => {
         if (aktifModal === 'borc_ode') {
             setBorcOdemeTutarState("");
+            setBorcSecilenHesapIdState(defaultPaymentAccountId || "");
+        } else {
+            setBorcOdemeTutarState("");
             setBorcSecilenHesapIdState("");
         }
-    }, [aktifModal]);
+    }, [aktifModal, defaultPaymentAccountId]);
 
     useEffect(() => {
         if (aktifModal !== 'duzenle_islem') return;
@@ -365,6 +375,21 @@ const ModalManager = ({
     let customMinHeight = undefined;
     const siraliKategoriListesi = sortTurkishText(kategoriListesi || []);
     const gelirTurleri = ["Maaş", "Maaş Avansı", "Prim / İkramiye", "Masraf İadesi", "Diğer Gelir"];
+    const creditCardPaymentSettings = hesapTipi === 'krediKarti' && (
+        <div style={{ marginBottom: '20px' }}>
+            <FieldLabel>Ödeme stratejisi</FieldLabel>
+            <select value={kartOdemeStratejisi} onChange={e => setKartOdemeStratejisi(e.target.value)} style={{ ...inputStyle, marginBottom: '12px' }}>
+                {Object.entries(CREDIT_CARD_PAYMENT_STRATEGY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+            {kartOdemeStratejisi === CREDIT_CARD_PAYMENT_STRATEGIES.FIXED && (
+                <input type="number" placeholder="Varsayılan ödeme tutarı" value={kartVarsayilanOdemeTutari} onChange={e => setKartVarsayilanOdemeTutari(e.target.value)} style={{ ...inputStyle, marginBottom: '12px' }} />
+            )}
+            {kartOdemeStratejisi === CREDIT_CARD_PAYMENT_STRATEGIES.MANUAL && (
+                <input type="number" placeholder="Bu ay planlanan ödeme" value={kartPlanlananOdemeTutari} onChange={e => setKartPlanlananOdemeTutari(e.target.value)} style={{ ...inputStyle, marginBottom: '12px' }} />
+            )}
+            <input type="number" placeholder="Asgari ödeme tutarı (boşsa %20)" value={kartAsgariOdemeTutari} onChange={e => setKartAsgariOdemeTutari(e.target.value)} style={inputStyle} />
+        </div>
+    );
 
     // 0. YENİ EKLEME MODALLARI
     if (aktifModal === 'maas_ekle') {
@@ -421,6 +446,18 @@ const ModalManager = ({
                     <div style={{ marginBottom: '20px' }}>
                         <FieldLabel>Ekstre kesim günü</FieldLabel>
                         <input type="number" min="1" max="31" placeholder="1-31" value={hesapKesimGunu} onChange={e => setHesapKesimGunu(e.target.value)} style={inputStyle} />
+                    </div>
+                )}
+                {creditCardPaymentSettings}
+                {hesapTipi !== 'yatirim' && (
+                    <div className="qw-default-payment-toggle">
+                        <label>
+                            <input type="checkbox" checked={varsayilanOdemeAraci} onChange={e => setVarsayilanOdemeAraci(e.target.checked)} />
+                            <span>
+                                <strong>Varsayılan ödeme aracı</strong>
+                                <small>Yeni gider, fatura, abonelik ve taksit kayıtlarında bu hesap otomatik seçilir.</small>
+                            </span>
+                        </label>
                     </div>
                 )}
                 {hesapTipi !== 'krediKarti' && (
@@ -609,6 +646,18 @@ const ModalManager = ({
                         <div style={{ marginTop: '8px', fontSize: '12px', lineHeight: 1.45, color: '#94a3b8' }}>
                             Kesim gününü değiştirmek geçmiş ekstre dönemlerinin dağılımını değiştirebilir.
                         </div>
+                    </div>
+                )}
+                {creditCardPaymentSettings}
+                {hesapTipi !== 'yatirim' && (
+                    <div className="qw-default-payment-toggle">
+                        <label>
+                            <input type="checkbox" checked={varsayilanOdemeAraci} onChange={e => setVarsayilanOdemeAraci(e.target.checked)} />
+                            <span>
+                                <strong>Varsayılan ödeme aracı</strong>
+                                <small>Yeni gider, fatura, abonelik ve taksit kayıtlarında bu hesap otomatik seçilir.</small>
+                            </span>
+                        </label>
                     </div>
                 )}
                 {hesapTipi !== 'krediKarti' && (
@@ -1053,14 +1102,17 @@ const ModalManager = ({
         title = "Borç Öde";
         icon = "💳";
         const kart = hesaplar.find(h => h.id === kkOdemeKartId);
-        const borc = Math.abs(kart?.guncelBakiye || 0);
-        const asgariBorc = borc * 0.20;
+        const paymentPlan = getCreditCardPaymentPlan(kart);
+        const borc = paymentPlan.statementDebt;
+        const asgariBorc = paymentPlan.minimumPayment;
+        const planlananOdeme = paymentPlan.plannedPayment;
 
         content = (
             <form onSubmit={async (e) => { const s = await krediKartiBorcOde(e); if (s) close(); }}>
                 <div style={{ marginBottom: '20px', padding: '15px', background: '#f3e8ff', borderRadius: '12px', color: '#333' }}>
                     <p style={{ margin: 0 }}><strong>Kart:</strong> {kart?.hesapAdi}</p>
-                    <p style={{ margin: '8px 0', fontSize: '18px' }}><strong>Borç:</strong> {formatPara(borc)}</p>
+                    <p style={{ margin: '8px 0', fontSize: '18px' }}><strong>Dönem borcu:</strong> {formatPara(borc)}</p>
+                    <p style={{ margin: 0, color: '#64748b', fontSize: '13px' }}><strong>Planlanan ödeme:</strong> {formatPara(planlananOdeme)}</p>
                 </div>
 
                 <div style={{ marginBottom: '15px' }}>
@@ -1082,10 +1134,18 @@ const ModalManager = ({
 
                     <div style={{ display: 'flex', gap: '15px', marginTop: '5px' }}>
                         <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px', cursor: 'pointer' }}>
-                            <input type="radio" name="odemeTipi" onChange={() => setKkOdemeTutar("")} checked={Math.abs(kkOdemeTutar - borc) >= 1 && Math.abs(kkOdemeTutar - asgariBorc) >= 1} />
+                            <input type="radio" name="odemeTipi" onChange={() => setKkOdemeTutar("")} checked={Math.abs(kkOdemeTutar - borc) >= 1 && Math.abs(kkOdemeTutar - asgariBorc) >= 1 && Math.abs(kkOdemeTutar - planlananOdeme) >= 1} />
                             Özel Tutar
                         </label>
                     </div>
+                    {planlananOdeme > 0 && planlananOdeme !== borc && planlananOdeme !== asgariBorc && (
+                        <div style={{ display: 'flex', gap: '15px', marginTop: '5px' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px', cursor: 'pointer' }}>
+                                <input type="radio" name="odemeTipi" onChange={() => setKkOdemeTutar(planlananOdeme.toFixed(2))} checked={Math.abs(kkOdemeTutar - planlananOdeme) < 1} />
+                                Planlanan ({formatPara(planlananOdeme)})
+                            </label>
+                        </div>
+                    )}
                 </div>
                 <select value={kkOdemeKaynakId} onChange={e => setKkOdemeKaynakId(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} required><option value="">Parayı Hangi Hesaptan Çekelim?</option>{hesaplar.filter(h => h.id !== kkOdemeKartId).map(h => <option key={h.id} value={h.id}>{h.hesapAdi} ({formatPara(h.guncelBakiye)})</option>)}</select>
                 <input type="number" placeholder="Ödenecek Tutar (₺)" value={kkOdemeTutar} onChange={e => setKkOdemeTutar(e.target.value)} style={{ ...inputStyle, marginBottom: '20px' }} required />

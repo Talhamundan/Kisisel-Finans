@@ -1196,9 +1196,16 @@ html[data-theme="dark"] .mobile-bottom-nav {
 }
 
 .qw-account-row strong {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 7px;
   color: var(--text-primary);
   font-size: 14px;
+  min-width: 0;
+}
+
+.qw-account-row strong > span {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1221,6 +1228,74 @@ html[data-theme="dark"] .mobile-bottom-nav {
   display: grid;
   justify-items: end;
   gap: 5px;
+}
+
+.qw-default-account-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(124, 92, 255, 0.1);
+  color: var(--accent);
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 820;
+  letter-spacing: 0;
+}
+
+.qw-account-history-note {
+  margin: 18px 28px 0;
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 11px;
+  border-radius: 999px;
+  background: rgba(124, 92, 255, 0.1);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.qw-default-payment-toggle {
+  margin-bottom: 20px;
+  padding: 14px;
+  border-radius: 16px;
+  background: var(--surface-soft);
+}
+
+.qw-default-payment-toggle label {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.qw-default-payment-toggle input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: var(--accent);
+  flex: 0 0 auto;
+}
+
+.qw-default-payment-toggle span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.qw-default-payment-toggle strong {
+  color: var(--text-primary);
+  font-size: 13.5px;
+  line-height: 1.25;
+}
+
+.qw-default-payment-toggle small {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .qw-bottom-grid {
@@ -1299,6 +1374,162 @@ html[data-theme="dark"] .mobile-bottom-nav {
 .qw-submit-button:hover {
   transform: translateY(-1px);
   box-shadow: var(--shadow-card-hover);
+}
+
+.qw-submit-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+  transform: none;
+}
+
+.qw-field-error {
+  display: block;
+  margin: 6px 2px 0;
+  color: var(--danger);
+  font-size: 11px;
+  font-weight: 720;
+}
+
+.qw-more-toggle {
+  justify-self: start;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--text-secondary);
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 760;
+  cursor: pointer;
+  transition: transform 220ms ease, background 220ms ease, color 220ms ease;
+}
+
+.qw-more-toggle:hover {
+  transform: translateY(-1px);
+  background: var(--surface-muted);
+  color: var(--text-primary);
+}
+
+.qw-more-panel {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 18px;
+  background: var(--surface-soft);
+}
+
+.global-quick-fab {
+  position: fixed;
+  right: 24px;
+  bottom: 94px;
+  z-index: 9998;
+  min-height: 52px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--text-primary);
+  color: var(--surface-solid);
+  box-shadow: var(--shadow-card);
+  padding: 0 20px;
+  font-size: 14px;
+  font-weight: 820;
+  cursor: pointer;
+  transition: transform 220ms ease, box-shadow 220ms ease, background 220ms ease;
+}
+
+.global-quick-fab:hover {
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: var(--shadow-card-hover);
+}
+
+.global-quick-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 10020;
+}
+
+.global-quick-overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: 0;
+  background: rgba(15, 23, 42, 0.42);
+  cursor: default;
+}
+
+.global-quick-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(460px, calc(100vw - 24px));
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border-soft);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: -22px 0 48px rgba(16, 24, 40, 0.14);
+  animation: globalQuickDrawerIn 240ms ease both;
+}
+
+html[data-theme="dark"] .global-quick-panel {
+  background: rgba(25, 28, 34, 0.96);
+  box-shadow: -22px 0 48px rgba(0, 0, 0, 0.32);
+}
+
+.global-quick-handle {
+  display: none;
+}
+
+.global-quick-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 24px 24px 16px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.global-quick-header h2 {
+  margin: 0 0 4px;
+  color: var(--text-primary);
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.global-quick-header p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.global-quick-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 24px 28px;
+}
+
+@keyframes globalQuickDrawerIn {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes globalQuickSheetIn {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* --- BUDGET INFORMATION ARCHITECTURE REFINEMENTS --- */
@@ -1553,10 +1784,10 @@ html[data-theme="dark"] .mobile-bottom-nav {
 }
 
 .qw-account-row strong {
-  white-space: normal;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
 }
 
 .qw-secondary-grid {
@@ -3510,17 +3741,130 @@ html[data-theme="dark"] ::placeholder {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .global-quick-fab {
+    right: 16px;
+    bottom: calc(92px + env(safe-area-inset-bottom));
+    min-width: 56px;
+    min-height: 56px;
+    justify-content: center;
+    padding: 0 18px;
+  }
+
+  .global-quick-fab span {
+    display: none;
+  }
+
+  .global-quick-layer {
+    z-index: 10040;
+  }
+
+  .global-quick-panel {
+    top: auto;
+    right: 0;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    max-height: min(90dvh, calc(100dvh - 24px));
+    border-left: 0;
+    border-radius: 28px 28px 0 0;
+    box-shadow: 0 -22px 48px rgba(16, 24, 40, 0.18);
+    animation: globalQuickSheetIn 240ms ease both;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .global-quick-handle {
+    display: block;
+    width: 44px;
+    height: 5px;
+    flex: 0 0 auto;
+    align-self: center;
+    margin: 10px 0 2px;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.42);
+  }
+
+  .global-quick-header {
+    padding: 12px 16px 10px;
+  }
+
+  .global-quick-header h2 {
+    font-size: 18px;
+  }
+
+  .global-quick-header p {
+    font-size: 12px;
+  }
+
+  .global-quick-content {
+    padding: 14px 16px 20px;
+  }
+
+  .global-quick-content .qw-form-row {
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+
+  .global-quick-content .qw-form-tabs {
+    gap: 6px;
+    margin-bottom: 12px;
+    padding: 5px;
+    border-radius: 16px;
+  }
+
+  .global-quick-content .qw-form-tabs button {
+    min-height: 34px;
+    border-radius: 13px;
+    padding: 0 8px;
+    font-size: 12px;
+    font-weight: 760;
+  }
+
+  .global-quick-content .qw-quick-form {
+    gap: 9px;
+  }
+
+  .global-quick-content input,
+  .global-quick-content select,
+  .global-quick-content textarea {
+    min-height: 42px !important;
+    border-radius: 14px !important;
+    padding: 0 13px !important;
+    font-size: 14px !important;
+  }
+
+  .global-quick-content .description-input-wrapper,
+  .global-quick-content .description-input-wrapper input {
+    min-width: 0;
+  }
+
+  .global-quick-content .qw-submit-button {
+    min-height: 44px;
+    border-radius: 16px;
+    font-size: 13px;
+  }
+
+  .global-quick-content .qw-more-toggle {
+    padding: 7px 11px;
+    font-size: 11px;
+  }
+
+  .global-quick-content .qw-more-panel {
+    gap: 9px;
+    padding: 10px;
+    border-radius: 16px;
+  }
+
   .qw-row-actions {
     opacity: 1;
   }
 
   /* Feedback button: keep above MobileNav */
   .feedback-fab {
-    bottom: 110px !important;
-    right: 14px !important;
-    width: 52px !important;
-    height: 52px !important;
-    font-size: 20px !important;
+    bottom: 104px !important;
+    right: 84px !important;
+    width: 42px !important;
+    height: 42px !important;
+    font-size: 17px !important;
   }
 
   /* --- YATIRIM EKRANI MOBİL OPTİMİZASYONLARI --- */
