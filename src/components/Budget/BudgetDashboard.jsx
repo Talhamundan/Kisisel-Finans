@@ -48,6 +48,7 @@ import {
 } from '../Shared/PremiumUI';
 import QuickTransactionForm from './QuickTransactionForm';
 import { getCreditCardPaymentPlan } from '../../utils/creditCardPayments';
+import { buildSubscriptionOccurrences } from '../../utils/recurringPayments';
 
 const parseAmount = (value) => parseFloat(value) || 0;
 
@@ -161,6 +162,23 @@ const getVisibleRange = (selectedPeriod) => {
             net: 0,
         };
     });
+};
+
+const getDailyAverageDayCount = (selectedPeriod) => {
+    if (!selectedPeriod || selectedPeriod.month === 'all') return 0;
+
+    const today = new Date();
+    const periodStart = new Date(selectedPeriod.year, selectedPeriod.month - 1, 1);
+    const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+
+    if (periodStart > currentMonthStart) return 0;
+
+    const isCurrentMonth = selectedPeriod.year === today.getFullYear() &&
+        selectedPeriod.month === today.getMonth() + 1;
+
+    return isCurrentMonth
+        ? today.getDate()
+        : new Date(selectedPeriod.year, selectedPeriod.month, 0).getDate();
 };
 
 const Sparkline = ({ data = [], color = '#6d5dfc' }) => {
@@ -406,6 +424,12 @@ const BudgetDashboard = ({
     const dailyExpenseTotal = useMemo(() => (
         (gunlukVeri || []).reduce((sum, item) => sum + parseAmount(item.value), 0)
     ), [gunlukVeri]);
+    const dailyExpenseAverageDayCount = useMemo(() => (
+        getDailyAverageDayCount(selectedPeriod)
+    ), [selectedPeriod]);
+    const dailyExpenseAverage = dailyExpenseAverageDayCount > 0
+        ? dailyExpenseTotal / dailyExpenseAverageDayCount
+        : 0;
 
     const todayStats = useMemo(() => {
         const today = new Date();
@@ -599,18 +623,25 @@ const BudgetDashboard = ({
             });
         });
 
-        (abonelikler || []).forEach((subscription) => {
-            const day = parseInt(subscription.gun) || null;
-            const dueDate = day ? new Date(currentYear, currentMonth, Math.min(day, 28)) : null;
+        buildSubscriptionOccurrences({
+            subscriptions: abonelikler,
+            transactions: tumIslemler,
+            year: currentYear,
+            month: currentMonth,
+        }).forEach((occurrence) => {
+            if (occurrence.status === 'paid') return;
+            const subscription = occurrence.subscription;
+            const isOverdue = occurrence.status === 'overdue';
             rows.push({
-                id: `subscription-${subscription.id}`,
+                id: occurrence.id,
                 title: subscription.ad || 'Abonelik',
                 type: 'Abonelik',
-                badgeLabel: 'Abonelik',
-                date: dueDate,
-                amount: parseAmount(subscription.tutar),
+                badgeLabel: isOverdue ? 'Gecikti' : 'Abonelik',
+                date: occurrence.dueDate,
+                amount: occurrence.expectedAmount,
                 icon: Repeat2,
-                tone: 'info',
+                tone: isOverdue ? 'danger' : 'info',
+                isOverdue,
                 onClick: () => abonelikOde(subscription),
             });
         });
@@ -621,7 +652,7 @@ const BudgetDashboard = ({
                 if (a.isOverdue !== b.isOverdue) return a.isOverdue ? -1 : 1;
                 return (a.date?.getTime() || Number.MAX_SAFE_INTEGER) - (b.date?.getTime() || Number.MAX_SAFE_INTEGER);
             });
-    }, [abonelikler, abonelikOde, bekleyenFaturalar, getInstallmentPaidCount, hesaplar, modalAc, selectedPeriod, taksitOde, taksitler, tanimliFaturalar]);
+    }, [abonelikler, abonelikOde, bekleyenFaturalar, getInstallmentPaidCount, hesaplar, modalAc, selectedPeriod, taksitOde, taksitler, tanimliFaturalar, tumIslemler]);
 
     const recentTransactions = [...(filtrelenmisIslemler || [])]
         .sort((a, b) => (toDateSafe(b.tarih)?.getTime() || 0) - (toDateSafe(a.tarih)?.getTime() || 0));
@@ -913,9 +944,22 @@ const BudgetDashboard = ({
                             value: formatPara(selectedPeriodNet),
                             tone: getFinancialTone(selectedPeriodNet),
                         } : {
-                            label: 'Toplam',
-                            value: formatPara(dailyExpenseTotal),
-                            tone: 'danger',
+                            items: [
+                                {
+                                    key: 'daily-average',
+                                    label: 'Günlük Ortalama',
+                                    value: formatPara(dailyExpenseAverage),
+                                    tone: 'neutral',
+                                    showDot: false,
+                                },
+                                {
+                                    key: 'total',
+                                    label: 'Toplam',
+                                    value: formatPara(dailyExpenseTotal),
+                                    tone: 'danger',
+                                    showDot: false,
+                                },
+                            ],
                         }}
                         valueFormatter={(value) => gizliMod ? '****' : formatCurrencyPlain(value)}
                         yTickFormatter={(value) => gizliMod ? '****' : `${new Intl.NumberFormat('tr-TR', { notation: 'compact', maximumFractionDigits: 1 }).format(value)} ₺`}

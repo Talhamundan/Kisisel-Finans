@@ -1,5 +1,6 @@
 import { dateToKey } from './calendarUtils.js';
 import { getCreditCardPaymentPlan } from '../../utils/creditCardPayments.js';
+import { buildSubscriptionOccurrences } from '../../utils/recurringPayments.js';
 
 const toDateValue = (value) => {
     if (!value) return null;
@@ -201,20 +202,31 @@ export const buildCalendarEventsFromData = (data, anchorDate = new Date()) => {
         });
     });
 
-    subscriptions.forEach((subscription) => {
-        const day = Number(subscription.gun || 0);
-        if (!Number.isFinite(day) || day <= 0) return;
-        if (isInactive(subscription)) return;
-        const date = new Date(baseYear, baseMonth, clampDay(day, baseYear, baseMonth));
+    buildSubscriptionOccurrences({
+        subscriptions,
+        transactions,
+        year: baseYear,
+        month: baseMonth,
+        today: anchorDate,
+    }).forEach((occurrence) => {
+        const subscription = occurrence.subscription;
         events.push(buildEvent({
             title: subscription.ad || 'Abonelik',
-            date: dateToKey(date),
+            date: occurrence.dateKey,
             type: 'subscription',
-            amount: formatAmount(subscription.tutar),
+            amount: occurrence.expectedAmount,
             currency: 'TRY',
             source: 'subscription',
             sourceId: subscription.id,
-            description: 'Abonelik yenileme tarihi',
+            status: occurrence.status === 'paid' ? 'completed' : occurrence.status,
+            description: occurrence.status === 'paid' ? 'Abonelik ödemesi gerçekleşti' : 'Abonelik yenileme tarihi',
+            meta: {
+                subscriptionId: subscription.id,
+                periodKey: occurrence.periodKey,
+                expectedAmount: occurrence.expectedAmount,
+                matchedTransactionId: occurrence.matchedTransactionId,
+                occurrenceStatus: occurrence.status,
+            },
         }));
     });
 

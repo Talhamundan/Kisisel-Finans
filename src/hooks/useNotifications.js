@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { formatCurrencyPlain, toDateSafe } from '../utils/helpers';
 import { getCreditCardPaymentPlan } from '../utils/creditCardPayments';
+import { buildSubscriptionOccurrences } from '../utils/recurringPayments';
 
 export const useNotifications = ({
     hesaplar,
@@ -85,17 +86,16 @@ export const useNotifications = ({
             }
         });
 
-        abonelikler.forEach(abo => {
-            if (mevcutGun >= abo.gun) {
-                const odendiMi = islemler.some(islem => {
-                    const islemTarih = toDateSafe(islem.tarih);
-                    if (!islemTarih) return false;
-                    return islemTarih.getMonth() === mevcutAy &&
-                        islemTarih.getFullYear() === mevcutYil &&
-                        (islem.aciklama || "").toLowerCase().includes((abo.ad || "").toLowerCase());
-                });
-                if (!odendiMi) tempBildirimler.push({ id: abo.id, tip: 'abonelik', mesaj: `⚠️ ${abo.ad} ödenmedi! (${abo.gun}. gün)`, tutar: abo.tutar, data: abo, renk: 'red' });
-            }
+        buildSubscriptionOccurrences({
+            subscriptions: abonelikler,
+            transactions: islemler,
+            year: mevcutYil,
+            month: mevcutAy,
+            today: now,
+        }).forEach((occurrence) => {
+            if (occurrence.status !== 'overdue') return;
+            const abo = occurrence.subscription;
+            tempBildirimler.push({ id: abo.id, tip: 'abonelik', mesaj: `⚠️ ${abo.ad} ödenmedi! (${abo.gun}. gün)`, tutar: abo.tutar, data: abo, renk: 'red' });
         });
 
         taksitler.forEach(taksit => {

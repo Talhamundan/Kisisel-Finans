@@ -10,7 +10,7 @@ import {
     YAxis,
 } from 'recharts';
 import { LineChart } from 'lucide-react';
-import { ChartTooltip, EmptyState, PremiumCard, SectionHeader } from './PremiumUI';
+import { ChartTooltip, EmptyState, PremiumCard } from './PremiumUI';
 
 const compactCurrency = (value) => `${new Intl.NumberFormat('tr-TR', {
     notation: 'compact',
@@ -61,36 +61,56 @@ const FinancialTrendChart = ({
         tone: typeof serie.tone === 'function' ? serie.tone(item[serie.key] || 0, item) : serie.tone,
     })));
 
+    const summaryItems = summary?.items
+        ? summary.items
+        : summary
+            ? [{
+                key: summary.label,
+                label: summary.label,
+                value: summary.value,
+                tone: summary.tone,
+                color: summary.color,
+            }]
+            : [];
+
     return (
-        <PremiumCard className={className}>
-            <SectionHeader
-                title={title}
-                description={subtitle}
-                action={(
-                    <div className="qw-chart-header-action">
+        <PremiumCard className={['qw-financial-trend-card', className].filter(Boolean).join(' ')}>
+            <div className={['qw-chart-header', headerControl ? 'qw-chart-header--with-control' : ''].filter(Boolean).join(' ')}>
+                <div className="qw-chart-title-block">
+                    <h2>{title}</h2>
+                    {subtitle && <p>{subtitle}</p>}
+                </div>
+                {headerControl && (
+                    <div className="qw-chart-toggle-slot">
                         {headerControl}
-                        <div className="qw-chart-legend">
-                            {visibleSeries.map((serie) => (
-                                <span
-                                    key={serie.key}
-                                    className={typeof serie.tone === 'string' ? `is-${serie.tone}` : ''}
-                                    style={{ '--legend-color': serie.color }}
-                                >
-                                    {serie.legendLabel || serie.label}
-                                </span>
-                            ))}
-                            {summary && (
-                                <span
-                                    className={summary.tone ? `is-${summary.tone}` : ''}
-                                    style={{ '--legend-color': summary.color }}
-                                >
-                                    {summary.label} {summary.value}
-                                </span>
-                            )}
-                        </div>
                     </div>
                 )}
-            />
+                <div className="qw-chart-legend">
+                    {visibleSeries.map((serie) => (
+                        <span
+                            key={serie.key}
+                            className={typeof serie.tone === 'string' ? `is-${serie.tone}` : ''}
+                            style={{ '--legend-color': serie.color }}
+                        >
+                            {serie.legendLabel || serie.label}
+                        </span>
+                    ))}
+                    {summaryItems.map((item) => (
+                        <span
+                            key={item.key || item.label}
+                            className={[
+                                item.tone ? `is-${item.tone}` : '',
+                                item.showDot === false ? 'no-dot' : '',
+                                'qw-chart-metric',
+                            ].filter(Boolean).join(' ')}
+                            style={{ '--legend-color': item.color }}
+                        >
+                            <em>{item.label}</em>
+                            <strong>{item.value}</strong>
+                        </span>
+                    ))}
+                </div>
+            </div>
             {hasData ? (
                 <div className={areaClassName}>
                     <ResponsiveContainer width="100%" height="100%">

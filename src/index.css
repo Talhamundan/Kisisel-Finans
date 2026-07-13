@@ -1635,6 +1635,43 @@ html[data-theme="dark"] .global-quick-panel {
   height: 260px;
 }
 
+.qw-chart-header {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(360px, max-content);
+  align-items: start;
+  gap: 16px 24px;
+  margin-bottom: 18px;
+  min-height: 52px;
+}
+
+.qw-chart-header--with-control {
+  grid-template-columns: minmax(220px, 1fr) 410px minmax(420px, 1fr);
+}
+
+.qw-chart-title-block {
+  min-width: 0;
+}
+
+.qw-chart-title-block h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 17px;
+  line-height: 1.2;
+  font-weight: 720;
+}
+
+.qw-chart-title-block p {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.qw-chart-toggle-slot {
+  width: 410px;
+  min-width: 410px;
+  justify-self: center;
+}
+
 .qw-chart-legend {
   display: flex;
   align-items: center;
@@ -1643,6 +1680,18 @@ html[data-theme="dark"] .global-quick-panel {
   gap: 10px;
   font-size: 12px;
   font-weight: 760;
+  min-width: 360px;
+  font-variant-numeric: tabular-nums;
+}
+
+.qw-chart-header--with-control .qw-chart-legend {
+  width: 420px;
+  min-width: 420px;
+  display: grid;
+  grid-template-columns: minmax(128px, 1fr) minmax(168px, 1fr) minmax(104px, 1fr);
+  justify-content: end;
+  justify-self: end;
+  gap: 10px;
 }
 
 .qw-chart-header-action {
@@ -1660,10 +1709,13 @@ html[data-theme="dark"] .global-quick-panel {
   padding: 4px;
   border-radius: 999px;
   background: var(--surface-muted);
+  width: 100%;
 }
 
 .qw-chart-tabs button {
   height: 30px;
+  flex: 1 1 0;
+  min-width: 0;
   border: 0;
   border-radius: 999px;
   background: transparent;
@@ -1671,11 +1723,16 @@ html[data-theme="dark"] .global-quick-panel {
   padding: 0 12px;
   font-size: 12px;
   font-weight: 800;
-  transition: background-color 220ms ease, color 220ms ease, transform 220ms ease;
+  white-space: nowrap;
+  transition: background-color 220ms ease, color 220ms ease, box-shadow 220ms ease;
 }
 
 .qw-chart-tabs button:hover {
   color: var(--text-primary);
+}
+
+.qw-chart-tabs button:active {
+  transform: none;
 }
 
 .qw-chart-tabs button.is-active {
@@ -1688,14 +1745,82 @@ html[data-theme="dark"] .global-quick-panel {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .qw-chart-legend span::before {
   content: '';
+  flex: 0 0 auto;
   width: 8px;
   height: 8px;
   border-radius: 999px;
   background: currentColor;
+}
+
+.qw-chart-header--with-control .qw-chart-legend span {
+  justify-content: flex-start;
+}
+
+.qw-chart-legend span em {
+  font-style: normal;
+}
+
+.qw-chart-legend span strong {
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
+
+.qw-chart-legend span.no-dot::before {
+  display: none;
+}
+
+.qw-chart-legend span.is-neutral {
+  color: var(--text-secondary) !important;
+}
+
+@media (max-width: 1599px) {
+  .qw-chart-header--with-control {
+    grid-template-columns: minmax(220px, 1fr) 410px;
+    min-height: 86px;
+  }
+
+  .qw-chart-header--with-control .qw-chart-legend {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: repeat(3, minmax(0, max-content));
+    justify-content: end;
+  }
+}
+
+@media (max-width: 899px) {
+  .qw-chart-header,
+  .qw-chart-header--with-control {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .qw-chart-toggle-slot {
+    width: 100%;
+    min-width: 0;
+    justify-self: stretch;
+  }
+
+  .qw-chart-header--with-control .qw-chart-legend,
+  .qw-chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    justify-content: flex-start;
+  }
+
+  .qw-chart-header--with-control .qw-chart-legend {
+    grid-template-columns: repeat(3, minmax(0, max-content));
+  }
 }
 
 .qw-upcoming-card,
@@ -2590,7 +2715,7 @@ button.salary-debt-detail-row:hover {
 
 .salary-income-row {
   display: grid;
-  grid-template-columns: auto minmax(170px, 1.1fr) minmax(130px, 0.75fr) minmax(150px, 0.9fr) minmax(110px, 0.6fr) auto auto;
+  grid-template-columns: auto minmax(160px, 1fr) minmax(120px, 0.72fr) minmax(130px, 0.78fr) minmax(130px, 0.82fr) minmax(140px, 0.9fr) minmax(135px, 0.8fr) auto;
   align-items: center;
   gap: 14px;
   padding: 13px;
@@ -2627,6 +2752,17 @@ button.salary-debt-detail-row:hover {
   font-size: 13px;
   font-style: normal;
   font-weight: 780;
+}
+
+.salary-income-status {
+  display: grid;
+  gap: 5px;
+  justify-items: start;
+}
+
+.salary-income-status small {
+  max-width: 180px;
+  color: var(--text-secondary);
 }
 
 .salary-income-breakdown {
@@ -3290,8 +3426,10 @@ html[data-theme="dark"] .qw-login-submit:hover:not(:disabled) {
   .salary-income-row > div:nth-of-type(2),
   .salary-income-row > div:nth-of-type(3),
   .salary-income-row > div:nth-of-type(4),
+  .salary-income-row > div:nth-of-type(5),
+  .salary-income-row > div:nth-of-type(6),
   .salary-income-breakdown,
-  .salary-income-row > .qw-badge,
+  .salary-income-status,
   .salary-income-row > .qw-row-actions {
     grid-column: 2 / -1;
   }
