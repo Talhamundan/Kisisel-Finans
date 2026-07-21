@@ -50,6 +50,7 @@ const FinancialTrendChart = ({
     className = '',
     areaClassName = 'qw-chart-area',
     headerControl,
+    summaryPlacement = 'header',
 }) => {
     const visibleSeries = series.filter((item) => item?.key);
     const hasData = data.some((item) => visibleSeries.some((serie) => Math.abs(Number(item[serie.key]) || 0) > 0));
@@ -73,13 +74,23 @@ const FinancialTrendChart = ({
             }]
             : [];
 
+    const headerSummaryItems = summaryPlacement === 'footer' ? [] : summaryItems;
+    const footerSummaryItems = summaryPlacement === 'footer' ? summaryItems : [];
+    const hasTitleBlock = Boolean(title || subtitle);
+
     return (
         <PremiumCard className={['qw-financial-trend-card', className].filter(Boolean).join(' ')}>
-            <div className={['qw-chart-header', headerControl ? 'qw-chart-header--with-control' : ''].filter(Boolean).join(' ')}>
-                <div className="qw-chart-title-block">
-                    <h2>{title}</h2>
-                    {subtitle && <p>{subtitle}</p>}
-                </div>
+            <div className={[
+                'qw-chart-header',
+                headerControl ? 'qw-chart-header--with-control' : '',
+                !hasTitleBlock ? 'qw-chart-header--titleless' : '',
+            ].filter(Boolean).join(' ')}>
+                {hasTitleBlock && (
+                    <div className="qw-chart-title-block">
+                        {title && <h2>{title}</h2>}
+                        {subtitle && <p>{subtitle}</p>}
+                    </div>
+                )}
                 {headerControl && (
                     <div className="qw-chart-toggle-slot">
                         {headerControl}
@@ -95,7 +106,7 @@ const FinancialTrendChart = ({
                             {serie.legendLabel || serie.label}
                         </span>
                     ))}
-                    {summaryItems.map((item) => (
+                    {headerSummaryItems.map((item) => (
                         <span
                             key={item.key || item.label}
                             className={[
@@ -112,38 +123,58 @@ const FinancialTrendChart = ({
                 </div>
             </div>
             {hasData ? (
-                <div className={areaClassName}>
-                    <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={data} margin={{ top: 8, right: 10, left: 0, bottom: 0 }}>
-                            <defs>
+                <>
+                    <div className={areaClassName}>
+                        <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={data} margin={{ top: 8, right: 10, left: 0, bottom: 0 }}>
+                                <defs>
+                                    {visibleSeries.map((serie) => (
+                                        <linearGradient key={serie.key} id={`${serie.key}Gradient`} x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="0%" stopColor={serie.color} stopOpacity={serie.fillOpacity ?? 0.16} />
+                                            <stop offset="100%" stopColor={serie.color} stopOpacity={serie.fillOpacityEnd ?? 0.015} />
+                                        </linearGradient>
+                                    ))}
+                                </defs>
+                                <CartesianGrid vertical={false} stroke="rgba(17, 24, 39, 0.06)" />
+                                {hasNegativeValues && <ReferenceLine y={0} stroke="rgba(17, 24, 39, 0.18)" strokeWidth={1.2} />}
+                                <XAxis dataKey="name" tick={{ fill: '#98a2b3', fontSize: 12 }} tickLine={false} axisLine={false} />
+                                <YAxis tick={{ fill: '#98a2b3', fontSize: 12 }} tickLine={false} axisLine={false} width={58} tickFormatter={yTickFormatter} />
+                                <Tooltip content={<TrendTooltip rows={tooltipRowBuilder} valueFormatter={valueFormatter} labelFormatter={tooltipLabel} />} />
                                 {visibleSeries.map((serie) => (
-                                    <linearGradient key={serie.key} id={`${serie.key}Gradient`} x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor={serie.color} stopOpacity={serie.fillOpacity ?? 0.16} />
-                                        <stop offset="100%" stopColor={serie.color} stopOpacity={serie.fillOpacityEnd ?? 0.015} />
-                                    </linearGradient>
+                                    <Area
+                                        key={serie.key}
+                                        type="monotone"
+                                        dataKey={serie.key}
+                                        stroke={serie.color}
+                                        strokeWidth={serie.strokeWidth ?? 2.1}
+                                        strokeDasharray={serie.dashed ? '5 5' : undefined}
+                                        fill={`url(#${serie.key}Gradient)`}
+                                        dot={false}
+                                        activeDot={{ r: 4 }}
+                                    />
                                 ))}
-                            </defs>
-                            <CartesianGrid vertical={false} stroke="rgba(17, 24, 39, 0.06)" />
-                            {hasNegativeValues && <ReferenceLine y={0} stroke="rgba(17, 24, 39, 0.18)" strokeWidth={1.2} />}
-                            <XAxis dataKey="name" tick={{ fill: '#98a2b3', fontSize: 12 }} tickLine={false} axisLine={false} />
-                            <YAxis tick={{ fill: '#98a2b3', fontSize: 12 }} tickLine={false} axisLine={false} width={58} tickFormatter={yTickFormatter} />
-                            <Tooltip content={<TrendTooltip rows={tooltipRowBuilder} valueFormatter={valueFormatter} labelFormatter={tooltipLabel} />} />
-                            {visibleSeries.map((serie) => (
-                                <Area
-                                    key={serie.key}
-                                    type="monotone"
-                                    dataKey={serie.key}
-                                    stroke={serie.color}
-                                    strokeWidth={serie.strokeWidth ?? 2.1}
-                                    strokeDasharray={serie.dashed ? '5 5' : undefined}
-                                    fill={`url(#${serie.key}Gradient)`}
-                                    dot={false}
-                                    activeDot={{ r: 4 }}
-                                />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    </div>
+                    {footerSummaryItems.length > 0 && (
+                        <div className="qw-chart-footer-summary">
+                            {footerSummaryItems.map((item) => (
+                                <span
+                                    key={item.key || item.label}
+                                    className={[
+                                        item.tone ? `is-${item.tone}` : '',
+                                        item.showDot === false ? 'no-dot' : '',
+                                        'qw-chart-metric',
+                                    ].filter(Boolean).join(' ')}
+                                    style={{ '--legend-color': item.color }}
+                                >
+                                    <em>{item.label}</em>
+                                    <strong>{item.value}</strong>
+                                </span>
                             ))}
-                        </AreaChart>
-                    </ResponsiveContainer>
-                </div>
+                        </div>
+                    )}
+                </>
             ) : (
                 <EmptyState title={emptyTitle} description={emptyDescription} icon={emptyIcon} />
             )}

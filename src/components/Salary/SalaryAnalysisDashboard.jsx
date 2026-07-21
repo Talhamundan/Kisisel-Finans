@@ -129,18 +129,50 @@ const isCashAccount = (account) => {
         name.includes('kasa');
 };
 
+const transferLinksAccounts = (transaction, sourceAccount, targetAccount) => {
+    if (!transaction || !sourceAccount || !targetAccount) return false;
+    if (transaction.kaynakId === sourceAccount.id && transaction.hedefId === targetAccount.id) return true;
+
+    const description = normalizeText(transaction.aciklama);
+    const sourceName = normalizeText(sourceAccount.hesapAdi);
+    const targetName = normalizeText(targetAccount.hesapAdi);
+    if (!description || !sourceName || !targetName) return false;
+
+    return description.includes(sourceName) &&
+        description.includes(targetName) &&
+        description.indexOf(sourceName) < description.indexOf(targetName);
+};
+
 const findExpectedAccountTransfer = ({ transactions, realizedAccountId, expectedAccountId, actualDate, amount }) => {
     if (!realizedAccountId || !expectedAccountId || realizedAccountId === expectedAccountId || !actualDate) return null;
-    const tolerance = Math.max(1, parseAmount(amount) * 0.01);
-    return (transactions || [])
+    const transfers = (transactions || [])
         .filter((transaction) => {
             if (transaction.islemTipi !== 'transfer') return false;
             if (transaction.kaynakId !== realizedAccountId || transaction.hedefId !== expectedAccountId) return false;
             const transferDate = toDateSafe(transaction.tarih);
             if (!transferDate || transferDate < actualDate) return false;
-            return Math.abs(parseAmount(transaction.tutar) - parseAmount(amount)) <= tolerance;
+            return true;
         })
-        .sort((a, b) => (toDateSafe(a.tarih)?.getTime() || 0) - (toDateSafe(b.tarih)?.getTime() || 0))[0] || null;
+        .sort((a, b) => (toDateSafe(a.tarih)?.getTime() || 0) - (toDateSafe(b.tarih)?.getTime() || 0));
+
+    if (transfers.length === 0) return null;
+    const targetAmount = parseAmount(amount);
+    const tolerance = Math.max(1, targetAmount * 0.01);
+    let transferredAmount = 0;
+    const matchedTransfers = [];
+
+    for (const transfer of transfers) {
+        if (targetAmount > 0 && transferredAmount >= targetAmount - tolerance) break;
+        transferredAmount += parseAmount(transfer.tutar);
+        matchedTransfers.push(transfer);
+    }
+
+    return {
+        transaction: matchedTransfers[0],
+        transactions: matchedTransfers,
+        amount: Math.min(transferredAmount, targetAmount || transferredAmount),
+        fullyTransferred: targetAmount > 0 ? transferredAmount >= targetAmount - tolerance : transferredAmount > 0,
+    };
 };
 
 const buildPeriodMovements = ({ transactions, account, accounts, period, installmentPlans = [] }) => {
@@ -302,7 +334,8 @@ const getIncomeStatus = ({ salary, transactions, expectedDate, accounts = [], tr
         if (hasOnlyAdvance && expectedDate && today < expectedDate) return { label: 'Avans Ödendi', tone: 'info' };
         if (expectedAccountId && realizedAccountId && expectedAccountId !== realizedAccountId) {
             const realizedAccount = accounts.find((account) => account.id === realizedAccountId);
-            if (transferToExpected) return { label: 'Beklenen hesaba aktarıldı', tone: 'success' };
+            if (transferToExpected?.fullyTransferred) return { label: 'Beklenen hesaba aktarıldı', tone: 'success' };
+            if (transferToExpected?.amount > 0) return { label: 'Kısmi aktarıldı', tone: 'warning' };
             if (isCashAccount(realizedAccount)) return { label: 'Nakit olarak alındı', tone: 'warning' };
             return { label: 'Farklı hesaba geldi', tone: 'warning' };
         }
@@ -347,6 +380,11 @@ const buildIncomeRows = ({ salaries, incomeTransactions, period, accounts = [], 
                 actualDate,
                 amount: actualAmount || salary.tutar,
             });
+            const transferredAmount = parseAmount(transferToExpected?.amount);
+            const realizedAccountIsCash = isCashAccount(accounts.find((account) => account.id === realizedAccountId));
+            const cashWaitingAmount = realizedAccountIsCash
+                ? Math.max(0, actualAmount - transferredAmount)
+                : 0;
             const status = getIncomeStatus({ salary, transactions, expectedDate, accounts, transferToExpected });
             return {
                 id: `salary-${salary.id}`,
@@ -365,8 +403,10 @@ const buildIncomeRows = ({ salaries, incomeTransactions, period, accounts = [], 
                 expectedAccountName: getAccountName(accounts, expectedAccountId),
                 realizedAccountId,
                 realizedAccountName: getAccountName(accounts, realizedAccountId),
-                realizedAccountIsCash: isCashAccount(accounts.find((account) => account.id === realizedAccountId)),
-                transferredToExpected: Boolean(transferToExpected),
+                realizedAccountIsCash,
+                transferredToExpected: Boolean(transferToExpected?.fullyTransferred),
+                transferredAmount,
+                cashWaitingAmount,
                 transferToExpected,
                 remainingAmount: Math.max(0, parseAmount(salary.tutar) - actualAmount),
                 difference: actualAmount ? actualAmount - parseAmount(salary.tutar) : 0,
@@ -393,6 +433,10 @@ const buildIncomeRows = ({ salaries, incomeTransactions, period, accounts = [], 
             realizedAccountName: getAccountName(accounts, transaction.hesapId),
             realizedAccountIsCash: isCashAccount(accounts.find((account) => account.id === transaction.hesapId)),
             transferredToExpected: false,
+            transferredAmount: 0,
+            cashWaitingAmount: isCashAccount(accounts.find((account) => account.id === transaction.hesapId))
+                ? parseAmount(transaction.tutar)
+                : 0,
             remainingAmount: 0,
             difference: parseAmount(transaction.tutar),
             graphKey: toLocalDateKey(transaction.tarih),
@@ -473,16 +517,33 @@ const SalaryAnalysisDashboard = ({
         : [];
     const expectedIncomeTotal = incomeRows.reduce((sum, row) => sum + row.expectedAmount, 0);
     const receivedIncomeTotal = incomeRows.reduce((sum, row) => sum + row.actualAmount, 0);
-    const bankIncomeTotal = incomeRows.reduce((sum, row) => {
+    const cashIncomeTotal = incomeRows.reduce((sum, row) => {
         if (!row.actualAmount) return sum;
-        return (!row.realizedAccountIsCash || row.transferredToExpected) ? sum + row.actualAmount : sum;
+        return row.realizedAccountIsCash ? sum + row.actualAmount : sum;
     }, 0);
-    const cashWaitingTotal = incomeRows.reduce((sum, row) => {
+    const nonCashIncomeTotal = incomeRows.reduce((sum, row) => {
         if (!row.actualAmount) return sum;
-        return row.realizedAccountIsCash && !row.transferredToExpected ? sum + row.actualAmount : sum;
+        return !row.realizedAccountIsCash ? sum + row.actualAmount : sum;
     }, 0);
+    const cashTransferToSelectedTotal = (tumIslemler || []).reduce((sum, transaction) => {
+        if (!period || transaction?.islemTipi !== 'transfer') return sum;
+        const sourceAccount = (hesaplar || []).find((account) => account.id === transaction.kaynakId);
+        const inferredSourceAccount = sourceAccount || (hesaplar || []).find((account) => (
+            isCashAccount(account) && transferLinksAccounts(transaction, account, selectedAccount)
+        ));
+        if (!isCashAccount(inferredSourceAccount)) return sum;
+        if (!transferLinksAccounts(transaction, inferredSourceAccount, selectedAccount)) return sum;
+        if (!isDateInSalaryPeriod(transaction.tarih, period)) return sum;
+        return sum + parseAmount(transaction.tutar);
+    }, 0);
+    const cashTransferredToBankTotal = Math.min(cashIncomeTotal, cashTransferToSelectedTotal);
+    const bankIncomeTotal = nonCashIncomeTotal + cashTransferredToBankTotal;
+    const cashWaitingTotal = Math.max(0, cashIncomeTotal - cashTransferredToBankTotal);
     const definedIncomeRows = incomeRows.filter((row) => row.salary);
     const otherIncomeRows = incomeRows.filter((row) => !row.salary);
+    const salaryManagementRows = [...(maaslar || [])]
+        .sort((a, b) => (parseInt(a.gun) || 32) - (parseInt(b.gun) || 32));
+    const salaryManagementTotal = salaryManagementRows.reduce((sum, item) => sum + parseAmount(item.tutar), 0);
 
     const balances = selectedAccount && period
         ? estimateBalances({ transactions: tumIslemler, account: selectedAccount, period, periodAccountNet })
@@ -731,9 +792,47 @@ const SalaryAnalysisDashboard = ({
                 </PremiumCard>
             </div>
 
-            <PremiumCard className="salary-income-card">
+            <PremiumCard className="salary-income-card salary-management-card">
                 <SectionHeader
                     title="Maaşlar & Gelirler"
+                    description={`${salaryManagementRows.length} gelir kalemi`}
+                    action={<button type="button" className="qw-inline-action" onClick={() => modalAc?.('maas_ekle')}><Plus size={17} /> Gelir Ekle</button>}
+                />
+                <div className="salary-management-summary">
+                    <span>Aylık beklenen</span>
+                    <strong>{formatPara(salaryManagementTotal)}</strong>
+                </div>
+                <div className="salary-management-list">
+                    {salaryManagementRows.map((salary) => {
+                        const account = (hesaplar || []).find((item) => item.id === (salary.beklenenHesapId || salary.hesapId));
+                        const meta = [
+                            salary.tur || 'Maaş',
+                            salary.gun ? `Her ayın ${salary.gun}. günü` : 'Gün tanımsız',
+                            account?.hesapAdi,
+                        ].filter(Boolean).join(' · ');
+
+                        return (
+                            <div className="salary-management-row" key={salary.id}>
+                                <IconTile icon={Banknote} tone="success" />
+                                <div>
+                                    <strong>{salary.ad || 'Gelir'}</strong>
+                                    <span>{meta}</span>
+                                </div>
+                                <b>{formatPara(salary.tutar)}</b>
+                                <div className="qw-row-actions">
+                                    <button type="button" className="qw-mini-icon-button" aria-label="Düzenle" onClick={() => modalAc?.('duzenle_maas', salary)}><Edit3 size={14} /></button>
+                                    {normalSil && <button type="button" className="qw-mini-icon-button is-danger" aria-label="Sil" onClick={() => normalSil('maaslar', salary.id)}><Trash2 size={14} /></button>}
+                                </div>
+                            </div>
+                        );
+                    })}
+                    {salaryManagementRows.length === 0 && <EmptyState title="Gelir kalemi yok" description="Maaş veya düzenli gelir ekleyerek takip edebilirsiniz." icon={Banknote} />}
+                </div>
+            </PremiumCard>
+
+            <PremiumCard className="salary-income-card">
+                <SectionHeader
+                    title="Maaş Dönemi Gelir Durumu"
                     description="Tanımlı düzenli gelirler ve bu dönemdeki gerçekleşme durumları."
                     action={<button type="button" className="qw-inline-action" onClick={() => modalAc?.('maas_ekle')}><Plus size={17} /> Gelir Ekle</button>}
                 />
@@ -746,7 +845,7 @@ const SalaryAnalysisDashboard = ({
                 <div className="salary-income-list">
                     {definedIncomeRows.map((row) => (
                         <div className="salary-income-row" key={row.id}>
-                            <span className="salary-income-icon"><ArrowDownRight size={20} strokeWidth={2.25} /></span>
+                            <span className="salary-income-icon"><Banknote size={22} strokeWidth={2.25} /></span>
                             <div>
                                 <strong>{row.name}</strong>
                                 <span>{row.type}</span>
@@ -768,7 +867,15 @@ const SalaryAnalysisDashboard = ({
                             <div>
                                 <small>Gerçekleşen Hesap</small>
                                 <b>{row.realizedAccountName}</b>
-                                {row.actualAmount > 0 && <em>{row.transferredToExpected ? 'Beklenen hesaba aktarıldı' : 'Geldi'}</em>}
+                                {row.actualAmount > 0 && (
+                                    <em>
+                                        {row.transferredToExpected
+                                            ? 'Beklenen hesaba aktarıldı'
+                                            : row.transferredAmount > 0
+                                                ? `${formatPara(row.transferredAmount)} aktarıldı`
+                                                : 'Geldi'}
+                                    </em>
+                                )}
                             </div>
                             <div className="salary-income-status">
                                 <StatusBadge tone={row.status.tone}>{row.status.label}</StatusBadge>
@@ -833,7 +940,7 @@ const SalaryAnalysisDashboard = ({
                 <div className="salary-income-list">
                     {otherIncomeRows.map((row) => (
                         <div className="salary-income-row" key={row.id}>
-                            <span className="salary-income-icon"><ArrowDownRight size={20} strokeWidth={2.25} /></span>
+                            <span className="salary-income-icon"><Banknote size={22} strokeWidth={2.25} /></span>
                             <div>
                                 <strong>{row.name}</strong>
                                 <span>{row.type}</span>

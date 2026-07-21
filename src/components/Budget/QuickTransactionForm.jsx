@@ -98,12 +98,20 @@ const QuickTransactionForm = ({
     const [submitting, setSubmitting] = useState(false);
     const [errors, setErrors] = useState({});
     const [showMore, setShowMore] = useState(false);
+    const [useFullTransferBalance, setUseFullTransferBalance] = useState(false);
     const activeTab = formTab || 'islem';
     const siraliKategoriListesi = useMemo(() => sortTurkishText(kategoriListesi || []), [kategoriListesi]);
     const siraliHesaplar = useMemo(() => [...(hesaplar || [])].sort((a, b) =>
         String(a?.hesapAdi || '').localeCompare(String(b?.hesapAdi || ''), 'tr-TR', { sensitivity: 'base' })
     ), [hesaplar]);
     const accountIds = useMemo(() => new Set((hesaplar || []).map((account) => account.id)), [hesaplar]);
+    const selectedTransferSource = useMemo(
+        () => (hesaplar || []).find((account) => account.id === transferKaynakId),
+        [hesaplar, transferKaynakId],
+    );
+    const fullTransferBalance = Math.max(0, parseFloat(selectedTransferSource?.guncelBakiye) || 0);
+    const transferFeeAmount = Math.max(0, parseFloat(transferUcreti) || 0);
+    const fullTransferAmount = Math.max(0, fullTransferBalance - transferFeeAmount);
     const quickSalaryPeriodOptions = getSalaryPeriodOptions(islemTarihi || new Date());
     const quickNeedsSalaryLink = islemTipi === 'gelir' && salaryPaymentTypes.includes(islemGelirTuru);
 
@@ -150,6 +158,11 @@ const QuickTransactionForm = ({
         taksitHesapId,
         transferKaynakId,
     ]);
+
+    useEffect(() => {
+        if (!useFullTransferBalance) return;
+        setTransferTutar?.(fullTransferAmount ? String(Math.round(fullTransferAmount * 100) / 100) : '');
+    }, [fullTransferAmount, setTransferTutar, useFullTransferBalance]);
 
     const ensureQuickSalaryPeriod = (dateValue = islemTarihi || new Date()) => {
         if (!islemMaasDonemi) {
@@ -286,30 +299,50 @@ const QuickTransactionForm = ({
                         <div>
                             <select value={transferKaynakId} onChange={e => setTransferKaynakId(e.target.value)} style={inputStyle}>
                                 <option value="">Nereden?</option>
-                                {siraliHesaplar.map(h => <option key={h.id} value={h.id}>{h.hesapAdi}</option>)}
+                                {siraliHesaplar.map(h => <option key={h.id} value={h.id}>{h.hesapAdi} ({formatCurrencyPlain(parseFloat(h.guncelBakiye) || 0)})</option>)}
                             </select>
                             <FieldError>{errors.transferKaynakId}</FieldError>
                         </div>
                         <div>
                             <select value={transferHedefId} onChange={e => setTransferHedefId(e.target.value)} style={inputStyle}>
                                 <option value="">Nereye?</option>
-                                {siraliHesaplar.map(h => <option key={h.id} value={h.id}>{h.hesapAdi}</option>)}
+                                {siraliHesaplar.map(h => <option key={h.id} value={h.id}>{h.hesapAdi} ({formatCurrencyPlain(parseFloat(h.guncelBakiye) || 0)})</option>)}
                             </select>
                             <FieldError>{errors.transferHedefId}</FieldError>
                         </div>
                     </div>
                     <div>
-                        <input type="number" placeholder="İşlem tutarı" value={transferTutar} onChange={e => setTransferTutar(e.target.value)} style={inputStyle} />
+                        <input
+                            type="number"
+                            placeholder="İşlem tutarı"
+                            value={transferTutar}
+                            onChange={e => {
+                                setUseFullTransferBalance(false);
+                                setTransferTutar(e.target.value);
+                            }}
+                            style={inputStyle}
+                        />
+                        <label className="qw-inline-checkbox">
+                            <input
+                                type="checkbox"
+                                checked={useFullTransferBalance}
+                                onChange={e => {
+                                    const checked = e.target.checked;
+                                    setUseFullTransferBalance(checked);
+                                    if (checked) setTransferTutar?.(fullTransferAmount ? String(Math.round(fullTransferAmount * 100) / 100) : '');
+                                }}
+                                disabled={!transferKaynakId || fullTransferBalance <= 0}
+                            />
+                            <span>Tüm bakiye</span>
+                            {transferKaynakId && <em>{formatCurrencyPlain(fullTransferBalance)}</em>}
+                        </label>
                         <FieldError>{errors.transferTutar}</FieldError>
                     </div>
-                    <input placeholder="Açıklama" value={transferAciklama || ''} onChange={e => setTransferAciklama?.(e.target.value)} style={inputStyle} />
+                    <div className="qw-form-row">
+                        <input placeholder="Açıklama" value={transferAciklama || ''} onChange={e => setTransferAciklama?.(e.target.value)} style={inputStyle} />
+                        <input type="number" placeholder="Ücret" value={transferUcreti} onChange={e => setTransferUcreti(e.target.value)} style={inputStyle} />
+                    </div>
                     <input type="datetime-local" value={transferTarihi} onChange={e => setTransferTarihi(e.target.value)} style={inputStyle} />
-                    <button type="button" className="qw-more-toggle" onClick={() => setShowMore((current) => !current)}>Daha fazla seçenek</button>
-                    {showMore && (
-                        <div className="qw-more-panel">
-                            <input type="number" placeholder="Ücret" value={transferUcreti} onChange={e => setTransferUcreti(e.target.value)} style={inputStyle} />
-                        </div>
-                    )}
                     <button type="submit" className="qw-submit-button" disabled={submitting}>{submitting ? 'Aktarılıyor...' : 'Transfer yap'}</button>
                 </form>
             )}

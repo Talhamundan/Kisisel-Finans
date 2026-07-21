@@ -99,6 +99,22 @@ const getCreditCardBillingDay = (account) => {
     return day >= 1 && day <= 31 ? day : null;
 };
 
+const getCreditCardPaymentsInPeriod = (transactions = [], accountId, year, month) => {
+    if (!accountId) return 0;
+
+    return (transactions || []).reduce((sum, transaction) => {
+        const isCardPayment = transaction?.islemTipi === 'transfer' &&
+            transaction?.kategori === 'Kredi Kartı Ödemesi' &&
+            transaction?.hedefId === accountId;
+        if (!isCardPayment) return sum;
+
+        const date = toDateSafe(transaction.tarih);
+        if (!date || date.getFullYear() !== year || date.getMonth() !== month) return sum;
+
+        return sum + parseAmount(transaction.tutar);
+    }, 0);
+};
+
 const getStatementPeriod = (account, selectedPeriod) => {
     const billingDay = getCreditCardBillingDay(account);
     if (!billingDay) return null;
@@ -350,6 +366,7 @@ const BudgetDashboard = ({
     const [historyAccount, setHistoryAccount] = useState(null);
     const [salaryHistoryMode, setSalaryHistoryMode] = useState('calendar');
     const [flowChartMode, setFlowChartMode] = useState('expense');
+    const [hiddenExpenseCategories, setHiddenExpenseCategories] = useState(() => new Set());
     const isNestedModalOpen = Boolean(historyAccount && aktifModal);
     const formatPara = (tutar) => gizliMod ? '****' : formatCurrencyPlain(parseAmount(tutar));
     const siraliKategoriListesi = sortTurkishText(kategoriListesi || []);
@@ -461,8 +478,23 @@ const BudgetDashboard = ({
             }, { income: 0, expense: 0, count: 0 });
     }, [tumIslemler]);
 
-    const kategoriToplam = (kategoriVerisi || []).reduce((sum, item) => sum + parseAmount(item.value), 0);
-    const donutData = useMemo(() => {
+    const toggleExpenseCategory = useCallback((categoryName) => {
+        setHiddenExpenseCategories((current) => {
+            const next = new Set(current);
+            if (next.has(categoryName)) {
+                next.delete(categoryName);
+            } else {
+                next.add(categoryName);
+            }
+            return next;
+        });
+    }, []);
+
+    const clearHiddenExpenseCategories = useCallback(() => {
+        setHiddenExpenseCategories(new Set());
+    }, []);
+
+    const categoryRows = useMemo(() => {
         const sorted = [...(kategoriVerisi || [])]
             .map((item) => ({ ...item, value: parseAmount(item.value) }))
             .filter((item) => item.value > 0)
@@ -470,9 +502,26 @@ const BudgetDashboard = ({
         return sorted.map((item, index) => ({
             ...item,
             color: DONUT_PALETTE[index % DONUT_PALETTE.length],
-            yuzde: kategoriToplam > 0 ? Math.round((item.value / kategoriToplam) * 100) : 0,
+            isActive: !hiddenExpenseCategories.has(item.name),
         }));
-    }, [kategoriVerisi, kategoriToplam]);
+    }, [kategoriVerisi, hiddenExpenseCategories]);
+
+    const donutData = useMemo(() => {
+        const activeData = categoryRows.filter((item) => item.isActive);
+        const activeTotal = activeData.reduce((sum, item) => sum + item.value, 0);
+
+        return activeData.map((item) => ({
+            ...item,
+            yuzde: activeTotal > 0 ? Math.round((item.value / activeTotal) * 100) : 0,
+        }));
+    }, [categoryRows]);
+
+    const kategoriToplam = useMemo(
+        () => categoryRows.filter((item) => item.isActive).reduce((sum, item) => sum + parseAmount(item.value), 0),
+        [categoryRows],
+    );
+
+    const hasHiddenExpenseCategories = categoryRows.some((item) => !item.isActive);
 
     const linkedInstallmentPaymentCounts = useMemo(() => {
         const counts = new Map();
@@ -587,14 +636,20 @@ const BudgetDashboard = ({
                 const day = parseInt(account.kesimGunu) || null;
                 const dueDate = day ? new Date(currentYear, currentMonth, Math.min(day, 28)) : null;
                 const paymentPlan = getCreditCardPaymentPlan(account, periodKey);
-                if (paymentPlan.plannedPayment <= 0) return;
+                const paidThisPeriod = getCreditCardPaymentsInPeriod(tumIslemler, account.id, currentYear, currentMonth);
+                const minimumRemaining = Math.max(0, paymentPlan.minimumPayment - paidThisPeriod);
+                if (paymentPlan.minimumPayment > 0 && minimumRemaining <= 0.5) return;
+                const displayAmount = paidThisPeriod > 0
+                    ? minimumRemaining
+                    : paymentPlan.plannedPayment;
+                if (displayAmount <= 0) return;
                 rows.push({
                     id: `card-statement-${account.id}`,
                     title: account.hesapAdi || 'Kart ekstresi',
                     type: 'Kart ekstresi',
                     badgeLabel: 'Kart ekstresi',
                     date: dueDate,
-                    amount: paymentPlan.plannedPayment,
+                    amount: displayAmount,
                     icon: CreditCard,
                     tone: 'warning',
                     onClick: () => modalAc('kredi_karti_ode', account),
@@ -912,8 +967,8 @@ const BudgetDashboard = ({
 
             <div className="qw-priority-grid">
                 <FinancialTrendChart
-                        title={flowChartMode === 'cashflow' ? 'Nakit Akışı' : 'Günlük Harcama'}
-                        subtitle={flowChartMode === 'cashflow' ? `${aktifAy} hareket görünümü` : `${aktifAy} gerçek tüketim görünümü`}
+                        title={null}
+                        subtitle={null}
                         data={flowChartMode === 'cashflow' ? cashflowDataset : gunlukVeri}
                         headerControl={(
                             <div className="qw-chart-tabs" aria-label="Grafik türü">
@@ -961,6 +1016,7 @@ const BudgetDashboard = ({
                                 },
                             ],
                         }}
+                        summaryPlacement={flowChartMode === 'expense' ? 'footer' : 'header'}
                         valueFormatter={(value) => gizliMod ? '****' : formatCurrencyPlain(value)}
                         yTickFormatter={(value) => gizliMod ? '****' : `${new Intl.NumberFormat('tr-TR', { notation: 'compact', maximumFractionDigits: 1 }).format(value)} ₺`}
                         tooltipRows={flowChartMode === 'cashflow' ? ((item, formatter) => {
@@ -1107,32 +1163,53 @@ const BudgetDashboard = ({
                 <PremiumCard>
                     <SectionHeader
                         title="Harcama Dağılımı"
-                        description="En yüksek kategoriler"
+                        description="Kategorileri tıklayarak grafikten çıkarın"
+                        action={hasHiddenExpenseCategories ? (
+                            <QuickActionButton onClick={clearHiddenExpenseCategories}>Tümünü göster</QuickActionButton>
+                        ) : null}
                     />
-                    {donutData.length > 0 ? (
+                    {categoryRows.length > 0 ? (
                         <div className="qw-donut-layout">
                             <div className="qw-donut-chart">
-                                <PremiumDonutChart
-                                    data={donutData}
-                                    centerValue={formatPara(kategoriToplam)}
-                                    centerLabel="Toplam gider"
-                                    formatValue={formatPara}
-                                    height={220}
-                                    innerRadius={64}
-                                    outerRadius={88}
-                                />
+                                {donutData.length > 0 ? (
+                                    <PremiumDonutChart
+                                        data={donutData}
+                                        centerValue={formatPara(kategoriToplam)}
+                                        centerLabel="Aktif gider"
+                                        formatValue={formatPara}
+                                        height={220}
+                                        innerRadius={64}
+                                        outerRadius={88}
+                                    />
+                                ) : (
+                                    <EmptyState title="Tüm kategoriler kapalı" description="Grafiği görmek için bir kategoriyi tekrar açın." icon={PiePlaceholder} />
+                                )}
                             </div>
                             <div className="qw-category-list">
-                                {donutData.map((item) => (
-                                    <div className="qw-category-row" key={item.name}>
-                                        <span style={{ background: item.color }} />
-                                        <div>
-                                            <strong>{item.name}</strong>
-                                            <small>%{item.yuzde}</small>
-                                        </div>
-                                        <b>{formatPara(item.value)}</b>
-                                    </div>
-                                ))}
+                                {categoryRows.map((item) => {
+                                    const activePercent = kategoriToplam > 0 ? Math.round((item.value / kategoriToplam) * 100) : 0;
+
+                                    return (
+                                        <button
+                                            type="button"
+                                            className={[
+                                                'qw-category-row',
+                                                !item.isActive ? 'is-muted' : '',
+                                            ].filter(Boolean).join(' ')}
+                                            key={item.name}
+                                            aria-pressed={item.isActive}
+                                            onClick={() => toggleExpenseCategory(item.name)}
+                                            title={`${item.name} kategorisini ${item.isActive ? 'grafikten çıkar' : 'grafiğe ekle'}`}
+                                        >
+                                            <span style={{ background: item.color }} />
+                                            <div>
+                                                <strong>{item.name}</strong>
+                                                <small>{item.isActive ? `%${activePercent}` : 'Kapalı'}</small>
+                                            </div>
+                                            <b>{formatPara(item.value)}</b>
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
                     ) : (
