@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ReceiptText } from 'lucide-react';
 import { inputStyle, formatCurrencyPlain, sortTurkishText } from '../../utils/helpers';
 import { MONTH_NAMES } from '../../utils/period';
+import { getCreditCardPaymentAmountOptions, isCreditCardPaymentSourceAccount } from '../../utils/creditCardPayments';
 import DescriptionInput from '../Shared/DescriptionInput';
 import { EmptyState, StatusBadge } from '../Shared/PremiumUI';
 
@@ -109,6 +110,18 @@ const QuickTransactionForm = ({
         () => (hesaplar || []).find((account) => account.id === transferKaynakId),
         [hesaplar, transferKaynakId],
     );
+    const selectedTransferTarget = useMemo(
+        () => (hesaplar || []).find((account) => account.id === transferHedefId),
+        [hesaplar, transferHedefId],
+    );
+    const transferTargets = siraliHesaplar;
+    const isTransferToCreditCard = selectedTransferTarget?.hesapTipi === 'krediKarti';
+    const transferSources = isTransferToCreditCard
+        ? siraliHesaplar.filter(isCreditCardPaymentSourceAccount)
+        : siraliHesaplar;
+    const creditCardTransferAmounts = isTransferToCreditCard
+        ? getCreditCardPaymentAmountOptions(selectedTransferTarget)
+        : null;
     const fullTransferBalance = Math.max(0, parseFloat(selectedTransferSource?.guncelBakiye) || 0);
     const transferFeeAmount = Math.max(0, parseFloat(transferUcreti) || 0);
     const fullTransferAmount = Math.max(0, fullTransferBalance - transferFeeAmount);
@@ -142,6 +155,11 @@ const QuickTransactionForm = ({
         if (taksitHesapId && !accountIds.has(taksitHesapId)) setTaksitHesapId?.('');
         if (transferKaynakId && !accountIds.has(transferKaynakId)) setTransferKaynakId?.('');
     }, [accountIds, secilenHesapId, setSecilenHesapId, setTaksitHesapId, setTransferKaynakId, taksitHesapId, transferKaynakId]);
+
+    useEffect(() => {
+        if (!isTransferToCreditCard || !transferKaynakId) return;
+        if (!isCreditCardPaymentSourceAccount(selectedTransferSource)) setTransferKaynakId?.('');
+    }, [isTransferToCreditCard, selectedTransferSource, setTransferKaynakId, transferKaynakId]);
 
     useEffect(() => {
         if (!defaultPaymentAccountId || !accountIds.has(defaultPaymentAccountId)) return;
@@ -299,18 +317,53 @@ const QuickTransactionForm = ({
                         <div>
                             <select value={transferKaynakId} onChange={e => setTransferKaynakId(e.target.value)} style={inputStyle}>
                                 <option value="">Nereden?</option>
-                                {siraliHesaplar.map(h => <option key={h.id} value={h.id}>{h.hesapAdi} ({formatCurrencyPlain(parseFloat(h.guncelBakiye) || 0)})</option>)}
+                                {transferSources.map(h => <option key={h.id} value={h.id}>{h.hesapAdi} ({formatCurrencyPlain(parseFloat(h.guncelBakiye) || 0)})</option>)}
                             </select>
                             <FieldError>{errors.transferKaynakId}</FieldError>
                         </div>
                         <div>
                             <select value={transferHedefId} onChange={e => setTransferHedefId(e.target.value)} style={inputStyle}>
                                 <option value="">Nereye?</option>
-                                {siraliHesaplar.map(h => <option key={h.id} value={h.id}>{h.hesapAdi} ({formatCurrencyPlain(parseFloat(h.guncelBakiye) || 0)})</option>)}
+                                {transferTargets.map(h => <option key={h.id} value={h.id}>{h.hesapAdi} ({formatCurrencyPlain(parseFloat(h.guncelBakiye) || 0)})</option>)}
                             </select>
                             <FieldError>{errors.transferHedefId}</FieldError>
                         </div>
                     </div>
+                    {isTransferToCreditCard && creditCardTransferAmounts && (
+                        <div className="qw-quick-cc-panel">
+                            <div className="qw-cc-payment-grid">
+                                <div>
+                                    <span>Seçilen hesap bakiyesi</span>
+                                    <strong>{selectedTransferSource ? formatCurrencyPlain(selectedTransferSource.guncelBakiye) : '-'}</strong>
+                                </div>
+                                <div>
+                                    <span>Güncel borç</span>
+                                    <strong className="is-danger">{formatCurrencyPlain(creditCardTransferAmounts.currentDebt)}</strong>
+                                </div>
+                                <div>
+                                    <span>Ekstre borcu</span>
+                                    <strong>{creditCardTransferAmounts.statementDebt > 0 ? formatCurrencyPlain(creditCardTransferAmounts.statementDebt) : '-'}</strong>
+                                </div>
+                                <div>
+                                    <span>Asgari tutar</span>
+                                    <strong>{creditCardTransferAmounts.minimumPayment > 0 ? formatCurrencyPlain(creditCardTransferAmounts.minimumPayment) : '-'}</strong>
+                                </div>
+                            </div>
+                            <div className="qw-cc-quick-options">
+                                {creditCardTransferAmounts.options.map((option) => (
+                                    <button
+                                        key={option.id}
+                                        type="button"
+                                        disabled={!option.enabled}
+                                        onClick={() => setTransferTutar?.(option.amount === null ? '' : String(Math.round(option.amount * 100) / 100))}
+                                    >
+                                        <span>{option.label}</span>
+                                        {option.amount !== null && <b>{formatCurrencyPlain(option.amount)}</b>}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                     <div>
                         <input
                             type="number"
@@ -331,7 +384,7 @@ const QuickTransactionForm = ({
                                     setUseFullTransferBalance(checked);
                                     if (checked) setTransferTutar?.(fullTransferAmount ? String(Math.round(fullTransferAmount * 100) / 100) : '');
                                 }}
-                                disabled={!transferKaynakId || fullTransferBalance <= 0}
+                                disabled={!transferKaynakId || fullTransferBalance <= 0 || isTransferToCreditCard}
                             />
                             <span>Tüm bakiye</span>
                             {transferKaynakId && <em>{formatCurrencyPlain(fullTransferBalance)}</em>}
@@ -340,7 +393,7 @@ const QuickTransactionForm = ({
                     </div>
                     <div className="qw-form-row">
                         <input placeholder="Açıklama" value={transferAciklama || ''} onChange={e => setTransferAciklama?.(e.target.value)} style={inputStyle} />
-                        <input type="number" placeholder="Ücret" value={transferUcreti} onChange={e => setTransferUcreti(e.target.value)} style={inputStyle} />
+                        {!isTransferToCreditCard && <input type="number" placeholder="Ücret" value={transferUcreti} onChange={e => setTransferUcreti(e.target.value)} style={inputStyle} />}
                     </div>
                     <input type="datetime-local" value={transferTarihi} onChange={e => setTransferTarihi(e.target.value)} style={inputStyle} />
                     <button type="submit" className="qw-submit-button" disabled={submitting}>{submitting ? 'Aktarılıyor...' : 'Transfer yap'}</button>

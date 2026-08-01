@@ -5,7 +5,13 @@ import { formatCurrencyPlain, inputStyle, tarihSadeceGunAyYil, sortTurkishText }
 import { toast } from 'react-toastify';
 import Swal from 'sweetalert2';
 import { MONTH_NAMES } from '../../utils/period';
-import { CREDIT_CARD_PAYMENT_STRATEGIES, CREDIT_CARD_PAYMENT_STRATEGY_LABELS, getCreditCardPaymentPlan } from '../../utils/creditCardPayments';
+import {
+    CREDIT_CARD_PAYMENT_TYPES,
+    CREDIT_CARD_PAYMENT_STRATEGIES,
+    CREDIT_CARD_PAYMENT_STRATEGY_LABELS,
+    getCreditCardPaymentAmountOptions,
+    isCreditCardPaymentSourceAccount,
+} from '../../utils/creditCardPayments';
 
 const FieldLabel = ({ children }) => (
     <label style={{ display: 'block', margin: '0 0 6px', fontSize: '12px', fontWeight: 700, color: '#64748b' }}>
@@ -275,6 +281,9 @@ const ModalManager = ({
     kkOdemeKartId,
     kkOdemeKaynakId, setKkOdemeKaynakId,
     kkOdemeTutar, setKkOdemeTutar,
+    kkOdemeTarihi, setKkOdemeTarihi,
+    kkOdemeAciklama, setKkOdemeAciklama,
+    kkOdemeTipi, setKkOdemeTipi,
     krediKartiBorcOde,
     faturaOde,
     tanimliFaturalar,
@@ -1101,55 +1110,114 @@ const ModalManager = ({
     else if (aktifModal === 'kredi_karti_ode') {
         title = "Borç Öde";
         icon = "💳";
+        customWidth = "min(520px, calc(100vw - 32px))";
         const kart = hesaplar.find(h => h.id === kkOdemeKartId);
-        const paymentPlan = getCreditCardPaymentPlan(kart);
-        const borc = paymentPlan.statementDebt;
-        const asgariBorc = paymentPlan.minimumPayment;
-        const planlananOdeme = paymentPlan.plannedPayment;
+        const kaynak = hesaplar.find(h => h.id === kkOdemeKaynakId);
+        const paymentAmounts = getCreditCardPaymentAmountOptions(kart);
+        const paymentAccounts = (hesaplar || []).filter(isCreditCardPaymentSourceAccount);
+        const isInterimPayment = kkOdemeTipi === CREDIT_CARD_PAYMENT_TYPES.INTERIM;
+        const applyQuickAmount = (option) => {
+            if (!option.enabled || option.amount === null) {
+                setKkOdemeTutar("");
+                return;
+            }
+            setKkOdemeTutar(String(Math.round(option.amount * 100) / 100));
+        };
 
         content = (
-            <form onSubmit={async (e) => { const s = await krediKartiBorcOde(e); if (s) close(); }}>
-                <div style={{ marginBottom: '20px', padding: '15px', background: '#f3e8ff', borderRadius: '12px', color: '#333' }}>
-                    <p style={{ margin: 0 }}><strong>Kart:</strong> {kart?.hesapAdi}</p>
-                    <p style={{ margin: '8px 0', fontSize: '18px' }}><strong>Dönem borcu:</strong> {formatPara(borc)}</p>
-                    <p style={{ margin: 0, color: '#64748b', fontSize: '13px' }}><strong>Planlanan ödeme:</strong> {formatPara(planlananOdeme)}</p>
+            <form className="qw-cc-payment-form" onSubmit={async (e) => {
+                e.preventDefault();
+                if (isProcessing) return;
+                setIsProcessing(true);
+                const s = await krediKartiBorcOde(e);
+                setIsProcessing(false);
+                if (s) close();
+            }}>
+                <div className="qw-cc-payment-hero">
+                    <div>
+                        <span>Ödenecek kredi kartı</span>
+                        <strong>{kart?.hesapAdi || 'Kredi kartı'}</strong>
+                    </div>
+                    <b className="is-danger">{formatPara(paymentAmounts.currentDebt)}</b>
                 </div>
 
-                <div style={{ marginBottom: '15px' }}>
-                    <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: 'bold' }}>Ödenecek Tutar Seçimi:</label>
-
-                    <div style={{ display: 'flex', gap: '15px' }}>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px', cursor: 'pointer' }}>
-                            <input type="radio" name="odemeTipi" onChange={() => setKkOdemeTutar(borc.toFixed(2))} checked={Math.abs(kkOdemeTutar - borc) < 1} />
-                            Tamamı ({formatPara(borc)})
-                        </label>
+                <div>
+                    <FieldLabel>Ödeme türü</FieldLabel>
+                    <div className="qw-cc-payment-type-tabs">
+                        <button
+                            type="button"
+                            className={kkOdemeTipi === CREDIT_CARD_PAYMENT_TYPES.STATEMENT ? 'is-active' : ''}
+                            onClick={() => setKkOdemeTipi(CREDIT_CARD_PAYMENT_TYPES.STATEMENT)}
+                        >
+                            Ekstre ödemesi
+                        </button>
+                        <button
+                            type="button"
+                            className={isInterimPayment ? 'is-active' : ''}
+                            onClick={() => setKkOdemeTipi(CREDIT_CARD_PAYMENT_TYPES.INTERIM)}
+                        >
+                            Ara ödeme
+                        </button>
                     </div>
-
-                    <div style={{ display: 'flex', gap: '15px', marginTop: '5px' }}>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px', cursor: 'pointer' }}>
-                            <input type="radio" name="odemeTipi" onChange={() => setKkOdemeTutar(asgariBorc.toFixed(2))} checked={Math.abs(kkOdemeTutar - asgariBorc) < 1} />
-                            Asgari (%20 - {formatPara(asgariBorc)})
-                        </label>
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '15px', marginTop: '5px' }}>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px', cursor: 'pointer' }}>
-                            <input type="radio" name="odemeTipi" onChange={() => setKkOdemeTutar("")} checked={Math.abs(kkOdemeTutar - borc) >= 1 && Math.abs(kkOdemeTutar - asgariBorc) >= 1 && Math.abs(kkOdemeTutar - planlananOdeme) >= 1} />
-                            Özel Tutar
-                        </label>
-                    </div>
-                    {planlananOdeme > 0 && planlananOdeme !== borc && planlananOdeme !== asgariBorc && (
-                        <div style={{ display: 'flex', gap: '15px', marginTop: '5px' }}>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px', cursor: 'pointer' }}>
-                                <input type="radio" name="odemeTipi" onChange={() => setKkOdemeTutar(planlananOdeme.toFixed(2))} checked={Math.abs(kkOdemeTutar - planlananOdeme) < 1} />
-                                Planlanan ({formatPara(planlananOdeme)})
-                            </label>
-                        </div>
-                    )}
                 </div>
-                <select value={kkOdemeKaynakId} onChange={e => setKkOdemeKaynakId(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} required><option value="">Parayı Hangi Hesaptan Çekelim?</option>{hesaplar.filter(h => h.id !== kkOdemeKartId).map(h => <option key={h.id} value={h.id}>{h.hesapAdi} ({formatPara(h.guncelBakiye)})</option>)}</select>
-                <input type="number" placeholder="Ödenecek Tutar (₺)" value={kkOdemeTutar} onChange={e => setKkOdemeTutar(e.target.value)} style={{ ...inputStyle, marginBottom: '20px' }} required />
-                <button type="submit" style={{ width: '100%', background: '#805ad5', color: 'white', padding: '14px', borderRadius: '12px', border: 'none', fontWeight: 'bold', fontSize: '16px' }}>ÖDEMEYİ YAP</button>
+
+                <div>
+                    <FieldLabel>Ödeme yapılacak vadesiz hesap</FieldLabel>
+                    <select value={kkOdemeKaynakId} onChange={e => setKkOdemeKaynakId(e.target.value)} style={inputStyle} required>
+                        <option value="">Hesap seç</option>
+                        {paymentAccounts.map(h => <option key={h.id} value={h.id}>{h.hesapAdi} ({formatPara(h.guncelBakiye)})</option>)}
+                    </select>
+                </div>
+
+                <div className="qw-cc-payment-grid">
+                    <div>
+                        <span>Seçilen hesabın kullanılabilir bakiyesi</span>
+                        <strong>{kaynak ? formatPara(kaynak.guncelBakiye) : '-'}</strong>
+                    </div>
+                    <div>
+                        <span>Güncel kredi kartı borcu</span>
+                        <strong className="is-danger">{formatPara(paymentAmounts.currentDebt)}</strong>
+                    </div>
+                    <div>
+                        <span>Ekstre borcu</span>
+                        <strong>{paymentAmounts.statementDebt > 0 ? formatPara(paymentAmounts.statementDebt) : '-'}</strong>
+                    </div>
+                    <div>
+                        <span>Asgari ödeme tutarı</span>
+                        <strong>{paymentAmounts.minimumPayment > 0 ? formatPara(paymentAmounts.minimumPayment) : '-'}</strong>
+                    </div>
+                </div>
+                <div>
+                    <FieldLabel>Hızlı tutar seçimi</FieldLabel>
+                    <div className="qw-cc-quick-options">
+                        {paymentAmounts.options.map((option) => (
+                            <button key={option.id} type="button" disabled={!option.enabled} onClick={() => applyQuickAmount(option)}>
+                                <span>{option.label}</span>
+                                {option.amount !== null && <b>{formatPara(option.amount)}</b>}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+                <div className="qw-form-row">
+                    <div>
+                        <FieldLabel>Ödenecek tutar</FieldLabel>
+                        <input type="number" min="0.01" step="0.01" placeholder="0,00" value={kkOdemeTutar} onChange={e => setKkOdemeTutar(e.target.value)} style={inputStyle} required />
+                    </div>
+                    <div>
+                        <FieldLabel>İşlem tarihi</FieldLabel>
+                        <input type="datetime-local" value={kkOdemeTarihi || ''} onChange={e => setKkOdemeTarihi(e.target.value)} style={inputStyle} required />
+                    </div>
+                </div>
+                <div>
+                    <FieldLabel>Açıklama</FieldLabel>
+                    <input
+                        placeholder={`${kaynak?.hesapAdi || 'Kaynak hesap'} → ${kart?.hesapAdi || 'Kredi kartı'} ${isInterimPayment ? 'Ara Ödeme' : 'Ekstre Ödemesi'}`}
+                        value={kkOdemeAciklama || ''}
+                        onChange={e => setKkOdemeAciklama(e.target.value)}
+                        style={inputStyle}
+                    />
+                </div>
+                <button type="submit" disabled={isProcessing} className="qw-submit-button">{isProcessing ? 'Kaydediliyor...' : 'Ödemeyi kaydet'}</button>
             </form>
         );
 

@@ -1,11 +1,18 @@
 import { useState } from 'react';
-import { collection, addDoc, doc, updateDoc, deleteDoc, increment, getDoc, query, where, getDocs, setDoc, writeBatch, deleteField } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc, deleteDoc, increment, getDoc, query, where, getDocs, setDoc, writeBatch, deleteField, runTransaction } from 'firebase/firestore';
 import { db } from '../firebase';
 import { toast } from 'react-toastify';
 import Swal from 'sweetalert2';
 import { formatCurrencyPlain, formatMoneyInputValue } from '../utils/helpers';
 import { canBeDefaultPaymentAccount } from '../utils/defaultPaymentAccount';
-import { CREDIT_CARD_PAYMENT_STRATEGIES, getCreditCardPaymentPlan } from '../utils/creditCardPayments';
+import {
+    CREDIT_CARD_PAYMENT_STRATEGIES,
+    CREDIT_CARD_PAYMENT_TYPES,
+    applyCreditCardPaymentToBalances,
+    getCreditCardPaymentPlan,
+    toMoneyCents,
+    validateCreditCardPayment,
+} from '../utils/creditCardPayments';
 
 export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tanimliFaturalar) => {
     // --- FORM STATES ---
@@ -99,6 +106,9 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
     const [kkOdemeKartId, setKkOdemeKartId] = useState("");
     const [kkOdemeKaynakId, setKkOdemeKaynakId] = useState("");
     const [kkOdemeTutar, setKkOdemeTutar] = useState("");
+    const [kkOdemeTarihi, setKkOdemeTarihi] = useState("");
+    const [kkOdemeAciklama, setKkOdemeAciklama] = useState("");
+    const [kkOdemeTipi, setKkOdemeTipi] = useState(CREDIT_CARD_PAYMENT_TYPES.STATEMENT);
 
     const [tasimaIslemiSuruyor, setTasimaIslemiSuruyor] = useState(false);
     const [yeniKodInput, setYeniKodInput] = useState("");
@@ -487,9 +497,120 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
         });
     }
 
+    const buildPaymentIdempotencyKey = ({ sourceId, cardId, amount, date, paymentType = CREDIT_CARD_PAYMENT_TYPES.STATEMENT }) => {
+        const safe = (value) => String(value || '').replace(/[^a-zA-Z0-9_-]/g, '_');
+        return [
+            'ccpay',
+            safe(paymentType),
+            safe(user?.uid),
+            safe(alanKodu),
+            safe(sourceId),
+            safe(cardId),
+            Number.isFinite(date?.getTime?.()) ? date.getTime() : Date.now(),
+            toMoneyCents(amount),
+        ].join('_');
+    };
+
+    const krediKartiBorcOdemeKaydet = async ({
+        kartId,
+        kaynakId,
+        tutar,
+        tarih,
+        aciklama = "",
+        odemeTipi = CREDIT_CARD_PAYMENT_TYPES.STATEMENT,
+        idempotencyKey,
+        resetForm = true,
+    }) => {
+        try {
+            const kart = hesaplar.find(h => h.id === kartId);
+            const kaynak = hesaplar.find(h => h.id === kaynakId);
+            const validation = validateCreditCardPayment({ sourceAccount: kaynak, cardAccount: kart, amount: tutar });
+
+            if (!validation.valid) {
+                toast.error(validation.message);
+                return false;
+            }
+
+            const paymentDate = tarih instanceof Date ? tarih : (tarih ? new Date(tarih) : new Date());
+            const safePaymentDate = Number.isNaN(paymentDate.getTime()) ? new Date() : paymentDate;
+            const paymentRef = idempotencyKey
+                ? doc(db, "nakit_islemleri", idempotencyKey)
+                : doc(collection(db, "nakit_islemleri"));
+            const transferId = paymentRef.id;
+
+            await runTransaction(db, async (transaction) => {
+                const existingPayment = await transaction.get(paymentRef);
+                if (existingPayment.exists()) return;
+
+                const sourceRef = doc(db, "hesaplar", kaynakId);
+                const cardRef = doc(db, "hesaplar", kartId);
+                const sourceSnap = await transaction.get(sourceRef);
+                const cardSnap = await transaction.get(cardRef);
+                const freshSource = sourceSnap.exists() ? { id: kaynakId, ...sourceSnap.data() } : null;
+                const freshCard = cardSnap.exists() ? { id: kartId, ...cardSnap.data() } : null;
+                const freshValidation = validateCreditCardPayment({ sourceAccount: freshSource, cardAccount: freshCard, amount: tutar });
+
+                if (!freshValidation.valid) throw new Error(freshValidation.message);
+
+                const appliedPayment = applyCreditCardPaymentToBalances({
+                    sourceAccount: freshSource,
+                    cardAccount: freshCard,
+                    amount: freshValidation.amount,
+                    paymentId: transferId,
+                    paymentType: odemeTipi,
+                });
+                if (!appliedPayment.valid) throw new Error(appliedPayment.message);
+                const metadata = appliedPayment.metadata;
+                const isStatementPayment = odemeTipi === CREDIT_CARD_PAYMENT_TYPES.STATEMENT;
+                const description = aciklama?.trim() || `${freshSource.hesapAdi} → ${freshCard.hesapAdi} ${isStatementPayment ? 'Ekstre Ödemesi' : 'Ara Ödeme'}`;
+
+                transaction.set(paymentRef, {
+                    uid: user.uid,
+                    alanKodu,
+                    islemTipi: "transfer",
+                    kategori: "Kredi Kartı Ödemesi",
+                    tutar: freshValidation.amount,
+                    aciklama: description,
+                    tarih: safePaymentDate,
+                    kaynakId,
+                    hedefId: kartId,
+                    transferId,
+                    transactionId: transferId,
+                    linkedTransactionId: transferId,
+                    isCreditCardPayment: true,
+                    krediKartiOdeme: true,
+                    kkOdemeTipi: odemeTipi,
+                    ...metadata,
+                    upcomingPaymentStatus: isStatementPayment ? (metadata.statementPaid ? 'paid' : 'partial') : 'independent',
+                    paidAt: isStatementPayment && metadata.statementPaid ? safePaymentDate : null,
+                });
+                transaction.update(sourceRef, { guncelBakiye: appliedPayment.sourceBalance });
+                transaction.update(cardRef, { guncelBakiye: appliedPayment.cardBalance });
+            });
+
+            toast.success("Kredi kartı ödemesi kaydedildi.");
+            if (resetForm) {
+                setKkOdemeTutar("");
+                setKkOdemeKaynakId("");
+                setKkOdemeKartId("");
+                setKkOdemeTarihi("");
+                setKkOdemeAciklama("");
+                setKkOdemeTipi(CREDIT_CARD_PAYMENT_TYPES.STATEMENT);
+            }
+            return true;
+        } catch (err) {
+            console.error(err);
+            toast.error(err?.message || "Ödeme hatası");
+            return false;
+        }
+    };
+
     const transferYap = async (e) => {
         if (e) e.preventDefault();
         try {
+            const tutar = parseFloat(transferTutar);
+            const ucret = parseFloat(transferUcreti) || 0; // Fee
+
             if (!transferKaynakId || !transferHedefId) {
                 toast.error("Lütfen hesapları seçin.");
                 return false;
@@ -498,9 +619,6 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
                 toast.error("Aynı hesaba transfer yapılamaz.");
                 return false;
             }
-            const tutar = parseFloat(transferTutar);
-            const ucret = parseFloat(transferUcreti) || 0; // Fee
-
             if (!transferTutar || isNaN(tutar) || tutar <= 0) {
                 toast.error("Geçerli bir transfer tutarı girin.");
                 return false;
@@ -509,6 +627,27 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
             const k = hesaplar.find(h => h.id === transferKaynakId);
             const h = hesaplar.find(h => h.id === transferHedefId);
             const tarih = transferTarihi ? new Date(transferTarihi) : new Date();
+
+            if (h?.hesapTipi === 'krediKarti') {
+                if (ucret > 0) {
+                    toast.error("Kredi kartı borç ödemesinde transfer ücreti desteklenmiyor.");
+                    return false;
+                }
+                const success = await krediKartiBorcOdemeKaydet({
+                    kartId: transferHedefId,
+                    kaynakId: transferKaynakId,
+                    tutar,
+                    tarih,
+                    aciklama: transferAciklama,
+                    odemeTipi: CREDIT_CARD_PAYMENT_TYPES.INTERIM,
+                    idempotencyKey: buildPaymentIdempotencyKey({ sourceId: transferKaynakId, cardId: transferHedefId, amount: tutar, date: tarih, paymentType: CREDIT_CARD_PAYMENT_TYPES.INTERIM }),
+                    resetForm: false,
+                });
+                if (success) {
+                    setTransferTutar(""); setTransferUcreti(""); setTransferAciklama(""); setTransferKaynakId(""); setTransferHedefId(""); setTransferTarihi("");
+                }
+                return success;
+            }
 
             const batch = writeBatch(db);
 
@@ -555,39 +694,18 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
 
     const krediKartiBorcOde = async (e) => {
         if (e) e.preventDefault();
-        try {
-            if (!kkOdemeKartId || !kkOdemeKaynakId || !kkOdemeTutar) {
-                toast.error("Eksik bilgi");
-                return false;
-            }
-            const tutar = parseFloat(kkOdemeTutar);
-            if (isNaN(tutar)) {
-                toast.error("Tutar geçersiz");
-                return false;
-            }
-
-            const kart = hesaplar.find(h => h.id === kkOdemeKartId);
-            const kaynak = hesaplar.find(h => h.id === kkOdemeKaynakId);
-
-            const batch = writeBatch(db);
-            batch.set(doc(collection(db, "nakit_islemleri")), {
-                uid: user.uid, alanKodu, islemTipi: "transfer", kategori: "Kredi Kartı Ödemesi",
-                tutar: tutar, aciklama: `${kaynak.hesapAdi} ➝ ${kart.hesapAdi} Borç Ödeme`,
-                tarih: new Date(), kaynakId: kkOdemeKaynakId, hedefId: kkOdemeKartId
-            });
-            batch.update(doc(db, "hesaplar", kkOdemeKaynakId), { guncelBakiye: increment(-tutar) });
-            batch.update(doc(db, "hesaplar", kkOdemeKartId), { guncelBakiye: increment(tutar) });
-            await batch.commit();
-
-            toast.success("Kredi kartı ödemesi yapıldı!");
-            setKkOdemeTutar(""); setKkOdemeKaynakId(""); setKkOdemeKartId("");
-            return true;
-        } catch (err) {
-            console.error(err);
-            toast.error("Ödeme hatası");
-            return false;
-        }
-    }
+        const tutar = parseFloat(kkOdemeTutar);
+        const tarih = kkOdemeTarihi ? new Date(kkOdemeTarihi) : new Date();
+        return krediKartiBorcOdemeKaydet({
+            kartId: kkOdemeKartId,
+            kaynakId: kkOdemeKaynakId,
+            tutar,
+            tarih,
+            aciklama: kkOdemeAciklama,
+            odemeTipi: kkOdemeTipi,
+            idempotencyKey: buildPaymentIdempotencyKey({ sourceId: kkOdemeKaynakId, cardId: kkOdemeKartId, amount: tutar, date: tarih, paymentType: kkOdemeTipi }),
+        });
+    };
 
     // --- TAKSİT ---
     const taksitEkle = async (e) => {
@@ -1387,6 +1505,11 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
         setKkOdemeKartId(v.id);
         const paymentPlan = getCreditCardPaymentPlan(v);
         setKkOdemeTutar(paymentPlan.plannedPayment > 0 ? formatMoneyInputValue(paymentPlan.plannedPayment) : "");
+        const now = new Date();
+        const localDateTime = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
+        setKkOdemeTarihi(localDateTime);
+        setKkOdemeAciklama("");
+        setKkOdemeTipi(CREDIT_CARD_PAYMENT_TYPES.STATEMENT);
     }
 
     return {
@@ -1406,13 +1529,13 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
         cariBaslik, setCariBaslik, cariTutar, setCariTutar, cariHesapId, setCariHesapId, cariKategori, setCariKategori, cariTarih, setCariTarih, cariNot, setCariNot,
         cariIadeTutar, setCariIadeTutar, cariIadeHesapId, setCariIadeHesapId,
         tanimBaslik, setTanimBaslik, tanimKurum, setTanimKurum, tanimAboneNo, setTanimAboneNo, tanimHesapId, setTanimHesapId, secilenTanimId, setSecilenTanimId, faturaGirisTutar, setFaturaGirisTutar, faturaGirisTarih, setFaturaGirisTarih, faturaGirisAciklama, setFaturaGirisAciklama,
-        kkOdemeKartId, setKkOdemeKartId, kkOdemeKaynakId, setKkOdemeKaynakId, kkOdemeTutar, setKkOdemeTutar,
+        kkOdemeKartId, setKkOdemeKartId, kkOdemeKaynakId, setKkOdemeKaynakId, kkOdemeTutar, setKkOdemeTutar, kkOdemeTarihi, setKkOdemeTarihi, kkOdemeAciklama, setKkOdemeAciklama, kkOdemeTipi, setKkOdemeTipi,
         tasimaIslemiSuruyor, setTasimaIslemiSuruyor, yeniKodInput, setYeniKodInput,
 
         // Actions
         hesapEkle, hesapDuzenle,
         islemEkle, islemSil: islemSilAction, islemDuzenle, normalSil,
-        transferYap, krediKartiBorcOde,
+        transferYap, krediKartiBorcOde, krediKartiBorcOdemeKaydet,
         taksitEkle, taksitOde, taksitDuzenle,
         abonelikEkle, abonelikOde, abonelikDuzenle,
         maasEkle, maasYatir, maasDuzenle,

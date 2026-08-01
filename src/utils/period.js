@@ -70,14 +70,20 @@ export const readInitialPeriod = () => {
 
 export const buildAvailablePeriods = (dates = []) => {
     const periodMap = new Map();
+    const ensurePeriod = (year, month) => {
+        if (!periodMap.has(year)) periodMap.set(year, new Set());
+        periodMap.get(year).add(month);
+    };
+
+    const current = getDefaultPeriod();
+    ensurePeriod(current.year, current.month);
 
     dates.forEach((value) => {
         const date = toDateSafe(value);
         if (!date) return;
         const year = date.getFullYear();
         const month = date.getMonth() + 1;
-        if (!periodMap.has(year)) periodMap.set(year, new Set());
-        periodMap.get(year).add(month);
+        ensurePeriod(year, month);
     });
 
     const years = Array.from(periodMap.keys()).sort((a, b) => b - a);

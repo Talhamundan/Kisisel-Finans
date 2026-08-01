@@ -73,6 +73,20 @@ function App() {
     const defaultPaymentAccountId = defaultPaymentAccount?.id || "";
 
     useEffect(() => {
+        const current = getDefaultPeriod();
+        const currentKey = `${current.year}-${String(current.month).padStart(2, '0')}`;
+        const selectedKey = selectedPeriod.month === 'all'
+            ? `${selectedPeriod.year}-99`
+            : `${selectedPeriod.year}-${String(selectedPeriod.month).padStart(2, '0')}`;
+        const lastRolloverKey = localStorage.getItem('tm_finance_period_last_rollover');
+
+        if (selectedPeriod.month !== 'all' && selectedKey < currentKey && lastRolloverKey !== currentKey) {
+            localStorage.setItem('tm_finance_period_last_rollover', currentKey);
+            setSelectedPeriod(current);
+        }
+    }, [selectedPeriod]);
+
+    useEffect(() => {
         document.documentElement.dataset.theme = theme;
         document.documentElement.style.colorScheme = theme;
         localStorage.setItem('theme', theme);
@@ -628,6 +642,9 @@ function App() {
                 kkOdemeKartId={budgetActions.kkOdemeKartId}
                 kkOdemeKaynakId={budgetActions.kkOdemeKaynakId} setKkOdemeKaynakId={budgetActions.setKkOdemeKaynakId}
                 kkOdemeTutar={budgetActions.kkOdemeTutar} setKkOdemeTutar={budgetActions.setKkOdemeTutar}
+                kkOdemeTarihi={budgetActions.kkOdemeTarihi} setKkOdemeTarihi={budgetActions.setKkOdemeTarihi}
+                kkOdemeAciklama={budgetActions.kkOdemeAciklama} setKkOdemeAciklama={budgetActions.setKkOdemeAciklama}
+                kkOdemeTipi={budgetActions.kkOdemeTipi} setKkOdemeTipi={budgetActions.setKkOdemeTipi}
                 krediKartiBorcOde={budgetActions.krediKartiBorcOde}
                 faturaOde={budgetActions.faturaOde}
                 tanimliFaturalar={data.tanimliFaturalar}

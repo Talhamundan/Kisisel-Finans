@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { formatCurrencyPlain, toDateSafe } from '../utils/helpers';
-import { getCreditCardPaymentPlan } from '../utils/creditCardPayments';
+import { getCreditCardPaymentPlan, isCreditCardStatementPaymentTransaction } from '../utils/creditCardPayments';
 import { buildSubscriptionOccurrences } from '../utils/recurringPayments';
 
 export const useNotifications = ({
@@ -41,14 +41,16 @@ export const useNotifications = ({
             if (h.hesapTipi === 'krediKarti' && h.kesimGunu) {
                 const kesimGunuInt = parseInt(h.kesimGunu);
                 if (mevcutGun >= kesimGunuInt && mevcutGun < kesimGunuInt + 10) {
-                    const odemeYapildiMi = islemler.some(islem => {
-                        const t = toDateSafe(islem.tarih);
-                        if (!t) return false;
-                        return t.getMonth() === mevcutAy && t.getFullYear() === mevcutYil && t.getDate() >= kesimGunuInt && (islem.hedefId === h.id || islem.hesapId === h.id) && (islem.islemTipi === 'transfer' || islem.islemTipi === 'gelir');
-                    });
-                    if (!odemeYapildiMi && h.guncelBakiye < 0) {
+                    if (h.guncelBakiye < 0) {
                         const paymentPlan = getCreditCardPaymentPlan(h, periodKey);
-                        if (paymentPlan.plannedPayment > 0) {
+                        const paidThisPeriod = islemler.reduce((sum, islem) => {
+                            if (!isCreditCardStatementPaymentTransaction(islem, h.id)) return sum;
+                            const t = toDateSafe(islem.tarih);
+                            if (!t || t.getMonth() !== mevcutAy || t.getFullYear() !== mevcutYil) return sum;
+                            return sum + (parseFloat(islem.tutar) || 0);
+                        }, 0);
+                        const minimumRemaining = Math.max(0, paymentPlan.minimumPayment - paidThisPeriod);
+                        if (paymentPlan.plannedPayment > 0 && minimumRemaining > 0.5) {
                             tempBildirimler.push({ id: h.id + '_kk', tip: 'kk_hatirlatma', mesaj: `💳 ${h.hesapAdi} ekstresi kesildi!`, tutar: paymentPlan.plannedPayment, data: h, renk: 'orange' });
                         }
                     }

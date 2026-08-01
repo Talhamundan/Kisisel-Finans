@@ -13,6 +13,7 @@ const HighQualityModal = ({
     icon,
     children,
     footerButtons,
+    headerActions,
     width = '450px',
     minHeight,
     maxHeight = '90vh',
@@ -86,19 +87,22 @@ const HighQualityModal = ({
                             {subtitle && <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#64748b', fontWeight: 600 }}>{subtitle}</p>}
                         </div>
                     </div>
-                    <button
-                        onClick={onClose}
-                        style={{
-                            border: 'none',
-                            background: 'transparent',
-                            cursor: 'pointer',
-                            fontSize: '18px',
-                            color: '#94a3b8',
-                            padding: '4px'
-                        }}
-                    >
-                        ✕
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                        {headerActions}
+                        <button
+                            onClick={onClose}
+                            style={{
+                                border: 'none',
+                                background: 'transparent',
+                                cursor: 'pointer',
+                                fontSize: '18px',
+                                color: '#94a3b8',
+                                padding: '4px'
+                            }}
+                        >
+                            ✕
+                        </button>
+                    </div>
                 </div>
 
                 {/* BODY */}

@@ -47,7 +47,7 @@ import {
     UpcomingPaymentRow,
 } from '../Shared/PremiumUI';
 import QuickTransactionForm from './QuickTransactionForm';
-import { getCreditCardPaymentPlan } from '../../utils/creditCardPayments';
+import { getCreditCardPaymentPlan, isCreditCardStatementPaymentTransaction } from '../../utils/creditCardPayments';
 import { buildSubscriptionOccurrences } from '../../utils/recurringPayments';
 
 const parseAmount = (value) => parseFloat(value) || 0;
@@ -103,10 +103,7 @@ const getCreditCardPaymentsInPeriod = (transactions = [], accountId, year, month
     if (!accountId) return 0;
 
     return (transactions || []).reduce((sum, transaction) => {
-        const isCardPayment = transaction?.islemTipi === 'transfer' &&
-            transaction?.kategori === 'Kredi Kartı Ödemesi' &&
-            transaction?.hedefId === accountId;
-        if (!isCardPayment) return sum;
+        if (!isCreditCardStatementPaymentTransaction(transaction, accountId)) return sum;
 
         const date = toDateSafe(transaction.tarih);
         if (!date || date.getFullYear() !== year || date.getMonth() !== month) return sum;
@@ -637,11 +634,7 @@ const BudgetDashboard = ({
                 const dueDate = day ? new Date(currentYear, currentMonth, Math.min(day, 28)) : null;
                 const paymentPlan = getCreditCardPaymentPlan(account, periodKey);
                 const paidThisPeriod = getCreditCardPaymentsInPeriod(tumIslemler, account.id, currentYear, currentMonth);
-                const minimumRemaining = Math.max(0, paymentPlan.minimumPayment - paidThisPeriod);
-                if (paymentPlan.minimumPayment > 0 && minimumRemaining <= 0.5) return;
-                const displayAmount = paidThisPeriod > 0
-                    ? minimumRemaining
-                    : paymentPlan.plannedPayment;
+                const displayAmount = paymentPlan.plannedPayment;
                 if (displayAmount <= 0) return;
                 rows.push({
                     id: `card-statement-${account.id}`,
@@ -652,6 +645,7 @@ const BudgetDashboard = ({
                     amount: displayAmount,
                     icon: CreditCard,
                     tone: 'warning',
+                    paidThisPeriod,
                     onClick: () => modalAc('kredi_karti_ode', account),
                 });
             });
@@ -1372,6 +1366,16 @@ const BudgetDashboard = ({
                 onClose={() => setHistoryAccount(null)}
                 title={historyAccount?.hesapAdi || ''}
                 subtitle={historySubtitle}
+                headerActions={historyAccount?.hesapTipi === 'krediKarti' ? (
+                    <button
+                        type="button"
+                        className="qw-action-button qw-cc-pay-header-button"
+                        onClick={() => modalAc('kredi_karti_ode', historyAccount)}
+                    >
+                        <CreditCard size={16} strokeWidth={2.35} />
+                        Borç Öde
+                    </button>
+                ) : null}
                 width="min(760px, calc(100vw - 48px))"
                 maxHeight="min(760px, calc(100vh - 80px))"
                 className="qw-account-history-modal"
