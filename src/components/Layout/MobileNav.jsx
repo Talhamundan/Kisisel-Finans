@@ -2,7 +2,7 @@ import React from 'react';
 import { Home, Briefcase, Target, CalendarDays, Banknote } from 'lucide-react';
 
 const items = [
-    { id: 'butcem', label: 'Ana Sayfa', icon: Home },
+    { id: 'butcem', label: 'Dashboard', icon: Home },
     { id: 'maasAnalizi', label: 'Maaş', icon: Banknote },
     { id: 'yatirimlar', label: 'Yatırım', icon: Briefcase },
     { id: 'hedefler', label: 'Envanter', icon: Target },

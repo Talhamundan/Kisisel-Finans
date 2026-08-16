@@ -19,7 +19,7 @@ import { MONTH_NAMES } from '../../utils/period';
 import AppLogo from '../Shared/AppLogo';
 
 const navItems = [
-    { id: 'butcem', label: 'Bütçem', icon: Home },
+    { id: 'butcem', label: 'Dashboard', icon: Home },
     { id: 'maasAnalizi', label: 'Maaş Analizi', icon: Banknote },
     { id: 'yatirimlar', label: 'Yatırımlar', icon: WalletCards },
     { id: 'hedefler', label: 'Hedefler', icon: Target },
@@ -27,7 +27,7 @@ const navItems = [
 ];
 
 const pageMeta = {
-    butcem: ['Bütçem', 'Finansal durumuna genel bakış'],
+    butcem: ['Dashboard', 'Finansal durumuna genel bakış'],
     maasAnalizi: ['Maaş Analizi', 'Maaş dönemindeki gelir, harcama ve kalan tutarı incele'],
     yatirimlar: ['Yatırımlar', 'Portföy ve varlık performansı'],
     hedefler: ['Hedefler', 'Envanter ve birikim planları'],

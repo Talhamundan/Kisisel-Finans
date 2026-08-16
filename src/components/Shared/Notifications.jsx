@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { formatCurrencyPlain } from '../../utils/helpers';
 
 const notificationAccent = (renk) => {
@@ -20,6 +20,7 @@ const notificationButtonColor = (renk) => {
 };
 
 const buttonLabel = (tip) => {
+    if (tip === 'kk_limit') return 'Tamam';
     if (tip === 'maas') return 'Yatır';
     if (tip === 'alacak') return 'Ödeme Al';
     return 'Öde';
@@ -34,9 +35,23 @@ const Notifications = ({
     modalAc,
     besOdemeYap
 }) => {
+    const [dismissedIds, setDismissedIds] = useState(() => new Set());
     const formatPara = (tutar) => gizliMod ? "**** ₺" : formatCurrencyPlain(tutar);
+    const visibleNotifications = useMemo(
+        () => (bildirimler || []).filter((b) => !dismissedIds.has(b.id || b.mesaj)),
+        [bildirimler, dismissedIds]
+    );
 
     const handleNotificationAction = (b) => {
+        if (b.tip === 'kk_limit') {
+            const key = b.id || b.mesaj;
+            setDismissedIds((current) => {
+                const next = new Set(current);
+                next.add(key);
+                return next;
+            });
+            return;
+        }
         if (b.tip === 'abonelik') abonelikOde(b.data);
         if (b.tip === 'taksit') taksitOde(b.data);
         if (b.tip === 'maas') maasYatir(b.data);
@@ -47,13 +62,13 @@ const Notifications = ({
         if (b.tip === 'kk_hatirlatma') modalAc('kredi_karti_ode', b.data);
     };
 
-    if (bildirimler.length === 0) return null;
+    if (visibleNotifications.length === 0) return null;
 
     return (
         <div style={{ marginBottom: '30px', background: '#fff5f5', border: '1px solid #feb2b2', borderRadius: '10px', padding: '15px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <h4 style={{ margin: 0, color: '#c53030', display: 'flex', alignItems: 'center', gap: '5px' }}>⏳ Bekleyen İşlemler</h4>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '10px' }}>
-                {bildirimler.map((b, i) => {
+                {visibleNotifications.map((b, i) => {
                     const accentColor = notificationAccent(b.renk);
                     const amountColor = notificationAmountColor(b.renk);
                     const buttonColor = notificationButtonColor(b.renk);

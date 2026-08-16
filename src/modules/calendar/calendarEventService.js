@@ -211,7 +211,7 @@ export const buildCalendarEventsFromData = (data, anchorDate = new Date()) => {
     }).forEach((occurrence) => {
         const subscription = occurrence.subscription;
         events.push(buildEvent({
-            title: subscription.ad || 'Abonelik',
+            title: subscription.ad || 'Sabit gider',
             date: occurrence.dateKey,
             type: 'subscription',
             amount: occurrence.expectedAmount,
@@ -219,7 +219,7 @@ export const buildCalendarEventsFromData = (data, anchorDate = new Date()) => {
             source: 'subscription',
             sourceId: subscription.id,
             status: occurrence.status === 'paid' ? 'completed' : occurrence.status,
-            description: occurrence.status === 'paid' ? 'Abonelik ödemesi gerçekleşti' : 'Abonelik yenileme tarihi',
+            description: occurrence.status === 'paid' ? 'Sabit gider ödemesi gerçekleşti' : 'Sabit gider ödeme tarihi',
             meta: {
                 subscriptionId: subscription.id,
                 periodKey: occurrence.periodKey,

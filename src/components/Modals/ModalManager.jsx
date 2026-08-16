@@ -236,6 +236,7 @@ const ModalManager = ({
     hesapTipi, setHesapTipi,
     baslangicBakiye, setBaslangicBakiye,
     hesapKesimGunu, setHesapKesimGunu,
+    kartLimiti, setKartLimiti,
     kartOdemeStratejisi, setKartOdemeStratejisi,
     kartVarsayilanOdemeTutari, setKartVarsayilanOdemeTutari,
     kartPlanlananOdemeTutari, setKartPlanlananOdemeTutari,
@@ -442,9 +443,9 @@ const ModalManager = ({
                 <div style={{ marginBottom: '15px' }}>
                     <FieldLabel>Hesap türü</FieldLabel>
                     <select value={hesapTipi} onChange={e => setHesapTipi(e.target.value)} style={inputStyle}>
-                        <option value="nakit">Nakit</option>
-                        <option value="krediKarti">Kart</option>
-                        <option value="yatirim">Yatırım H.</option>
+                        <option value="nakit">Vadesiz Hesap</option>
+                        <option value="krediKarti">Kredi Kartı</option>
+                        <option value="yatirim">Yatırım Hesabı</option>
                     </select>
                 </div>
                 <div style={{ marginBottom: '15px' }}>
@@ -453,8 +454,16 @@ const ModalManager = ({
                 </div>
                 {hesapTipi === 'krediKarti' && (
                     <div style={{ marginBottom: '20px' }}>
-                        <FieldLabel>Ekstre kesim günü</FieldLabel>
-                        <input type="number" min="1" max="31" placeholder="1-31" value={hesapKesimGunu} onChange={e => setHesapKesimGunu(e.target.value)} style={inputStyle} />
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                            <div>
+                                <FieldLabel>Kart limiti</FieldLabel>
+                                <input type="number" min="0" step="0.01" placeholder="0" value={kartLimiti} onChange={e => setKartLimiti(e.target.value)} style={inputStyle} />
+                            </div>
+                            <div>
+                                <FieldLabel>Ekstre kesim günü</FieldLabel>
+                                <input type="number" min="1" max="31" placeholder="1-31" value={hesapKesimGunu} onChange={e => setHesapKesimGunu(e.target.value)} style={inputStyle} />
+                            </div>
+                        </div>
                     </div>
                 )}
                 {creditCardPaymentSettings}
@@ -464,7 +473,7 @@ const ModalManager = ({
                             <input type="checkbox" checked={varsayilanOdemeAraci} onChange={e => setVarsayilanOdemeAraci(e.target.checked)} />
                             <span>
                                 <strong>Varsayılan ödeme aracı</strong>
-                                <small>Yeni gider, fatura, abonelik ve taksit kayıtlarında bu hesap otomatik seçilir.</small>
+                                <small>Yeni gider, fatura, sabit gider ve taksit kayıtlarında bu hesap otomatik seçilir.</small>
                             </span>
                         </label>
                     </div>
@@ -639,9 +648,9 @@ const ModalManager = ({
                 <div style={{ marginBottom: '15px' }}>
                     <FieldLabel>Hesap türü</FieldLabel>
                     <select value={hesapTipi} onChange={e => setHesapTipi(e.target.value)} style={inputStyle}>
-                        <option value="nakit">Nakit</option>
-                        <option value="krediKarti">Kart</option>
-                        <option value="yatirim">Yatırım H.</option>
+                        <option value="nakit">Vadesiz Hesap</option>
+                        <option value="krediKarti">Kredi Kartı</option>
+                        <option value="yatirim">Yatırım Hesabı</option>
                     </select>
                 </div>
                 <div style={{ marginBottom: '15px' }}>
@@ -650,8 +659,16 @@ const ModalManager = ({
                 </div>
                 {hesapTipi === 'krediKarti' && (
                     <div style={{ marginBottom: '20px' }}>
-                        <FieldLabel>Ekstre kesim günü</FieldLabel>
-                        <input type="number" min="1" max="31" placeholder="1-31" value={hesapKesimGunu} onChange={e => setHesapKesimGunu(e.target.value)} style={inputStyle} />
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                            <div>
+                                <FieldLabel>Kart limiti</FieldLabel>
+                                <input type="number" min="0" step="0.01" placeholder="0" value={kartLimiti} onChange={e => setKartLimiti(e.target.value)} style={inputStyle} />
+                            </div>
+                            <div>
+                                <FieldLabel>Ekstre kesim günü</FieldLabel>
+                                <input type="number" min="1" max="31" placeholder="1-31" value={hesapKesimGunu} onChange={e => setHesapKesimGunu(e.target.value)} style={inputStyle} />
+                            </div>
+                        </div>
                         <div style={{ marginTop: '8px', fontSize: '12px', lineHeight: 1.45, color: '#94a3b8' }}>
                             Kesim gününü değiştirmek geçmiş ekstre dönemlerinin dağılımını değiştirebilir.
                         </div>
@@ -664,7 +681,7 @@ const ModalManager = ({
                             <input type="checkbox" checked={varsayilanOdemeAraci} onChange={e => setVarsayilanOdemeAraci(e.target.checked)} />
                             <span>
                                 <strong>Varsayılan ödeme aracı</strong>
-                                <small>Yeni gider, fatura, abonelik ve taksit kayıtlarında bu hesap otomatik seçilir.</small>
+                                <small>Yeni gider, fatura, sabit gider ve taksit kayıtlarında bu hesap otomatik seçilir.</small>
                             </span>
                         </label>
                     </div>

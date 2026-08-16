@@ -32,7 +32,7 @@ export const EVENT_TYPE_META = {
     credit_card_statement: { label: 'Kredi Kartı Kesimi', color: '#3b82f6', dot: '🔵' },
     credit_card_payment: { label: 'Son Ödeme Tarihi', color: '#ef4444', dot: '🔴' },
     loan_payment: { label: 'Kredi Taksidi', color: '#f97316', dot: '🟠' },
-    subscription: { label: 'Abonelik', color: '#a855f7', dot: '🟣' },
+    subscription: { label: 'Sabit gider', color: '#a855f7', dot: '🟣' },
     bill: { label: 'Fatura', color: '#eab308', dot: '🟡' },
     investment: { label: 'Hedef / Plan', color: '#06b6d4', dot: '🔷' },
     reminder: { label: 'Hatırlatma', color: '#94a3b8', dot: '⚪' },

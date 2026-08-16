@@ -21,6 +21,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
     const [hesapTipi, setHesapTipi] = useState("nakit");
     const [baslangicBakiye, setBaslangicBakiye] = useState("");
     const [hesapKesimGunu, setHesapKesimGunu] = useState("");
+    const [kartLimiti, setKartLimiti] = useState("");
     const [kartOdemeStratejisi, setKartOdemeStratejisi] = useState(CREDIT_CARD_PAYMENT_STRATEGIES.FULL);
     const [kartVarsayilanOdemeTutari, setKartVarsayilanOdemeTutari] = useState("");
     const [kartPlanlananOdemeTutari, setKartPlanlananOdemeTutari] = useState("");
@@ -131,6 +132,11 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
                 toast.warning("Ekstre kesim günü 1-31 arasında olmalı.");
                 return false;
             }
+            const limit = parseFloat(kartLimiti);
+            if (hesapTipi === 'krediKarti' && kartLimiti !== "" && (!Number.isFinite(limit) || limit < 0)) {
+                toast.warning("Kart limiti 0 veya daha büyük olmalı.");
+                return false;
+            }
             const salaryDay = parseInt(hesapMaasGunu);
             const isSalaryAccount = hesapTipi !== 'krediKarti' && maasHesabi;
             const shouldBeDefaultPaymentAccount = hesapTipi !== 'yatirim' && varsayilanOdemeAraci;
@@ -145,6 +151,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
                 uid: user.uid, alanKodu, hesapAdi, hesapTipi,
                 guncelBakiye: bakiye,
                 kesimGunu: hesapTipi === 'krediKarti' ? kesimGunu : "",
+                kartLimiti: hesapTipi === 'krediKarti' ? (Number.isFinite(limit) ? limit : 0) : 0,
                 odemeStratejisi: hesapTipi === 'krediKarti' ? (kartOdemeStratejisi || CREDIT_CARD_PAYMENT_STRATEGIES.FULL) : "",
                 varsayilanOdemeTutari: hesapTipi === 'krediKarti' && kartOdemeStratejisi === CREDIT_CARD_PAYMENT_STRATEGIES.FIXED ? (parseFloat(kartVarsayilanOdemeTutari) || 0) : 0,
                 planlananOdemeTutari: hesapTipi === 'krediKarti' && kartOdemeStratejisi === CREDIT_CARD_PAYMENT_STRATEGIES.MANUAL ? (parseFloat(kartPlanlananOdemeTutari) || 0) : 0,
@@ -167,7 +174,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
                     .forEach((account) => batch.update(doc(db, "hesaplar", account.id), { anaMaasHesabi: false }));
             }
             await batch.commit();
-            setHesapAdi(""); setBaslangicBakiye(""); setHesapKesimGunu(""); setKartOdemeStratejisi(CREDIT_CARD_PAYMENT_STRATEGIES.FULL); setKartVarsayilanOdemeTutari(""); setKartPlanlananOdemeTutari(""); setKartAsgariOdemeTutari(""); setVarsayilanOdemeAraci(false);
+            setHesapAdi(""); setBaslangicBakiye(""); setHesapKesimGunu(""); setKartLimiti(""); setKartOdemeStratejisi(CREDIT_CARD_PAYMENT_STRATEGIES.FULL); setKartVarsayilanOdemeTutari(""); setKartPlanlananOdemeTutari(""); setKartAsgariOdemeTutari(""); setVarsayilanOdemeAraci(false);
             setMaasHesabi(false); setAnaMaasHesabi(false); setHesapMaasGunu(""); setBagliMaasId("");
             toast.success("Hesap eklendi.");
             return true;
@@ -191,6 +198,11 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
                 toast.warning("Ekstre kesim günü 1-31 arasında olmalı.");
                 return false;
             }
+            const limit = parseFloat(kartLimiti);
+            if (hesapTipi === 'krediKarti' && kartLimiti !== "" && (!Number.isFinite(limit) || limit < 0)) {
+                toast.warning("Kart limiti 0 veya daha büyük olmalı.");
+                return false;
+            }
             const salaryDay = parseInt(hesapMaasGunu);
             const isSalaryAccount = hesapTipi !== 'krediKarti' && maasHesabi;
             const shouldBeDefaultPaymentAccount = hesapTipi !== 'yatirim' && varsayilanOdemeAraci;
@@ -203,6 +215,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
                 hesapAdi, hesapTipi,
                 guncelBakiye: bakiye,
                 kesimGunu: hesapTipi === 'krediKarti' ? kesimGunu : "",
+                kartLimiti: hesapTipi === 'krediKarti' ? (Number.isFinite(limit) ? limit : 0) : 0,
                 odemeStratejisi: hesapTipi === 'krediKarti' ? (kartOdemeStratejisi || CREDIT_CARD_PAYMENT_STRATEGIES.FULL) : "",
                 varsayilanOdemeTutari: hesapTipi === 'krediKarti' && kartOdemeStratejisi === CREDIT_CARD_PAYMENT_STRATEGIES.FIXED ? (parseFloat(kartVarsayilanOdemeTutari) || 0) : 0,
                 planlananOdemeTutari: hesapTipi === 'krediKarti' && kartOdemeStratejisi === CREDIT_CARD_PAYMENT_STRATEGIES.MANUAL ? (parseFloat(kartPlanlananOdemeTutari) || 0) : 0,
@@ -338,24 +351,45 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
                 if (result.isConfirmed) {
                     try {
                         const batch = writeBatch(db);
+                        const tutar = parseFloat(data.tutar) || 0;
 
                         // 1. TERSİNE BAKE GÜNCELLEME MANTIĞI
                         if (data.islemTipi === "transfer") {
+                            let linkedFeeDocs = [];
+                            if (data.feeTransactionId) {
+                                const feeSnap = await getDoc(doc(db, "nakit_islemleri", data.feeTransactionId));
+                                if (feeSnap.exists()) linkedFeeDocs = [{ ref: feeSnap.ref, data: feeSnap.data() }];
+                            } else {
+                                const feeQuery = query(collection(db, "nakit_islemleri"), where("linkedTransferId", "==", id));
+                                const feeSnap = await getDocs(feeQuery);
+                                linkedFeeDocs = feeSnap.docs.map((feeDoc) => ({ ref: feeDoc.ref, data: feeDoc.data() }));
+                            }
+
+                            const accountAdjustments = new Map();
+                            const addAccountAdjustment = (accountId, amount) => {
+                                if (!accountId || !Number.isFinite(amount) || amount === 0) return;
+                                accountAdjustments.set(accountId, (accountAdjustments.get(accountId) || 0) + amount);
+                            };
+
                             // Transfer: Kaynaktan çıktı, Hedefe girdi.
                             // Silinince: Kaynağa geri ekle (+), Hedepten düş (-).
-                            if (data.kaynakId) {
-                                const kaynakRef = doc(db, "hesaplar", data.kaynakId);
-                                batch.update(kaynakRef, { guncelBakiye: increment(data.tutar) });
-                            }
-                            if (data.hedefId) {
-                                const hedefRef = doc(db, "hesaplar", data.hedefId);
-                                batch.update(hedefRef, { guncelBakiye: increment(-data.tutar) });
-                            }
+                            addAccountAdjustment(data.kaynakId, tutar);
+                            addAccountAdjustment(data.hedefId, -tutar);
+
+                            linkedFeeDocs.forEach(({ ref, data: feeData }) => {
+                                const feeAmount = parseFloat(feeData?.tutar) || 0;
+                                addAccountAdjustment(feeData?.hesapId, feeAmount);
+                                batch.delete(ref);
+                            });
+
+                            accountAdjustments.forEach((amount, accountId) => {
+                                batch.update(doc(db, "hesaplar", accountId), { guncelBakiye: increment(amount) });
+                            });
                         } else {
                             // Gelir/Gider
                             let duzeltmeMiktari = 0;
-                            if (data.islemTipi === 'gider' || data.islemTipi === 'yatirim_alis') duzeltmeMiktari = data.tutar; // Harcananı iade et (+)
-                            if (data.islemTipi === 'gelir' || data.islemTipi === 'yatirim_satis') duzeltmeMiktari = -data.tutar; // Geleni geri al (-)
+                            if (data.islemTipi === 'gider' || data.islemTipi === 'yatirim_alis') duzeltmeMiktari = tutar; // Harcananı iade et (+)
+                            if (data.islemTipi === 'gelir' || data.islemTipi === 'yatirim_satis') duzeltmeMiktari = -tutar; // Geleni geri al (-)
 
                             if (data.hesapId && duzeltmeMiktari !== 0) {
                                 const hesapRef = doc(db, "hesaplar", data.hesapId);
@@ -372,7 +406,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
                         // 3. Borç Ödeme Durumu
                         if (data.borcId) {
                             const borcRef = doc(db, "borclar", data.borcId);
-                            batch.update(borcRef, { kalanTutar: increment(data.tutar) });
+                            batch.update(borcRef, { kalanTutar: increment(tutar) });
                         }
 
                         // 4. İşlemi Sil
@@ -650,20 +684,24 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
             }
 
             const batch = writeBatch(db);
+            const transferRef = doc(collection(db, "nakit_islemleri"));
+            const feeRef = ucret > 0 ? doc(collection(db, "nakit_islemleri")) : null;
 
             // 1. Transfer Logic (Money Moved)
             const transferAciklamaMetni = transferAciklama.trim()
                 || `${k?.hesapAdi} ➝ ${h?.hesapAdi}` + (ucret > 0 ? ` (+${formatCurrencyPlain(ucret)} Komisyon)` : "");
 
-            batch.set(doc(collection(db, "nakit_islemleri")), {
+            batch.set(transferRef, {
                 uid: user.uid, alanKodu, islemTipi: "transfer", kategori: "Transfer",
                 tutar: tutar, aciklama: transferAciklamaMetni,
-                tarih: tarih, kaynakId: transferKaynakId, hedefId: transferHedefId
+                tarih: tarih, kaynakId: transferKaynakId, hedefId: transferHedefId,
+                transferFeeAmount: ucret,
+                feeTransactionId: feeRef?.id || ""
             });
 
             // 2. Fee Logic (Extra Expense)
-            if (ucret > 0) {
-                batch.set(doc(collection(db, "nakit_islemleri")), {
+            if (ucret > 0 && feeRef) {
+                batch.set(feeRef, {
                     uid: user.uid,
                     alanKodu,
                     hesapId: transferKaynakId, // Fee deducted from Source
@@ -671,7 +709,9 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
                     kategori: "Banka Komisyonu",
                     tutar: ucret,
                     aciklama: `Transfer Ücreti (${k?.hesapAdi} ➝ ${h?.hesapAdi})`,
-                    tarih: tarih
+                    tarih: tarih,
+                    linkedTransferId: transferRef.id,
+                    transferId: transferRef.id
                 });
             }
 
@@ -755,7 +795,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
         if (yeniSayac >= t.taksitSayisi) {
             const finishResult = await Swal.fire({
                 title: 'Taksit Bitti! 🎉',
-                text: `${t.baslik} taksitleri (${t.taksitSayisi} ay) bitti. Kaldırılsın mı?`,
+                text: `${t.baslik || 'Taksit'} taksitleri bitti (${yeniSayac}/${t.taksitSayisi}). Kaldırılsın mı?`,
                 icon: 'success',
                 showCancelButton: true,
                 confirmButtonText: 'Kaldır',
@@ -1470,6 +1510,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
         setHesapTipi(v.hesapTipi || "nakit");
         setBaslangicBakiye(formatMoneyInputValue(v.guncelBakiye));
         setHesapKesimGunu(v.kesimGunu || "");
+        setKartLimiti(v.kartLimiti || v.limit || v.creditLimit ? formatMoneyInputValue(v.kartLimiti || v.limit || v.creditLimit) : "");
         setKartOdemeStratejisi(v.odemeStratejisi || CREDIT_CARD_PAYMENT_STRATEGIES.FULL);
         setKartVarsayilanOdemeTutari(v.varsayilanOdemeTutari ? formatMoneyInputValue(v.varsayilanOdemeTutari) : "");
         setKartPlanlananOdemeTutari(v.planlananOdemeTutari || v.manuelOdemeTutari ? formatMoneyInputValue(v.planlananOdemeTutari || v.manuelOdemeTutari) : "");
@@ -1514,7 +1555,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
 
     return {
         // States
-        hesapAdi, setHesapAdi, hesapTipi, setHesapTipi, baslangicBakiye, setBaslangicBakiye, hesapKesimGunu, setHesapKesimGunu,
+        hesapAdi, setHesapAdi, hesapTipi, setHesapTipi, baslangicBakiye, setBaslangicBakiye, hesapKesimGunu, setHesapKesimGunu, kartLimiti, setKartLimiti,
         kartOdemeStratejisi, setKartOdemeStratejisi, kartVarsayilanOdemeTutari, setKartVarsayilanOdemeTutari, kartPlanlananOdemeTutari, setKartPlanlananOdemeTutari, kartAsgariOdemeTutari, setKartAsgariOdemeTutari,
         varsayilanOdemeAraci, setVarsayilanOdemeAraci,
         maasHesabi, setMaasHesabi, anaMaasHesabi, setAnaMaasHesabi, hesapMaasGunu, setHesapMaasGunu, bagliMaasId, setBagliMaasId,

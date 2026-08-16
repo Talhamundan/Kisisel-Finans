@@ -4,6 +4,11 @@ import { useNotifications } from './useNotifications';
 import { isDateInPeriod, MONTH_NAMES, periodLabel } from '../utils/period';
 import { classifySalaryMovement } from '../utils/salaryPeriod';
 
+const formatDayMonthWeekday = (date) => {
+    if (!date) return 'Tarih yok';
+    return date.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', weekday: 'long' });
+};
+
 export const useCalculations = (
     data, // { hesaplar, islemler, portfoy, abonelikler, taksitler, maaslar, bekleyenFaturalar, tanimliFaturalar, besVerisi, satislar, borclar }
     gizliMod,
@@ -149,10 +154,11 @@ export const useCalculations = (
             }))
             : Array.from({ length: visibleDayCount }, (_, index) => {
                 const day = index + 1;
+                const date = new Date(selectedPeriod.year, selectedPeriod.month - 1, day);
                 return {
                     name: day,
                     value: 0,
-                    tooltipLabel: `${day} ${MONTH_NAMES[selectedPeriod.month - 1]} ${selectedPeriod.year}`,
+                    tooltipLabel: formatDayMonthWeekday(date),
                     isToday: isCurrentMonth && day === today.getDate(),
                 };
             });

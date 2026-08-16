@@ -596,6 +596,7 @@ function App() {
                 hesapTipi={budgetActions.hesapTipi} setHesapTipi={budgetActions.setHesapTipi}
                 baslangicBakiye={budgetActions.baslangicBakiye} setBaslangicBakiye={budgetActions.setBaslangicBakiye}
                 hesapKesimGunu={budgetActions.hesapKesimGunu} setHesapKesimGunu={budgetActions.setHesapKesimGunu}
+                kartLimiti={budgetActions.kartLimiti} setKartLimiti={budgetActions.setKartLimiti}
                 kartOdemeStratejisi={budgetActions.kartOdemeStratejisi} setKartOdemeStratejisi={budgetActions.setKartOdemeStratejisi}
                 kartVarsayilanOdemeTutari={budgetActions.kartVarsayilanOdemeTutari} setKartVarsayilanOdemeTutari={budgetActions.setKartVarsayilanOdemeTutari}
                 kartPlanlananOdemeTutari={budgetActions.kartPlanlananOdemeTutari} setKartPlanlananOdemeTutari={budgetActions.setKartPlanlananOdemeTutari}
@@ -722,7 +723,7 @@ function App() {
 
             <Notifications
                 bildirimler={calculations.bildirimler.filter(b => {
-                    if (anaSekme === 'butcem') return ['fatura', 'abonelik', 'maas', 'taksit', 'kk_hatirlatma', 'borc_hatirlatma'].includes(b.tip);
+                    if (anaSekme === 'butcem') return ['fatura', 'abonelik', 'maas', 'taksit', 'kk_hatirlatma', 'kk_limit', 'borc_hatirlatma'].includes(b.tip);
                     if (anaSekme === 'yatirimlar') return ['bes_odeme'].includes(b.tip);
                     if (anaSekme === 'hedefler') return ['alacak'].includes(b.tip);
                     return false;
@@ -735,7 +736,7 @@ function App() {
                 besOdemeYap={() => investmentActions.besOdemeYap(null, budgetActions.islemEkle)}
             />
 
-            {/* BÜTÇEM DASHBOARD */}
+            {/* DASHBOARD */}
             {anaSekme === "butcem" && (
                 <BudgetDashboard
                     // Data
