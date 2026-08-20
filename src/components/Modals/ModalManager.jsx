@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import HighQualityModal from '../Shared/HighQualityModal';
 import DescriptionInput from '../Shared/DescriptionInput';
+import TagSelector from '../Shared/TagSelector';
 import { formatCurrencyPlain, inputStyle, tarihSadeceGunAyYil, sortTurkishText } from '../../utils/helpers';
 import { toast } from 'react-toastify';
 import Swal from 'sweetalert2';
@@ -32,7 +33,7 @@ const getPeriodOptions = (dateValue = new Date()) => {
 };
 
 // Sub-component to handle Portföy Düzenleme with own state
-const IslemEkleMobilModal = ({ close, islemEkle, hesaplar, kategoriListesi, inputStyle, tumIslemler, maaslar = [] }) => {
+const IslemEkleMobilModal = ({ close, islemEkle, hesaplar, kategoriListesi, inputStyle, tumIslemler, maaslar = [], etiketler = [] }) => {
     const [hesapId, setHesapId] = useState("");
     const [islemTipi, setIslemTipi] = useState("gider");
     const [kategori, setKategori] = useState(kategoriListesi && kategoriListesi[0] ? kategoriListesi[0] : "");
@@ -40,6 +41,7 @@ const IslemEkleMobilModal = ({ close, islemEkle, hesaplar, kategoriListesi, inpu
     const [tutar, setTutar] = useState("");
     const [gelirTuru, setGelirTuru] = useState("Diğer Gelir");
     const [bagliMaasId, setBagliMaasId] = useState("");
+    const [tagIds, setTagIds] = useState([]);
 
     // Default to current date and time
     const tzOffset = (new Date()).getTimezoneOffset() * 60000;
@@ -68,6 +70,7 @@ const IslemEkleMobilModal = ({ close, islemEkle, hesaplar, kategoriListesi, inpu
             bagliMaasId: needsSalaryLink ? bagliMaasId : undefined,
             maasDonemi: needsSalaryLink ? maasDonemi : undefined,
             salaryPeriod: needsSalaryLink ? maasDonemi : undefined,
+            tagIds,
         });
         setIsProcessing(false);
         if (success !== false) close();
@@ -118,6 +121,7 @@ const IslemEkleMobilModal = ({ close, islemEkle, hesaplar, kategoriListesi, inpu
                     <input type="number" placeholder="Tutar (₺)" value={tutar} onChange={e => setTutar(e.target.value)} style={{ flex: 1, ...inputStyle }} required step="0.01" />
                 </div>
                 <input type="datetime-local" value={tarih} onChange={e => setTarih(e.target.value)} style={{ ...inputStyle }} required />
+                <TagSelector tags={etiketler} selectedIds={tagIds} onChange={setTagIds} />
 
                 <button type="submit" disabled={isProcessing} style={{ padding: '15px', background: '#805ad5', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', fontSize: '16px', opacity: isProcessing ? 0.7 : 1 }}>
                     {isProcessing ? 'KAYDEDİLİYOR...' : 'KAYDET'}
@@ -254,6 +258,7 @@ const ModalManager = ({
     islemBirimFiyat, setIslemBirimFiyat, // NEW
     kategori, setKategori,
     yatirimTurleri,
+    etiketler = [],
     kategoriListesi,
     islemDuzenle,
     aboAd, setAboAd,
@@ -278,6 +283,7 @@ const ModalManager = ({
     islemGelirTuru, setIslemGelirTuru,
     islemBagliMaasId, setIslemBagliMaasId,
     islemMaasDonemi, setIslemMaasDonemi,
+    secilenEtiketIds, setSecilenEtiketIds,
     maaslar = [],
     kkOdemeKartId,
     kkOdemeKaynakId, setKkOdemeKaynakId,
@@ -310,6 +316,9 @@ const ModalManager = ({
     // yeniYatirimTuruAdi, setYeniYatirimTuruAdi, -> MOVED TO LOCAL STATE
     onKategoriUpdate, // Replaces inline setDoc
     onYatirimTuruUpdate, // Replaces inline setDoc
+    ensureTag,
+    renameTag,
+    deleteTag,
     aylikLimit,
     onLimitChange,
     gizliMod,
@@ -342,6 +351,7 @@ const ModalManager = ({
 
     const [yeniKategoriAdi, setYeniKategoriAdi] = useState("");
     const [yeniYatirimTuruAdi, setYeniYatirimTuruAdi] = useState("");
+    const [yeniEtiketAdi, setYeniEtiketAdi] = useState("");
     const [isProcessing, setIsProcessing] = useState(false); // NEW: Global loading state for modals
     const [silinecekObje, setSilinecekObje] = useState(null); // Local state for delete confirmation
     const [borcOdemeTutarState, setBorcOdemeTutarState] = useState("");
@@ -869,6 +879,9 @@ const ModalManager = ({
                         </select>
                     )}
                 </div>
+                <div style={{ marginBottom: '22px' }}>
+                    <TagSelector tags={etiketler} selectedIds={secilenEtiketIds} onChange={setSecilenEtiketIds} />
+                </div>
 
                 <button type="submit" style={{ width: '100%', background: 'linear-gradient(to right, #4f46e5, #6366f1)', color: 'white', padding: '14px', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold', boxShadow: '0 4px 6px -1px rgba(79, 70, 229, 0.2)', cursor: 'pointer', transition: 'transform 0.1s' }} onMouseDown={e => e.currentTarget.style.transform = 'scale(0.98)'} onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}>
                     DEĞİŞİKLİKLERİ KAYDET
@@ -1006,7 +1019,6 @@ const ModalManager = ({
             background: bg, color: '#000', padding: '4px 10px', borderRadius: '15px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px', border: `1px solid ${bg === '#fff' ? '#e2e8f0' : 'transparent'}`,
             fontWeight: '500'
         });
-
         content = (
             <div style={{ position: 'relative' }}>
                 {/* SİLME ONAY OVERLAY */}
@@ -1021,16 +1033,17 @@ const ModalManager = ({
                             <div style={{ fontSize: '20px', marginBottom: '8px' }}>🗑️</div>
                             <b style={{ color: '#2d3748', fontSize: '13px' }}>{silinecekObje.name}</b>
                             <div style={{ color: '#718096', fontSize: '11px', marginTop: '4px' }}>
-                                {silinecekObje.type === 'kategori' ? 'kategorisini' : 'türünü'} silmek istediğinize emin misiniz?
+                                {silinecekObje.type === 'kategori' ? 'kategorisini' : silinecekObje.type === 'etiket' ? 'etiketini' : 'türünü'} silmek istediğinize emin misiniz?
                             </div>
                         </div>
                         <div style={{ display: 'flex', gap: '8px' }}>
                             <button onClick={() => setSilinecekObje(null)} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e0', background: 'white', color: '#4a5568', cursor: 'pointer', fontSize: '11px' }}>İPTAL</button>
                             <button onClick={() => {
                                 if (silinecekObje.type === 'kategori') onKategoriUpdate(kategoriListesi.filter(x => x !== silinecekObje.name));
+                                else if (silinecekObje.type === 'etiket') deleteTag?.(silinecekObje.item, { skipConfirm: true });
                                 else onYatirimTuruUpdate(yatirimTurleri.filter(x => x !== silinecekObje.name));
                                 setSilinecekObje(null);
-                                toast.success("Silindi.");
+                                if (silinecekObje.type !== 'etiket') toast.success("Silindi.");
                             }} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: '#e53e3e', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '11px' }}>SİL</button>
                         </div>
                     </div>
@@ -1064,6 +1077,21 @@ const ModalManager = ({
                         </div>
                     </form>
                 </div>
+
+                {/* 2. ETİKETLER */}
+                <h4 style={{ margin: '0 0 10px 0', color: '#4a5568', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px' }}>🏷️ Etiketler</h4>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
+                    {(etiketler || []).map(tag => (
+                        <span key={tag.id} style={tagStyle('#f5f3ff')}>
+                            #{tag.name} <span onClick={() => setSilinecekObje({ type: 'etiket', name: tag.name, item: tag })} style={{ cursor: 'pointer', color: '#e53e3e', fontWeight: 'bold', fontSize: '12px' }}>X</span>
+                        </span>
+                    ))}
+                    {(etiketler || []).length === 0 && <span style={{ color: '#94a3b8', fontSize: '12px' }}>Henüz etiket yok.</span>}
+                </div>
+                <form onSubmit={async (e) => { e.preventDefault(); if (!yeniEtiketAdi) return; const tag = await ensureTag?.(yeniEtiketAdi); if (tag) { setYeniEtiketAdi(""); toast.success("Etiket eklendi"); } }} style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+                    <input value={yeniEtiketAdi} onChange={e => setYeniEtiketAdi(e.target.value)} placeholder="Yeni Etiket" style={{ ...inputStyle, background: '#f8fafc', border: '1px solid #e2e8f0', fontSize: '12px', padding: '8px' }} />
+                    <button type="submit" style={{ padding: '0 16px', borderRadius: '8px', border: 'none', background: '#6d5dfc', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>Ekle</button>
+                </form>
 
                 {/* 1. KATEGORİLER */}
                 <h4 style={{ margin: '0 0 10px 0', color: '#4a5568', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px' }}>📂 Kategoriler</h4>

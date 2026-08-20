@@ -1,6 +1,28 @@
 import React, { useMemo, useState } from 'react';
 import { formatCurrencyPlain } from '../../utils/helpers';
 
+const CREDIT_CARD_LIMIT_ACK_KEY = 'kisisel_finans_kk_limit_ack_v1';
+
+const readAcknowledgedCreditCardLimitAlerts = () => {
+    try {
+        const rawValue = window.localStorage.getItem(CREDIT_CARD_LIMIT_ACK_KEY);
+        const parsed = rawValue ? JSON.parse(rawValue) : [];
+        return new Set(Array.isArray(parsed) ? parsed : []);
+    } catch {
+        return new Set();
+    }
+};
+
+const persistAcknowledgedCreditCardLimitAlert = (key) => {
+    try {
+        const next = readAcknowledgedCreditCardLimitAlerts();
+        next.add(key);
+        window.localStorage.setItem(CREDIT_CARD_LIMIT_ACK_KEY, JSON.stringify([...next]));
+    } catch {
+        // Bildirim yine ekrandan kalksın; kalıcı saklama desteklenmiyorsa sessiz geç.
+    }
+};
+
 const notificationAccent = (renk) => {
     if (renk === 'green') return '#48bb78';
     if (renk === 'orange') return '#ed8936';
@@ -35,7 +57,7 @@ const Notifications = ({
     modalAc,
     besOdemeYap
 }) => {
-    const [dismissedIds, setDismissedIds] = useState(() => new Set());
+    const [dismissedIds, setDismissedIds] = useState(() => readAcknowledgedCreditCardLimitAlerts());
     const formatPara = (tutar) => gizliMod ? "**** ₺" : formatCurrencyPlain(tutar);
     const visibleNotifications = useMemo(
         () => (bildirimler || []).filter((b) => !dismissedIds.has(b.id || b.mesaj)),
@@ -45,6 +67,7 @@ const Notifications = ({
     const handleNotificationAction = (b) => {
         if (b.tip === 'kk_limit') {
             const key = b.id || b.mesaj;
+            persistAcknowledgedCreditCardLimitAlert(key);
             setDismissedIds((current) => {
                 const next = new Set(current);
                 next.add(key);
@@ -65,7 +88,7 @@ const Notifications = ({
     if (visibleNotifications.length === 0) return null;
 
     return (
-        <div style={{ marginBottom: '30px', background: '#fff5f5', border: '1px solid #feb2b2', borderRadius: '10px', padding: '15px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <div style={{ marginBottom: '8px', background: '#fff5f5', border: '1px solid #feb2b2', borderRadius: '10px', padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <h4 style={{ margin: 0, color: '#c53030', display: 'flex', alignItems: 'center', gap: '5px' }}>⏳ Bekleyen İşlemler</h4>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '10px' }}>
                 {visibleNotifications.map((b, i) => {

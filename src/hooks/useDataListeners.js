@@ -1,11 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { getTransactionTags } from '../utils/tags';
 
 export const useDataListeners = (user, alanKodu) => {
     // Data States
     const [hesaplar, setHesaplar] = useState([]);
-    const [islemler, setIslemler] = useState([]);
+    const [rawIslemler, setRawIslemler] = useState([]);
+    const [etiketler, setEtiketler] = useState([]);
+    const [transactionTags, setTransactionTags] = useState([]);
     const [abonelikler, setAbonelikler] = useState([]);
     const [taksitler, setTaksitler] = useState([]);
     const [maaslar, setMaaslar] = useState([]);
@@ -34,12 +37,14 @@ export const useDataListeners = (user, alanKodu) => {
     useEffect(() => {
         if (!user || !alanKodu) {
             // Temizle
-            setHesaplar([]); setIslemler([]); setAbonelikler([]); setTaksitler([]); setMaaslar([]); setPortfoy([]); setBekleyenFaturalar([]); setTanimliFaturalar([]); setBorclar([]); setCariIslemler([]);
+            setHesaplar([]); setRawIslemler([]); setEtiketler([]); setTransactionTags([]); setAbonelikler([]); setTaksitler([]); setMaaslar([]); setPortfoy([]); setBekleyenFaturalar([]); setTanimliFaturalar([]); setBorclar([]); setCariIslemler([]);
             return;
         }
 
         const qHesaplar = query(collection(db, "hesaplar"), where("alanKodu", "==", alanKodu));
         const qIslemler = query(collection(db, "nakit_islemleri"), where("alanKodu", "==", alanKodu));
+        const qEtiketler = query(collection(db, "tags"), where("alanKodu", "==", alanKodu));
+        const qTransactionTags = query(collection(db, "transaction_tags"), where("alanKodu", "==", alanKodu));
         const qAbonelik = query(collection(db, "abonelikler"), where("alanKodu", "==", alanKodu));
         const qTaksitler = query(collection(db, "taksitler"), where("alanKodu", "==", alanKodu));
         const qMaaslar = query(collection(db, "maaslar"), where("alanKodu", "==", alanKodu));
@@ -59,8 +64,18 @@ export const useDataListeners = (user, alanKodu) => {
             if (s && s.docs) {
                 const v = s.docs.map(d => ({ id: d.id, ...d.data() }));
                 v.sort((a, b) => (b.tarih?.seconds || 0) - (a.tarih?.seconds || 0));
-                setIslemler(v);
+                setRawIslemler(v);
             }
+        });
+        const uTags = onSnapshot(qEtiketler, (s) => {
+            if (s && s.docs) {
+                const v = s.docs.map(d => ({ id: d.id, ...d.data() }));
+                v.sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || ''), 'tr-TR', { sensitivity: 'base' }));
+                setEtiketler(v);
+            }
+        });
+        const uTransactionTags = onSnapshot(qTransactionTags, (s) => {
+            if (s && s.docs) setTransactionTags(s.docs.map(d => ({ id: d.id, ...d.data() })));
         });
         const u4 = onSnapshot(qAbonelik, (s) => {
             if (s && s.docs) setAbonelikler(s.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -124,11 +139,35 @@ export const useDataListeners = (user, alanKodu) => {
             }
         });
 
-        return () => { u1(); u2(); u4(); u5(); u6(); u7(); u8(); u9(); u10(); uBorc(); uCari(); }
+        return () => { u1(); u2(); uTags(); uTransactionTags(); u4(); u5(); u6(); u7(); u8(); u9(); u10(); uBorc(); uCari(); }
     }, [user, alanKodu]);
+
+    const islemler = useMemo(() => {
+        const tagById = new Map((etiketler || []).map((tag) => [tag.id, tag]));
+        const linksByTransaction = new Map();
+
+        (transactionTags || []).forEach((link) => {
+            const transactionId = link.transaction_id || link.transactionId;
+            const tagId = link.tag_id || link.tagId;
+            if (!transactionId || !tagId) return;
+            if (!linksByTransaction.has(transactionId)) linksByTransaction.set(transactionId, []);
+            const tag = tagById.get(tagId);
+            if (tag) linksByTransaction.get(transactionId).push(tag);
+        });
+
+        return (rawIslemler || []).map((transaction) => {
+            const linkedTags = linksByTransaction.get(transaction.id) || getTransactionTags(transaction);
+            return {
+                ...transaction,
+                tags: linkedTags,
+                tagIds: linkedTags.map((tag) => tag.id).filter(Boolean),
+            };
+        });
+    }, [rawIslemler, etiketler, transactionTags]);
 
     return {
         hesaplar, islemler, abonelikler, taksitler, maaslar, portfoy, bekleyenFaturalar, tanimliFaturalar, besVerisi, borclar, cariIslemler,
+        etiketler, transactionTags,
         kategoriListesi, setKategoriListesi,
         yatirimTurleri, setYatirimTurleri,
         aylikLimit, setAylikLimit,

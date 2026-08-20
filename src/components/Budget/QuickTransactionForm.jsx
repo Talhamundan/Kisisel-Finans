@@ -4,6 +4,7 @@ import { inputStyle, formatCurrencyPlain, sortTurkishText } from '../../utils/he
 import { MONTH_NAMES } from '../../utils/period';
 import { getCreditCardPaymentAmountOptions, isCreditCardPaymentSourceAccount } from '../../utils/creditCardPayments';
 import DescriptionInput from '../Shared/DescriptionInput';
+import TagSelector from '../Shared/TagSelector';
 import { EmptyState, StatusBadge } from '../Shared/PremiumUI';
 
 const salaryPaymentTypes = ["Maaş Ödemesi", "Maaş Avansı", "Maaş Farkı", "Ek Maaş"];
@@ -36,6 +37,7 @@ const QuickTransactionForm = ({
     setFormTab,
     hesaplar = [],
     kategoriListesi = [],
+    etiketler = [],
     defaultPaymentAccountId = '',
     maaslar = [],
     tanimliFaturalar = [],
@@ -94,6 +96,8 @@ const QuickTransactionForm = ({
     setFaturaGirisTarih,
     faturaGirisAciklama,
     setFaturaGirisAciklama,
+    secilenEtiketIds = [],
+    setSecilenEtiketIds,
     onSuccess,
 }) => {
     const [submitting, setSubmitting] = useState(false);
@@ -224,6 +228,7 @@ const QuickTransactionForm = ({
                 <form
                     onSubmit={(event) => runSubmit(event, islemEkle, {
                         ...(!secilenHesapId ? { secilenHesapId: 'Hesap seçin.' } : {}),
+                        ...(!kategori ? { kategori: 'Kategori seçin.' } : {}),
                         ...(!islemTutar ? { islemTutar: 'Tutar girin.' } : {}),
                         ...(quickNeedsSalaryLink && !islemBagliMaasId ? { islemBagliMaasId: 'Bağlı maaş seçin.' } : {}),
                     })}
@@ -242,22 +247,25 @@ const QuickTransactionForm = ({
                             <option value="gelir">Gelir</option>
                         </select>
                     </div>
-                    <select value={kategori || (siraliKategoriListesi && siraliKategoriListesi[0])} onChange={e => setKategori(e.target.value)} style={inputStyle}>
-                        {siraliKategoriListesi.map(k => <option key={k} value={k}>{k}</option>)}
-                    </select>
                     <div className="qw-form-row">
-                        <DescriptionInput
-                            value={islemAciklama}
-                            onChange={e => setIslemAciklama(e.target.value)}
-                            historyItems={tumIslemler}
-                            inputStyle={inputStyle}
-                            wrapperStyle={{ flex: 1 }}
-                        />
+                        <div>
+                            <select value={kategori || ''} onChange={e => setKategori(e.target.value)} style={inputStyle}>
+                                <option value="">Kategori Seçiniz</option>
+                                {siraliKategoriListesi.map(k => <option key={k} value={k}>{k}</option>)}
+                            </select>
+                            <FieldError>{errors.kategori}</FieldError>
+                        </div>
                         <div>
                             <input type="number" placeholder="Tutar" value={islemTutar} onChange={e => setIslemTutar(e.target.value)} style={inputStyle} />
                             <FieldError>{errors.islemTutar}</FieldError>
                         </div>
                     </div>
+                    <DescriptionInput
+                        value={islemAciklama}
+                        onChange={e => setIslemAciklama(e.target.value)}
+                        historyItems={tumIslemler}
+                        inputStyle={inputStyle}
+                    />
                     <input
                         type="datetime-local"
                         value={islemTarihi}
@@ -267,37 +275,40 @@ const QuickTransactionForm = ({
                         }}
                         style={inputStyle}
                     />
-                    {islemTipi === 'gelir' && (
-                        <button type="button" className="qw-more-toggle" onClick={() => setShowMore((current) => !current)}>
-                            Daha fazla seçenek
-                        </button>
-                    )}
-                    {islemTipi === 'gelir' && showMore && (
+                    <button type="button" className="qw-more-toggle" onClick={() => setShowMore((current) => !current)}>
+                        Daha fazla seçenek
+                    </button>
+                    {showMore && (
                         <div className="qw-more-panel">
-                            <select
-                                value={islemGelirTuru}
-                                onChange={e => {
-                                    setIslemGelirTuru(e.target.value);
-                                    if (salaryPaymentTypes.includes(e.target.value)) ensureQuickSalaryPeriod();
-                                }}
-                                style={inputStyle}
-                            >
-                                {incomeTypes.map(tur => <option key={tur} value={tur}>{tur}</option>)}
-                            </select>
-                            {quickNeedsSalaryLink && (
-                                <div className="qw-form-row">
-                                    <div>
-                                        <select value={islemBagliMaasId} onChange={e => setIslemBagliMaasId(e.target.value)} style={inputStyle} required>
-                                            <option value="">Bağlı maaş</option>
-                                            {(maaslar || []).map(maas => <option key={maas.id} value={maas.id}>{maas.ad}</option>)}
-                                        </select>
-                                        <FieldError>{errors.islemBagliMaasId}</FieldError>
-                                    </div>
-                                    <select value={islemMaasDonemi || quickSalaryPeriodOptions[1]?.value || ''} onChange={e => setIslemMaasDonemi(e.target.value)} style={inputStyle} required>
-                                        {quickSalaryPeriodOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                            {islemTipi === 'gelir' && (
+                                <>
+                                    <select
+                                        value={islemGelirTuru}
+                                        onChange={e => {
+                                            setIslemGelirTuru(e.target.value);
+                                            if (salaryPaymentTypes.includes(e.target.value)) ensureQuickSalaryPeriod();
+                                        }}
+                                        style={inputStyle}
+                                    >
+                                        {incomeTypes.map(tur => <option key={tur} value={tur}>{tur}</option>)}
                                     </select>
-                                </div>
+                                    {quickNeedsSalaryLink && (
+                                        <div className="qw-form-row">
+                                            <div>
+                                                <select value={islemBagliMaasId} onChange={e => setIslemBagliMaasId(e.target.value)} style={inputStyle} required>
+                                                    <option value="">Bağlı maaş</option>
+                                                    {(maaslar || []).map(maas => <option key={maas.id} value={maas.id}>{maas.ad}</option>)}
+                                                </select>
+                                                <FieldError>{errors.islemBagliMaasId}</FieldError>
+                                            </div>
+                                            <select value={islemMaasDonemi || quickSalaryPeriodOptions[1]?.value || ''} onChange={e => setIslemMaasDonemi(e.target.value)} style={inputStyle} required>
+                                                {quickSalaryPeriodOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                                            </select>
+                                        </div>
+                                    )}
+                                </>
                             )}
+                            <TagSelector tags={etiketler} selectedIds={secilenEtiketIds} onChange={setSecilenEtiketIds} />
                         </div>
                     )}
                     <button type="submit" className="qw-submit-button" disabled={submitting}>{submitLabel}</button>
@@ -364,7 +375,7 @@ const QuickTransactionForm = ({
                             </div>
                         </div>
                     )}
-                    <div>
+                    <div className="qw-form-row">
                         <input
                             type="number"
                             placeholder="İşlem tutarı"
@@ -375,26 +386,32 @@ const QuickTransactionForm = ({
                             }}
                             style={inputStyle}
                         />
-                        <label className="qw-inline-checkbox">
+                        {!isTransferToCreditCard && (
                             <input
-                                type="checkbox"
-                                checked={useFullTransferBalance}
-                                onChange={e => {
-                                    const checked = e.target.checked;
-                                    setUseFullTransferBalance(checked);
-                                    if (checked) setTransferTutar?.(fullTransferAmount ? String(Math.round(fullTransferAmount * 100) / 100) : '');
-                                }}
-                                disabled={!transferKaynakId || fullTransferBalance <= 0 || isTransferToCreditCard}
+                                type="number"
+                                placeholder="İşlem Ücreti(opsiyonel)"
+                                value={transferUcreti}
+                                onChange={e => setTransferUcreti(e.target.value)}
+                                style={inputStyle}
                             />
-                            <span>Tüm bakiye</span>
-                            {transferKaynakId && <em>{formatCurrencyPlain(fullTransferBalance)}</em>}
-                        </label>
-                        <FieldError>{errors.transferTutar}</FieldError>
+                        )}
                     </div>
-                    <div className="qw-form-row">
-                        <input placeholder="Açıklama" value={transferAciklama || ''} onChange={e => setTransferAciklama?.(e.target.value)} style={inputStyle} />
-                        {!isTransferToCreditCard && <input type="number" placeholder="Ücret" value={transferUcreti} onChange={e => setTransferUcreti(e.target.value)} style={inputStyle} />}
-                    </div>
+                    <label className="qw-inline-checkbox">
+                        <input
+                            type="checkbox"
+                            checked={useFullTransferBalance}
+                            onChange={e => {
+                                const checked = e.target.checked;
+                                setUseFullTransferBalance(checked);
+                                if (checked) setTransferTutar?.(fullTransferAmount ? String(Math.round(fullTransferAmount * 100) / 100) : '');
+                            }}
+                            disabled={!transferKaynakId || fullTransferBalance <= 0 || isTransferToCreditCard}
+                        />
+                        <span>Tüm bakiye</span>
+                        {transferKaynakId && <em>{formatCurrencyPlain(fullTransferBalance)}</em>}
+                    </label>
+                    <FieldError>{errors.transferTutar}</FieldError>
+                    <input placeholder="Açıklama" value={transferAciklama || ''} onChange={e => setTransferAciklama?.(e.target.value)} style={inputStyle} />
                     <input type="datetime-local" value={transferTarihi} onChange={e => setTransferTarihi(e.target.value)} style={inputStyle} />
                     <button type="submit" className="qw-submit-button" disabled={submitting}>{submitting ? 'Aktarılıyor...' : 'Transfer yap'}</button>
                 </form>

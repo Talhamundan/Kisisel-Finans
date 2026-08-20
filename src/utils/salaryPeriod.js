@@ -52,6 +52,17 @@ const parseAmount = (value) => parseFloat(value) || 0;
 
 const isStrictNearAmount = (left, right) => Math.abs(Math.abs(parseAmount(left)) - Math.abs(parseAmount(right))) <= 0.02;
 
+const isCompatibleFlowAmount = (candidateAmount, transferAmount) => {
+    const candidate = Math.abs(parseAmount(candidateAmount));
+    const transfer = Math.abs(parseAmount(transferAmount));
+    if (candidate <= 0 || transfer <= 0) return false;
+    if (isStrictNearAmount(candidate, transfer)) return true;
+
+    const difference = Math.abs(candidate - transfer);
+    const tolerance = Math.max(250, transfer * 0.03);
+    return difference <= tolerance;
+};
+
 const getTransactionTime = (transaction) => toDateSafe(transaction?.tarih)?.getTime() || 0;
 
 const findLinkedInstallmentPlan = (transaction, installmentPlans = []) => {
@@ -204,7 +215,7 @@ export const resolveTransactionFlow = ({ transfer, transactions = [], accounts =
             if (!date) return false;
             const confidence = getFlowConfidence(transferDate, date);
             if (!confidence) return false;
-            if (!isStrictNearAmount(transaction.tutar, transfer.tutar)) return false;
+            if (!isCompatibleFlowAmount(transaction.tutar, transfer.tutar)) return false;
             const startsFromTarget = transaction.hesapId === transfer.hedefId || transaction.kaynakId === transfer.hedefId;
             if (!startsFromTarget) return false;
             const targetBucket = classifySalaryMovement(transaction, transfer.hedefId, accounts, installmentPlans);

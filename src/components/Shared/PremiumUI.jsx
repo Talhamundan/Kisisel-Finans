@@ -1,5 +1,6 @@
 import React from 'react';
 import { Search, Inbox } from 'lucide-react';
+import { titleCaseTr } from '../../utils/helpers';
 
 export const PremiumCard = ({
     children,
@@ -20,9 +21,9 @@ export const PremiumCard = ({
 export const SectionHeader = ({ eyebrow, title, description, action }) => (
     <div className="qw-section-header">
         <div>
-            {eyebrow && <span className="qw-eyebrow">{eyebrow}</span>}
-            <h2>{title}</h2>
-            {description && <p>{description}</p>}
+            {eyebrow && <span className="qw-eyebrow">{titleCaseTr(eyebrow)}</span>}
+            <h2>{titleCaseTr(title)}</h2>
+            {description && <p>{titleCaseTr(description)}</p>}
         </div>
         {action && <div className="qw-section-action">{action}</div>}
     </div>
@@ -59,9 +60,9 @@ export const StatCard = ({
             {badge && <MetricChangeBadge tone={tone}>{badge}</MetricChangeBadge>}
         </div>
         <div className="qw-stat-card__body">
-            <p>{title}</p>
+            <p>{titleCaseTr(title)}</p>
             <strong>{value}</strong>
-            {description && <span>{description}</span>}
+            {description && <span>{titleCaseTr(description)}</span>}
         </div>
         {children && <div className="qw-stat-card__visual">{children}</div>}
     </PremiumCard>
@@ -82,8 +83,8 @@ export const ChartTooltip = ({ label, rows = [] }) => (
 export const EmptyState = ({ title = 'Veri bulunamadı', description, icon: Icon = Inbox }) => (
     <div className="qw-empty-state">
         <IconTile icon={Icon} tone="neutral" />
-        <strong>{title}</strong>
-        {description && <span>{description}</span>}
+        <strong>{titleCaseTr(title)}</strong>
+        {description && <span>{titleCaseTr(description)}</span>}
     </div>
 );
 
@@ -92,6 +93,7 @@ export const TransactionRow = ({
     tone = 'neutral',
     title,
     meta,
+    tags = [],
     amount,
     amountTone,
     onClick,
@@ -102,6 +104,11 @@ export const TransactionRow = ({
         <div className="qw-row-main">
             <strong>{title}</strong>
             <span>{meta}</span>
+            {tags.length > 0 && (
+                <span className="qw-row-tags">
+                    {tags.map((tag) => <em key={tag.id || tag.name}>#{tag.name}</em>)}
+                </span>
+            )}
         </div>
         <div className="qw-row-side">
             <strong className={amountTone ? `is-${amountTone}` : ''}>{amount}</strong>
@@ -135,9 +142,15 @@ export const UpcomingPaymentRow = ({
 export const DashboardToolbar = ({
     searchValue,
     onSearchChange,
+    accountValue,
+    onAccountChange,
+    accounts = [],
     categoryValue,
     onCategoryChange,
     categories = [],
+    tagValue,
+    onTagChange,
+    tags = [],
     actions,
 }) => (
     <div className="qw-dashboard-toolbar">
@@ -145,12 +158,26 @@ export const DashboardToolbar = ({
             <Search size={17} strokeWidth={2.3} />
             <input
                 type="text"
-                placeholder="İşlem, kategori veya tutar ara"
+                placeholder="İşlem, kategori, etiket veya tutar ara"
                 value={searchValue}
                 onChange={(event) => onSearchChange(event.target.value)}
             />
         </label>
-        <select value={categoryValue} onChange={(event) => onCategoryChange(event.target.value)}>
+        {tags.length > 0 && (
+            <select className="qw-toolbar-filter-select qw-toolbar-filter-select--tag" value={tagValue} onChange={(event) => onTagChange(event.target.value)}>
+                <option value="Tümü">Tüm etiketler</option>
+                {tags.map((tag) => (
+                    <option key={tag.id} value={tag.id}>#{tag.name}</option>
+                ))}
+            </select>
+        )}
+        <select className="qw-toolbar-filter-select qw-toolbar-filter-select--account" value={accountValue} onChange={(event) => onAccountChange(event.target.value)}>
+            <option value="Tümü">Tüm hesaplar</option>
+            {accounts.map((account) => (
+                <option key={account.id} value={account.id}>{account.hesapAdi || 'İsimsiz hesap'}</option>
+            ))}
+        </select>
+        <select className="qw-toolbar-filter-select qw-toolbar-filter-select--category" value={categoryValue} onChange={(event) => onCategoryChange(event.target.value)}>
             <option value="Tümü">Tüm kategoriler</option>
             {categories.map((category) => (
                 <option key={category} value={category}>{category}</option>

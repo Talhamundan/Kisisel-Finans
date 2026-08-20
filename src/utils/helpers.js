@@ -60,6 +60,12 @@ export const sortTurkishText = (items = []) => {
     return [...items].filter(Boolean).sort((a, b) => String(a).localeCompare(String(b), 'tr-TR', { sensitivity: 'base' }));
 };
 
+export const titleCaseTr = (value = "") => {
+    return String(value).replace(/(^|[\s/([{])([\p{L}])/gu, (match, prefix, letter) => (
+        `${prefix}${letter.toLocaleUpperCase('tr-TR')}`
+    ));
+};
+
 export const normalizeAssetType = (value = "") => {
     return String(value)
         .trim()

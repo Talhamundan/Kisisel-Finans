@@ -67,7 +67,7 @@ function App() {
     // 3. HOOKS initialization
     const data = useDataListeners(user, alanKodu);
     const calculations = useCalculations(data, gizliMod, data.aylikLimit, selectedPeriod);
-    const budgetActions = useBudgetActions(user, alanKodu, data.hesaplar, data.kategoriListesi, data.tanimliFaturalar);
+    const budgetActions = useBudgetActions(user, alanKodu, data.hesaplar, data.kategoriListesi, data.tanimliFaturalar, data.etiketler, data.transactionTags);
     const investmentActions = useInvestmentActions(user, alanKodu);
     const defaultPaymentAccount = useDefaultPaymentAccount(data.hesaplar);
     const defaultPaymentAccountId = defaultPaymentAccount?.id || "";
@@ -275,6 +275,7 @@ function App() {
         kategoriListesi: data.kategoriListesi,
         maaslar: data.maaslar,
         tanimliFaturalar: data.tanimliFaturalar,
+        etiketler: data.etiketler,
         tumIslemler: data.islemler,
         defaultPaymentAccountId,
         islemEkle: budgetActions.islemEkle,
@@ -331,6 +332,8 @@ function App() {
         setFaturaGirisTarih: budgetActions.setFaturaGirisTarih,
         faturaGirisAciklama: budgetActions.faturaGirisAciklama,
         setFaturaGirisAciklama: budgetActions.setFaturaGirisAciklama,
+        secilenEtiketIds: budgetActions.secilenEtiketIds,
+        setSecilenEtiketIds: budgetActions.setSecilenEtiketIds,
     };
 
     // --- RENDERING ---
@@ -613,11 +616,13 @@ function App() {
                 islemGelirTuru={budgetActions.islemGelirTuru} setIslemGelirTuru={budgetActions.setIslemGelirTuru}
                 islemBagliMaasId={budgetActions.islemBagliMaasId} setIslemBagliMaasId={budgetActions.setIslemBagliMaasId}
                 islemMaasDonemi={budgetActions.islemMaasDonemi} setIslemMaasDonemi={budgetActions.setIslemMaasDonemi}
+                secilenEtiketIds={budgetActions.secilenEtiketIds} setSecilenEtiketIds={budgetActions.setSecilenEtiketIds}
                 // NEW: Quantity & Unit Price Props
                 islemAdet={budgetActions.islemAdet} setIslemAdet={budgetActions.setIslemAdet}
                 islemBirimFiyat={budgetActions.islemBirimFiyat} setIslemBirimFiyat={budgetActions.setIslemBirimFiyat}
                 kategori={budgetActions.kategori} setKategori={budgetActions.setKategori}
                 yatirimTurleri={data.yatirimTurleri}
+                etiketler={data.etiketler}
                 kategoriListesi={data.kategoriListesi}
                 islemDuzenle={budgetActions.islemDuzenle}
                 aboAd={budgetActions.aboAd} setAboAd={budgetActions.setAboAd}
@@ -667,6 +672,9 @@ function App() {
                 defaultPaymentAccountId={defaultPaymentAccountId}
                 onKategoriUpdate={onKategoriUpdate}
                 onYatirimTuruUpdate={onYatirimTuruUpdate}
+                ensureTag={budgetActions.ensureTag}
+                renameTag={budgetActions.renameTag}
+                deleteTag={budgetActions.deleteTag}
                 aylikLimit={data.aylikLimit}
                 onLimitChange={onLimitChange}
                 gizliMod={gizliMod}
@@ -767,7 +775,9 @@ function App() {
                     defaultPaymentAccountId={defaultPaymentAccountId}
                     mevcutAylar={calculations.mevcutAylar}
                     aramaMetni={calculations.aramaMetni} setAramaMetni={calculations.setAramaMetni}
+                    filtreHesap={calculations.filtreHesap} setFiltreHesap={calculations.setFiltreHesap}
                     filtreKategori={calculations.filtreKategori} setFiltreKategori={calculations.setFiltreKategori}
+                    filtreEtiket={calculations.filtreEtiket} setFiltreEtiket={calculations.setFiltreEtiket}
 
                     // Actions & States
                     aktifModal={aktifModal}
@@ -815,6 +825,8 @@ function App() {
                     islemGelirTuru={budgetActions.islemGelirTuru} setIslemGelirTuru={budgetActions.setIslemGelirTuru}
                     islemBagliMaasId={budgetActions.islemBagliMaasId} setIslemBagliMaasId={budgetActions.setIslemBagliMaasId}
                     islemMaasDonemi={budgetActions.islemMaasDonemi} setIslemMaasDonemi={budgetActions.setIslemMaasDonemi}
+                    secilenEtiketIds={budgetActions.secilenEtiketIds} setSecilenEtiketIds={budgetActions.setSecilenEtiketIds}
+                    etiketler={data.etiketler}
                     transferKaynakId={budgetActions.transferKaynakId} setTransferKaynakId={budgetActions.setTransferKaynakId}
                     transferHedefId={budgetActions.transferHedefId} setTransferHedefId={budgetActions.setTransferHedefId}
                     transferTutar={budgetActions.transferTutar} setTransferTutar={budgetActions.setTransferTutar}

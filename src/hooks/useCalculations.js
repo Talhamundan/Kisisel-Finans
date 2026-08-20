@@ -19,7 +19,9 @@ export const useCalculations = (
 
     // --- FILTER STATES ---
     const [aramaMetni, setAramaMetni] = useState("");
+    const [filtreHesap, setFiltreHesap] = useState("Tümü");
     const [filtreKategori, setFiltreKategori] = useState("Tümü");
+    const [filtreEtiket, setFiltreEtiket] = useState("Tümü");
 
     // Yatırım Filtreleri
     const [yatirimArama, setYatirimArama] = useState("");
@@ -46,12 +48,19 @@ export const useCalculations = (
             const metinUyumu = !aramaMetni ? true : (
                 (i.aciklama && i.aciklama.toLowerCase().includes(aramaKucuk)) ||
                 (i.kategori && i.kategori.toLowerCase().includes(aramaKucuk)) ||
+                ((i.tags || []).some((tag) => String(tag?.name || '').toLowerCase().includes(aramaKucuk))) ||
                 i.tutar.toString().includes(aramaMetni)
             );
+            const hesapUyumu = filtreHesap === "Tümü"
+                ? true
+                : i.hesapId === filtreHesap || i.kaynakId === filtreHesap || i.hedefId === filtreHesap;
             const kategoriUyumu = filtreKategori === "Tümü" ? true : i.kategori === filtreKategori;
-            return besDegil && yatirimAlisDegil && yatirimDegil && iadeDegil && ayUyumu && metinUyumu && kategoriUyumu;
+            const etiketUyumu = filtreEtiket === "Tümü"
+                ? true
+                : (i.tags || []).some((tag) => (tag?.id || tag?.name) === filtreEtiket);
+            return besDegil && yatirimAlisDegil && yatirimDegil && iadeDegil && ayUyumu && metinUyumu && hesapUyumu && kategoriUyumu && etiketUyumu;
         });
-    }, [islemler, selectedPeriod, aramaMetni, filtreKategori]);
+    }, [islemler, selectedPeriod, aramaMetni, filtreHesap, filtreKategori, filtreEtiket]);
 
     // 2. Yatırım Islemleri
     const yatirimIslemleri = useMemo(() => {
@@ -247,7 +256,18 @@ export const useCalculations = (
             : Math.max(directPaid, linkedPaid);
         const normalizedPaid = totalCount > 0 ? Math.min(paidCount, totalCount) : paidCount;
 
-        return acc + Math.max(0, (t.toplamTutar || 0) - ((t.aylikTutar || 0) * normalizedPaid));
+        const monthlyAmount = parseFloat(t.aylikTutar) || 0;
+        const totalAmount = parseFloat(t.toplamTutar) || 0;
+        const normalizedTotal = totalCount > 0 ? totalCount : 0;
+        const remainingInstallments = normalizedTotal > 0
+            ? Math.max(0, normalizedTotal - normalizedPaid)
+            : 0;
+
+        if (normalizedTotal > 0 && monthlyAmount > 0) {
+            return acc + Math.max(0, monthlyAmount * remainingInstallments);
+        }
+
+        return acc + Math.max(0, totalAmount - (monthlyAmount * normalizedPaid));
     }, 0);
     const toplamSabitGider = abonelikler.reduce((acc, abo) => acc + abo.tutar, 0);
     const toplamNakitVarlik = hesaplar.reduce((acc, h) => acc + (parseFloat(h.guncelBakiye) || 0), 0);
@@ -286,7 +306,7 @@ export const useCalculations = (
 
     return {
         // Filters
-        aktifAy, setAktifAy, aramaMetni, setAramaMetni, filtreKategori, setFiltreKategori,
+        aktifAy, setAktifAy, aramaMetni, setAramaMetni, filtreHesap, setFiltreHesap, filtreKategori, setFiltreKategori, filtreEtiket, setFiltreEtiket,
         yatirimArama, setYatirimArama, aktifYatirimAy, setAktifYatirimAy, filtreYatirimTuru, setFiltreYatirimTuru,
         mevcutAylar,
 

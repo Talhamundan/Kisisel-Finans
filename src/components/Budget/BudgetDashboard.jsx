@@ -23,7 +23,7 @@ import {
     Upload,
     Wallet,
 } from 'lucide-react';
-import { formatCurrencyPlain, tarihFormatla, toDateSafe, sortTurkishText } from '../../utils/helpers';
+import { formatCurrencyPlain, tarihFormatla, titleCaseTr, toDateSafe, sortTurkishText } from '../../utils/helpers';
 import { isDateInPeriod, MONTH_NAMES } from '../../utils/period';
 import {
     formatSalaryPeriodRange,
@@ -48,7 +48,7 @@ import {
     UpcomingPaymentRow,
 } from '../Shared/PremiumUI';
 import QuickTransactionForm from './QuickTransactionForm';
-import { getCreditCardPaymentPlan, isCreditCardStatementPaymentTransaction } from '../../utils/creditCardPayments';
+import { getCreditCardPaymentPlan, isCreditCardPaymentTransaction, isCreditCardStatementPaymentTransaction } from '../../utils/creditCardPayments';
 import { buildSubscriptionOccurrences } from '../../utils/recurringPayments';
 
 const parseAmount = (value) => parseFloat(value) || 0;
@@ -284,13 +284,13 @@ const QuickActionButton = ({ children, icon: Icon, variant = '', ...props }) => 
 );
 
 const SummaryLine = ({ label, value, tone }) => (
-    <div className="qw-summary-line">
-        <span>{label}</span>
+    <div className={`qw-summary-line ${tone ? `qw-summary-line--${tone}` : ''}`}>
+        <span>{titleCaseTr(label)}</span>
         <strong className={tone ? `is-${tone}` : ''}>{value}</strong>
     </div>
 );
 
-const ModuleRow = ({ icon, tone = 'neutral', title, meta, amount, amountTone, badge, onClick, actions }) => (
+const ModuleRow = ({ icon, tone = 'neutral', title, meta, amount, amountTone, amountMeta, badge, onClick, actions }) => (
     <div className={`qw-module-row ${onClick ? 'is-clickable' : ''}`} onClick={onClick}>
         <IconTile icon={icon} tone={tone} />
         <div className="qw-module-row__main">
@@ -299,6 +299,7 @@ const ModuleRow = ({ icon, tone = 'neutral', title, meta, amount, amountTone, ba
         </div>
         <div className="qw-module-row__side">
             {amount !== undefined && <b className={amountTone ? `is-${amountTone}` : ''}>{amount}</b>}
+            {amountMeta && <small>{amountMeta}</small>}
             {badge && <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>}
             {actions && <div className="qw-row-actions">{actions}</div>}
         </div>
@@ -310,6 +311,13 @@ const isBudgetTransaction = (transaction) => (
     transaction?.islemTipi !== 'yatirim_alis' &&
     transaction?.kategori !== 'Yatırım' &&
     transaction?.islemTipi !== 'cari_iade'
+);
+
+const isCreditCardCashOutTransaction = (transaction, accounts = []) => (
+    (accounts || []).some((account) => (
+        account?.hesapTipi === 'krediKarti' &&
+        isCreditCardPaymentTransaction(transaction, account.id)
+    ))
 );
 
 const isSameCalendarDay = (date, target) => (
@@ -338,7 +346,7 @@ const getMonthlyDueDate = (item, year, month) => {
 
 const getBillStatus = (date, hasDebt) => {
     if (hasDebt) return { label: 'Borç oluştu', tone: 'danger' };
-    if (!date) return { label: 'Bekliyor', tone: 'neutral' };
+    if (!date) return { label: 'Tanımlı', tone: 'neutral' };
 
     const todayTime = new Date().setHours(0, 0, 0, 0);
     const dueTime = new Date(date).setHours(0, 0, 0, 0);
@@ -375,6 +383,7 @@ const BudgetDashboard = ({
     abonelikOde,
     toplamSabitGider,
     kategoriListesi,
+    etiketler = [],
     defaultPaymentAccountId,
     formTab, setFormTab,
     islemEkle,
@@ -386,6 +395,7 @@ const BudgetDashboard = ({
     islemGelirTuru, setIslemGelirTuru,
     islemBagliMaasId, setIslemBagliMaasId,
     islemMaasDonemi, setIslemMaasDonemi,
+    secilenEtiketIds, setSecilenEtiketIds,
     kategori, setKategori,
     islemAciklama, setIslemAciklama,
     islemTutar, setIslemTutar,
@@ -407,7 +417,9 @@ const BudgetDashboard = ({
     faturaGirisTarih, setFaturaGirisTarih,
     faturaGirisAciklama, setFaturaGirisAciklama,
     aramaMetni, setAramaMetni,
+    filtreHesap, setFiltreHesap,
     filtreKategori, setFiltreKategori,
+    filtreEtiket, setFiltreEtiket,
     borclar,
     maaslar = [],
     excelIndir,
@@ -425,10 +437,23 @@ const BudgetDashboard = ({
     const siraliHesaplar = [...(hesaplar || [])].sort((a, b) =>
         String(a?.hesapAdi || '').localeCompare(String(b?.hesapAdi || ''), 'tr-TR', { sensitivity: 'base' })
     );
+    const usedTransactionTags = useMemo(() => {
+        const tagMap = new Map();
+        (tumIslemler || []).forEach((transaction) => {
+            (transaction.tags || []).forEach((tag) => {
+                const key = tag?.id || tag?.name;
+                if (key && tag?.name) tagMap.set(key, { ...tag, id: key });
+            });
+        });
+        return [...tagMap.values()].sort((a, b) =>
+            String(a.name || '').localeCompare(String(b.name || ''), 'tr-TR', { sensitivity: 'base' })
+        );
+    }, [tumIslemler]);
     const quickTransactionFormProps = {
         formTab, setFormTab,
         hesaplar,
         kategoriListesi,
+        etiketler,
         defaultPaymentAccountId,
         maaslar,
         tanimliFaturalar,
@@ -442,6 +467,7 @@ const BudgetDashboard = ({
         islemGelirTuru, setIslemGelirTuru,
         islemBagliMaasId, setIslemBagliMaasId,
         islemMaasDonemi, setIslemMaasDonemi,
+        secilenEtiketIds, setSecilenEtiketIds,
         kategori, setKategori,
         islemAciklama, setIslemAciklama,
         islemTutar, setIslemTutar,
@@ -478,13 +504,18 @@ const BudgetDashboard = ({
             if (!bucket) return;
 
             const amount = parseAmount(transaction.tutar);
-            if (transaction.islemTipi === 'gelir') bucket.gelir += amount;
-            if (transaction.islemTipi === 'gider') bucket.gider += amount;
+            const isCreditCardCashOut = isCreditCardCashOutTransaction(transaction, hesaplar);
+            const isInternalTransfer = transaction.islemTipi === 'transfer' || transaction.kategori === 'Transfer';
+
+            if (transaction.islemTipi === 'gelir' && !isInternalTransfer) bucket.gelir += amount;
+            if (isCreditCardCashOut || (transaction.islemTipi === 'gider' && !isInternalTransfer)) {
+                bucket.gider += amount;
+            }
             bucket.net = bucket.gelir - bucket.gider;
         });
 
         return buckets;
-    }, [filtrelenmisIslemler, selectedPeriod]);
+    }, [filtrelenmisIslemler, hesaplar, selectedPeriod]);
 
     const expenseSparkline = useMemo(() => (gunlukVeri || []).map((item) => ({
         name: item.name,
@@ -637,6 +668,18 @@ const BudgetDashboard = ({
         if (count > 0 && paid >= count) return acc;
         return acc + Math.min(monthly, Math.max(0, total - (monthly * paid)));
     }, 0);
+    const getInstallmentFinancials = useCallback((item) => {
+        const total = parseAmount(item.toplamTutar);
+        const monthly = parseAmount(item.aylikTutar);
+        const paid = getInstallmentPaidCount(item);
+        const count = parseInt(item.taksitSayisi) || 0;
+        const remainingCount = count > 0 ? Math.max(0, count - paid) : 0;
+        const remainingDebt = count > 0
+            ? Math.max(0, monthly * remainingCount)
+            : Math.max(0, total - (monthly * paid));
+
+        return { total, monthly, paid, count, remainingCount, remainingDebt };
+    }, [getInstallmentPaidCount]);
 
     const upcomingPayments = useMemo(() => {
         const periodDate = selectedPeriod?.month === 'all'
@@ -668,7 +711,6 @@ const BudgetDashboard = ({
             .filter((definition) => !(bekleyenFaturalar || []).some((bill) => bill.tanimId === definition.id))
             .forEach((definition) => {
                 const dueDate = getMonthlyDueDate(definition, currentYear, currentMonth);
-                if (!dueDate) return;
                 rows.push({
                     id: `bill-definition-${definition.id}`,
                     title: definition.baslik || definition.kurum || 'Fatura',
@@ -775,18 +817,19 @@ const BudgetDashboard = ({
         .sort((a, b) => (toDateSafe(a.sonOdemeTarihi || a.tarih)?.getTime() || Number.MAX_SAFE_INTEGER) - (toDateSafe(b.sonOdemeTarihi || b.tarih)?.getTime() || Number.MAX_SAFE_INTEGER))
         .slice(0, 8);
 
-    const installmentRows = [...(taksitler || [])]
+    const allInstallmentRows = [...(taksitler || [])]
         .map((item) => {
-            const paid = getInstallmentPaidCount(item);
-            const count = parseInt(item.taksitSayisi) || 0;
+            const financials = getInstallmentFinancials(item);
+            const { paid, count } = financials;
             const baseDate = toDateSafe(item.alisTarihi || item.olusturmaTarihi);
             const dueDate = addMonthsClamped(baseDate, paid);
             const nextInstallmentNumber = count > 0 ? Math.min(paid + 1, count) : paid + 1;
-            return { ...item, nextDueDate: dueDate, paidCount: paid, installmentCount: count, nextInstallmentNumber };
+            return { ...item, ...financials, nextDueDate: dueDate, paidCount: paid, installmentCount: count, nextInstallmentNumber };
         })
         .filter((item) => !(item.installmentCount > 0 && item.paidCount >= item.installmentCount))
-        .sort((a, b) => (a.nextDueDate?.getTime() || Number.MAX_SAFE_INTEGER) - (b.nextDueDate?.getTime() || Number.MAX_SAFE_INTEGER))
-        .slice(0, 8);
+        .sort((a, b) => (a.nextDueDate?.getTime() || Number.MAX_SAFE_INTEGER) - (b.nextDueDate?.getTime() || Number.MAX_SAFE_INTEGER));
+    const installmentRows = allInstallmentRows.slice(0, 8);
+    const installmentRemainingTotal = allInstallmentRows.reduce((sum, item) => sum + item.remainingDebt, 0);
 
     const selectedPeriodNet = toplamGelir - toplamGider;
     const todayNet = todayStats.income - todayStats.expense;
@@ -812,7 +855,6 @@ const BudgetDashboard = ({
             .map((definition) => {
                 const today = new Date();
                 const dueDate = getMonthlyDueDate(definition, today.getFullYear(), today.getMonth());
-                if (!dueDate) return null;
                 return {
                     id: `definition-${definition.id}`,
                     title: definition.baslik || definition.kurum || 'Fatura',
@@ -827,14 +869,13 @@ const BudgetDashboard = ({
     ]
         .sort((a, b) => (a.date?.getTime() || Number.MAX_SAFE_INTEGER) - (b.date?.getTime() || Number.MAX_SAFE_INTEGER))
         .slice(0, 8);
-    const debtOriginalTotal = (borclar || []).reduce((sum, item) => sum + parseAmount(item.tutar), 0);
     const debtTotal = (borclar || []).reduce((sum, item) => sum + parseAmount(item.kalanTutar ?? item.tutar), 0);
     const currentMonthDebtDue = (borclar || []).reduce((sum, item) => {
         const dueDate = toDateSafe(item.sonOdemeTarihi || item.tarih);
         return isSameCalendarMonth(dueDate, new Date()) ? sum + parseAmount(item.kalanTutar ?? item.tutar) : sum;
     }, 0);
     const filteredCount = (filtrelenmisIslemler || []).length;
-    const isFiltering = Boolean(aramaMetni) || filtreKategori !== 'Tümü';
+    const isFiltering = Boolean(aramaMetni) || filtreHesap !== 'Tümü' || filtreKategori !== 'Tümü' || filtreEtiket !== 'Tümü';
     const totalComparableTransactions = isFiltering ? (tumIslemler || []).filter(isBudgetTransaction).length : filteredCount;
     const transactionDescription = isFiltering
         ? `${totalComparableTransactions} işlemden ${filteredCount} sonuç`
@@ -1147,7 +1188,10 @@ const BudgetDashboard = ({
                 </PremiumCard>
             </div>
 
-            <div className="qw-transactions-accounts-grid">
+            <div
+                className="qw-transactions-accounts-grid"
+                style={{ '--accounts-panel-height': `${Math.max(360, 120 + (siraliHesaplar.length * 62))}px` }}
+            >
                 <PremiumCard className="qw-transactions-card">
                     <SectionHeader
                         title="Hareket geçmişi"
@@ -1166,14 +1210,29 @@ const BudgetDashboard = ({
                     <DashboardToolbar
                         searchValue={aramaMetni}
                         onSearchChange={setAramaMetni}
+                        accountValue={filtreHesap}
+                        onAccountChange={setFiltreHesap}
+                        accounts={siraliHesaplar}
                         categoryValue={filtreKategori}
                         onCategoryChange={setFiltreKategori}
                         categories={sortTurkishText([...siraliKategoriListesi, 'Transfer'])}
+                        tagValue={filtreEtiket}
+                        onTagChange={setFiltreEtiket}
+                        tags={usedTransactionTags}
                     />
                     <div className="qw-transaction-list qw-transaction-list--scroll">
                         {recentTransactions.map((transaction) => {
-                            const amountTone = transaction.islemTipi === 'gelir' ? 'success' : transaction.islemTipi === 'transfer' ? 'info' : 'danger';
-                            const prefix = transaction.islemTipi === 'gelir' ? '+' : transaction.islemTipi === 'gider' ? '-' : '';
+                            const isCreditCardCashOut = isCreditCardCashOutTransaction(transaction, hesaplar);
+                            const amountTone = transaction.islemTipi === 'gelir'
+                                ? 'success'
+                                : transaction.islemTipi === 'transfer' && !isCreditCardCashOut
+                                    ? 'info'
+                                    : 'danger';
+                            const prefix = transaction.islemTipi === 'gelir'
+                                ? '+'
+                                : transaction.islemTipi === 'gider' || isCreditCardCashOut
+                                    ? '-'
+                                    : '';
                             return (
                                 <TransactionRow
                                     key={transaction.id}
@@ -1181,6 +1240,7 @@ const BudgetDashboard = ({
                                     tone={transactionTone(transaction)}
                                     title={transaction.aciklama || transaction.kategori || 'İşlem'}
                                     meta={getTransactionMeta(transaction)}
+                                    tags={transaction.tags || []}
                                     amount={`${prefix}${formatPara(transaction.tutar)}`}
                                     amountTone={amountTone}
                                     onClick={() => modalAc('duzenle_islem', transaction)}
@@ -1372,15 +1432,15 @@ const BudgetDashboard = ({
                                 )}
                             />
                         ))}
-                        {billDisplayRows.length === 0 && <EmptyState title="Bekleyen fatura yok" description="Borcu oluşan veya tarihi yaklaşan faturalar burada görünür." icon={ReceiptText} />}
+                        {billDisplayRows.length === 0 && <EmptyState title="Fatura tanımı yok" description="Fatura tanımı ekleyerek takip edebilirsiniz." icon={ReceiptText} />}
                     </div>
                 </PremiumCard>
 
                 <PremiumCard className="qw-module-card">
-                    <SectionHeader title="Taksitler" description={`${installmentRows.length} taksit`} />
-                    <div className="qw-summary-lines">
-                        <SummaryLine label="Kalan taksit borcu" value={formatPara(toplamKalanTaksitBorcu)} tone="purple" />
-                        <SummaryLine label="Bu ay taksitler" value={formatPara(monthlyInstallmentLoad)} />
+                    <SectionHeader title="Taksitler" description={`${allInstallmentRows.length} taksit`} />
+                    <div className="qw-summary-lines qw-installment-summary">
+                        <SummaryLine label="Kalan Taksit Borcu" value={formatPara(installmentRemainingTotal)} tone="purple" />
+                        <SummaryLine label="Bu Ay Taksitler" value={formatPara(monthlyInstallmentLoad)} tone="danger" />
                     </div>
                     <div className="qw-module-list">
                         {installmentRows.map((installment) => {
@@ -1396,8 +1456,9 @@ const BudgetDashboard = ({
                                     icon={CalendarClock}
                                     tone="purple"
                                     title={installment.baslik || 'Taksit'}
-                                    meta={`${dueText}${nextInstallmentNumber}/${count || '-'} taksit`}
-                                    amount={formatPara(installment.aylikTutar)}
+                                    meta={`${dueText}${formatPara(installment.remainingDebt)} · ${nextInstallmentNumber}/${count || '-'} taksit`}
+                                    amount={formatPara(installment.monthly)}
+                                    amountTone="purple"
                                     onClick={() => taksitOde(installmentForPayment)}
                                     actions={(
                                         <>
@@ -1424,11 +1485,9 @@ const BudgetDashboard = ({
                         description={`${(borclar || []).length} borç kaydı`}
                         action={<QuickActionButton icon={Plus} onClick={() => modalAc('borc_tanimla')}>Borç ekle</QuickActionButton>}
                     />
-                    <div className="qw-summary-lines qw-summary-lines--wide">
-                        <SummaryLine label="Toplam Borç" value={formatPara(debtOriginalTotal)} tone="warning" />
-                        <SummaryLine label="Bu Ay Ödenecek" value={formatPara(currentMonthDebtDue)} />
+                    <div className="qw-summary-lines qw-debt-summary">
                         <SummaryLine label="Kalan Borç" value={formatPara(debtTotal)} tone="danger" />
-                        <SummaryLine label="Borç Sayısı" value={`${(borclar || []).length} kayıt`} />
+                        <SummaryLine label="Bu Ay Ödenecek" value={formatPara(currentMonthDebtDue)} />
                     </div>
                     <div className="qw-module-list qw-module-list--debt">
                         {debtRows.map((debt) => (
@@ -1616,6 +1675,7 @@ const BudgetDashboard = ({
                                 tone={movementAmount > 0 ? 'success' : movementAmount < 0 ? 'danger' : 'neutral'}
                                 title={transaction.aciklama || transaction.kategori || 'İşlem'}
                                 meta={getAccountMovementMeta(transaction, historyAccount.id)}
+                                tags={transaction.tags || []}
                                 amount={`${prefix}${formatPara(Math.abs(movementAmount))}`}
                                 amountTone={amountTone}
                                 onClick={() => modalAc('duzenle_islem', transaction)}

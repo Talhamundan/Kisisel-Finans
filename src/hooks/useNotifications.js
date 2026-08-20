@@ -4,7 +4,18 @@ import { getCreditCardPaymentPlan, isCreditCardStatementPaymentTransaction } fro
 import { buildSubscriptionOccurrences } from '../utils/recurringPayments';
 
 const NOTIFICATION_WINDOW_DAYS = 3;
-const CREDIT_CARD_LIMIT_THRESHOLDS = [5, 10, 20, 50];
+const CREDIT_CARD_LIMIT_THRESHOLDS = [50, 20, 10];
+const CREDIT_CARD_LIMIT_ACK_KEY = 'kisisel_finans_kk_limit_ack_v1';
+
+const getAcknowledgedCreditCardLimitAlerts = () => {
+    try {
+        const rawValue = window.localStorage.getItem(CREDIT_CARD_LIMIT_ACK_KEY);
+        const parsed = rawValue ? JSON.parse(rawValue) : [];
+        return new Set(Array.isArray(parsed) ? parsed : []);
+    } catch {
+        return new Set();
+    }
+};
 
 const getCreditCardLimitValue = (account) => parseFloat(
     account?.kartLimiti
@@ -15,9 +26,12 @@ const getCreditCardLimitValue = (account) => parseFloat(
 
 const getCreditCardDebt = (account) => Math.max(0, -(parseFloat(account?.guncelBakiye) || 0));
 
-const getCreditCardLimitThreshold = (availableRatio) => {
+const getCreditCardLimitThreshold = (availableRatio, accountId, acknowledgedAlerts) => {
     if (!Number.isFinite(availableRatio)) return null;
-    return CREDIT_CARD_LIMIT_THRESHOLDS.find((threshold) => availableRatio <= threshold) || null;
+    return CREDIT_CARD_LIMIT_THRESHOLDS.find((threshold) => (
+        availableRatio <= threshold &&
+        !acknowledgedAlerts.has(`${accountId}_kk_limit_${threshold}`)
+    )) || null;
 };
 
 const getInstallmentRemainingDebt = (installment) => {
@@ -75,6 +89,7 @@ export const useNotifications = ({
         const today0 = startOfDay(now);
         let tempBildirimler = [];
         const installmentPaymentCounts = new Map();
+        const acknowledgedCreditCardLimitAlerts = getAcknowledgedCreditCardLimitAlerts();
 
         const dueMessage = ({ name, daysLeft, overdueText }) => {
             if (daysLeft < 0) return `🔥 ${name} ${overdueText || 'GECİKTİ'}! (${Math.abs(daysLeft)} gün)`;
@@ -116,7 +131,7 @@ export const useNotifications = ({
                     const taksitBlokaji = getCreditCardInstallmentExposure(h, taksitler);
                     const kullanilabilirLimit = Math.max(0, kartLimiti - mevcutBorc - taksitBlokaji);
                     const kullanilabilirYuzde = (kullanilabilirLimit / kartLimiti) * 100;
-                    const esik = getCreditCardLimitThreshold(kullanilabilirYuzde);
+                    const esik = getCreditCardLimitThreshold(kullanilabilirYuzde, h.id, acknowledgedCreditCardLimitAlerts);
 
                     if (esik !== null) {
                         tempBildirimler.push({

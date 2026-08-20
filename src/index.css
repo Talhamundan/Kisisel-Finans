@@ -801,6 +801,7 @@ html[data-theme="dark"] .mobile-bottom-nav {
 .is-neutral { color: var(--text-tertiary) !important; }
 .is-info { color: var(--info) !important; }
 .is-warning { color: var(--warning) !important; }
+.is-purple { color: var(--purple) !important; }
 .is-muted { color: var(--text-tertiary) !important; }
 
 .qw-empty-state {
@@ -927,6 +928,7 @@ html[data-theme="dark"] .mobile-bottom-nav {
 }
 
 .qw-dashboard-toolbar select {
+  flex: 0 0 auto;
   height: 42px;
   border-radius: 999px !important;
   border: 0 !important;
@@ -934,7 +936,27 @@ html[data-theme="dark"] .mobile-bottom-nav {
   color: var(--text-secondary) !important;
   font-size: 13px !important;
   font-weight: 700;
-  padding: 0 34px 0 14px !important;
+  padding: 0 20px 0 12px !important;
+}
+
+.qw-dashboard-toolbar .qw-toolbar-filter-select {
+  min-width: 0;
+  max-width: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qw-dashboard-toolbar .qw-toolbar-filter-select--account {
+  width: 136px !important;
+}
+
+.qw-dashboard-toolbar .qw-toolbar-filter-select--category {
+  width: 158px !important;
+}
+
+.qw-dashboard-toolbar .qw-toolbar-filter-select--tag {
+  width: 142px !important;
 }
 
 .qw-toolbar-actions {
@@ -1425,6 +1447,62 @@ html[data-theme="dark"] .mobile-bottom-nav {
   font-weight: 720;
 }
 
+.qw-tag-selector {
+  display: grid;
+  gap: 8px;
+}
+
+.qw-tag-selector > span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.qw-tag-selector > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.qw-tag-selector button {
+  min-height: 30px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--text-secondary);
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 760;
+  cursor: pointer;
+  transition: background 180ms ease, border-color 180ms ease, color 180ms ease;
+}
+
+.qw-tag-selector button.is-selected {
+  background: var(--accent-soft);
+  border-color: rgba(109, 93, 252, 0.34);
+  color: var(--accent-primary);
+}
+
+.qw-row-tags {
+  display: flex !important;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 5px;
+}
+
+.qw-row-tags em {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-primary);
+  padding: 0 7px;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 780;
+}
+
 .qw-inline-checkbox {
   display: inline-flex;
   align-items: center;
@@ -1648,6 +1726,8 @@ html[data-theme="dark"] .mobile-bottom-nav {
   inset: 0;
   border-radius: 0;
   background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   cursor: default;
 }
 
@@ -1781,6 +1861,24 @@ html[data-theme="dark"] .global-quick-panel {
   font-weight: 760;
   text-align: right;
   white-space: nowrap;
+}
+
+.qw-installment-summary {
+  gap: 9px;
+  margin-bottom: 14px;
+}
+
+.qw-installment-summary .qw-summary-line {
+  min-height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.qw-installment-summary .qw-summary-line strong {
+  font-size: 14px;
+  font-weight: 820;
 }
 
 .qw-progress-track {
@@ -2160,7 +2258,7 @@ html[data-theme="dark"] .global-quick-panel {
 }
 
 .qw-transactions-accounts-grid > .qw-card {
-  height: 640px;
+  height: var(--accounts-panel-height, 640px);
 }
 
 .qw-transactions-card {
@@ -2190,8 +2288,8 @@ html[data-theme="dark"] .global-quick-panel {
 
 .qw-accounts-card .qw-account-list {
   min-height: 0;
-  overflow-y: auto;
-  padding-right: 4px;
+  overflow: visible;
+  padding-right: 0;
 }
 
 .qw-accounts-card .qw-account-row {
@@ -2214,22 +2312,46 @@ html[data-theme="dark"] .global-quick-panel {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(360px, 0.85fr);
   gap: 24px;
-  align-items: stretch;
+  align-items: start;
 }
 
 .qw-secondary-grid > .qw-card,
 .qw-module-grid > .qw-card {
   min-height: 430px;
-  height: 100%;
+  height: auto;
 }
 
 .qw-secondary-grid .qw-donut-layout {
-  grid-template-columns: minmax(210px, 0.72fr) minmax(240px, 1fr);
+  grid-template-columns: minmax(210px, 0.62fr) minmax(240px, 1fr);
   gap: 18px;
+  align-items: start;
+  max-height: 300px;
+  overflow: hidden;
+}
+
+.qw-secondary-grid .qw-donut-chart {
+  align-self: center;
+}
+
+.qw-secondary-grid .qw-category-list {
+  max-height: 300px;
+  overflow-y: auto;
+  padding-right: 6px;
+  scrollbar-width: thin;
 }
 
 .qw-secondary-grid .qw-category-row {
-  min-height: 38px;
+  min-height: 34px;
+  padding: 4px 6px;
+}
+
+.qw-secondary-grid .qw-category-row strong,
+.qw-secondary-grid .qw-category-row b {
+  font-size: 13px;
+}
+
+.qw-secondary-grid .qw-category-row small {
+  font-size: 11.5px;
 }
 
 .qw-card-sticky-footer {
@@ -2283,8 +2405,8 @@ html[data-theme="dark"] .global-quick-panel {
 }
 
 .qw-module-list--debt {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  max-height: none;
+  grid-template-columns: 1fr;
+  max-height: 286px;
 }
 
 .qw-module-row {
@@ -2344,6 +2466,14 @@ html[data-theme="dark"] .global-quick-panel {
   white-space: nowrap;
 }
 
+.qw-module-row__side small {
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+  font-weight: 650;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
 .qw-row-actions {
   display: flex;
   justify-content: flex-end;
@@ -2353,6 +2483,11 @@ html[data-theme="dark"] .global-quick-panel {
 .qw-summary-lines--wide {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   margin-bottom: 12px;
+}
+
+.qw-debt-summary {
+  grid-template-columns: 1fr;
+  margin-bottom: 14px;
 }
 
 .qw-credit-card-summary {
@@ -2939,11 +3074,13 @@ button.salary-debt-detail-row:hover {
 }
 
 .qw-debt-grid--single {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .qw-debt-grid--single > .qw-card {
+  width: 100%;
   min-height: 360px;
+  height: auto;
 }
 
 .salary-control-bar {
@@ -4083,7 +4220,6 @@ html[data-theme="dark"] .qw-login-submit:hover:not(:disabled) {
 
   .qw-transaction-list--scroll,
   .qw-account-list--scroll,
-  .qw-accounts-card .qw-account-list,
   .qw-module-list {
     max-height: 520px;
   }
@@ -4110,6 +4246,11 @@ html[data-theme="dark"] .qw-login-submit:hover:not(:disabled) {
 
   .qw-secondary-grid .qw-donut-layout {
     grid-template-columns: 1fr;
+    max-height: none;
+  }
+
+  .qw-secondary-grid .qw-category-list {
+    max-height: 260px;
   }
 
   .qw-login-shell {
@@ -4473,7 +4614,6 @@ html[data-theme="dark"] ::placeholder {
   }
 
   .qw-search-field,
-  .qw-dashboard-toolbar select,
   .qw-toolbar-actions,
   .qw-action-button {
     width: 100%;

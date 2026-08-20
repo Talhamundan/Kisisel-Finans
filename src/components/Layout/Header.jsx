@@ -16,6 +16,7 @@ import {
     WalletCards,
 } from 'lucide-react';
 import { MONTH_NAMES } from '../../utils/period';
+import { titleCaseTr } from '../../utils/helpers';
 import AppLogo from '../Shared/AppLogo';
 
 const navItems = [
@@ -53,6 +54,8 @@ const Header = ({
     const years = availablePeriods?.years?.length ? availablePeriods.years : [selectedPeriod.year];
     const availableMonths = availablePeriods?.monthsByYear?.[selectedPeriod.year] || [];
     const [title, description] = pageMeta[anaSekme] || pageMeta.butcem;
+    const displayTitle = titleCaseTr(title);
+    const displayDescription = titleCaseTr(description);
     const userName = user?.displayName?.split(' ')[0] || 'Profil';
     const initial = userName?.[0]?.toLocaleUpperCase('tr-TR') || 'P';
 
@@ -95,8 +98,8 @@ const Header = ({
 
             <header className="qw-topbar app-header">
                 <div className="qw-topbar-title">
-                    <h1>{title}</h1>
-                    <p>{description}</p>
+                    <h1>{displayTitle}</h1>
+                    <p>{displayDescription}</p>
                 </div>
 
                 <div className="qw-topbar-actions">

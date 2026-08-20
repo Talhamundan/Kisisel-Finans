@@ -72,6 +72,7 @@ const GlobalQuickTransaction = ({ isOpen, onOpen, onClose, quickFormProps }) => 
         props?.setIslemGelirTuru?.('Diğer Gelir');
         props?.setIslemBagliMaasId?.('');
         props?.setIslemMaasDonemi?.('');
+        props?.setSecilenEtiketIds?.([]);
 
         props?.setTransferKaynakId?.(defaultAccountId);
         props?.setTransferHedefId?.('');

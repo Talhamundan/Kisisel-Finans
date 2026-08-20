@@ -5,6 +5,7 @@ import { toast } from 'react-toastify';
 import Swal from 'sweetalert2';
 import { formatCurrencyPlain, formatMoneyInputValue } from '../utils/helpers';
 import { canBeDefaultPaymentAccount } from '../utils/defaultPaymentAccount';
+import { buildTransactionTagId, normalizeTagKey, normalizeTagName, uniqueTagIds } from '../utils/tags';
 import {
     CREDIT_CARD_PAYMENT_STRATEGIES,
     CREDIT_CARD_PAYMENT_TYPES,
@@ -14,7 +15,7 @@ import {
     validateCreditCardPayment,
 } from '../utils/creditCardPayments';
 
-export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tanimliFaturalar) => {
+export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tanimliFaturalar, etiketler = [], transactionTags = []) => {
     // --- FORM STATES ---
     // Hesap
     const [hesapAdi, setHesapAdi] = useState("");
@@ -42,6 +43,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
     const [islemGelirTuru, setIslemGelirTuru] = useState("Diğer Gelir");
     const [islemBagliMaasId, setIslemBagliMaasId] = useState("");
     const [islemMaasDonemi, setIslemMaasDonemi] = useState("");
+    const [secilenEtiketIds, setSecilenEtiketIds] = useState([]);
     // NEW: Unit Price & Quantity for editing
     const [islemAdet, setIslemAdet] = useState("");
     const [islemBirimFiyat, setIslemBirimFiyat] = useState("");
@@ -115,6 +117,121 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
     const [yeniKodInput, setYeniKodInput] = useState("");
 
     // --- ACTIONS ---
+    const ensureTag = async (name) => {
+        const cleanedName = normalizeTagName(name);
+        const nameKey = normalizeTagKey(cleanedName);
+        if (!cleanedName || !nameKey) return null;
+
+        const existing = (etiketler || []).find((tag) => normalizeTagKey(tag?.name) === nameKey || tag?.nameKey === nameKey);
+        if (existing) return existing;
+
+        const tagQuery = query(collection(db, "tags"), where("alanKodu", "==", alanKodu), where("nameKey", "==", nameKey));
+        const tagSnap = await getDocs(tagQuery);
+        if (!tagSnap.empty) {
+            const first = tagSnap.docs[0];
+            return { id: first.id, ...first.data() };
+        }
+
+        const tagRef = doc(collection(db, "tags"));
+        const now = new Date();
+        await setDoc(tagRef, {
+            uid: user.uid,
+            alanKodu,
+            name: cleanedName,
+            nameKey,
+            created_at: now,
+            updated_at: now,
+        });
+        return { id: tagRef.id, uid: user.uid, alanKodu, name: cleanedName, nameKey, created_at: now, updated_at: now };
+    };
+
+    const syncTransactionTags = async (transactionId, nextTagIds = [], existingLinks = null, batchOverride = null) => {
+        if (!transactionId) return;
+        const desiredIds = uniqueTagIds(nextTagIds);
+        const links = existingLinks || transactionTags.filter((link) => (
+            (link.transaction_id || link.transactionId) === transactionId
+        ));
+        const currentIds = new Set(links.map((link) => link.tag_id || link.tagId).filter(Boolean));
+        const desiredSet = new Set(desiredIds);
+        const batch = batchOverride || writeBatch(db);
+        const now = new Date();
+
+        desiredIds.forEach((tagId) => {
+            if (currentIds.has(tagId)) return;
+            batch.set(doc(db, "transaction_tags", buildTransactionTagId(transactionId, tagId)), {
+                uid: user.uid,
+                alanKodu,
+                transaction_id: transactionId,
+                tag_id: tagId,
+                created_at: now,
+            });
+        });
+
+        links.forEach((link) => {
+            const tagId = link.tag_id || link.tagId;
+            if (!tagId || desiredSet.has(tagId)) return;
+            batch.delete(doc(db, "transaction_tags", link.id || buildTransactionTagId(transactionId, tagId)));
+        });
+
+        if (!batchOverride) await batch.commit();
+    };
+
+    const renameTag = async (tagId, nextName) => {
+        try {
+            const cleanedName = normalizeTagName(nextName);
+            const nameKey = normalizeTagKey(cleanedName);
+            if (!tagId || !cleanedName) {
+                toast.warning("Etiket adı boş olamaz.");
+                return false;
+            }
+            const duplicate = (etiketler || []).find((tag) => tag.id !== tagId && (tag.nameKey === nameKey || normalizeTagKey(tag.name) === nameKey));
+            if (duplicate) {
+                toast.warning("Bu isimde bir etiket zaten var.");
+                return false;
+            }
+            await updateDoc(doc(db, "tags", tagId), { name: cleanedName, nameKey, updated_at: new Date() });
+            toast.success("Etiket güncellendi.");
+            return true;
+        } catch (error) {
+            console.error(error);
+            toast.error("Etiket güncellenemedi.");
+            return false;
+        }
+    };
+
+    const deleteTag = async (tag, options = {}) => {
+        if (!tag?.id) return false;
+        const usageCount = transactionTags.filter((link) => (link.tag_id || link.tagId) === tag.id).length;
+        if (!options.skipConfirm) {
+            const result = await Swal.fire({
+                title: 'Etiket silinsin mi?',
+                text: usageCount > 0
+                    ? `Bu etiket ${usageCount} işlemde kullanılıyor. Etiketi silerseniz işlemler silinmez, yalnızca bu etiket bağlantıları kaldırılır.`
+                    : `${tag.name} etiketi silinecek.`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                confirmButtonText: 'Evet, Sil',
+                cancelButtonText: 'Vazgeç'
+            });
+            if (!result.isConfirmed) return false;
+        }
+
+        try {
+            const batch = writeBatch(db);
+            transactionTags
+                .filter((link) => (link.tag_id || link.tagId) === tag.id)
+                .forEach((link) => batch.delete(doc(db, "transaction_tags", link.id || buildTransactionTagId(link.transaction_id || link.transactionId, tag.id))));
+            batch.delete(doc(db, "tags", tag.id));
+            await batch.commit();
+            toast.success("Etiket silindi.");
+            return true;
+        } catch (error) {
+            console.error(error);
+            toast.error("Etiket silinemedi.");
+            return false;
+        }
+    };
 
     const hesapEkle = async (e) => {
         if (e) e.preventDefault();
@@ -254,11 +371,12 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
             const hedefHesapId = manualData ? manualData.hesapId : secilenHesapId;
             const hedefTutar = manualData ? manualData.tutar : islemTutar;
             const hedefAciklama = manualData ? manualData.aciklama : islemAciklama;
-            const hedefKategori = manualData ? manualData.kategori : (kategori || (kategoriListesi && kategoriListesi[0]) || "Diğer");
+            const hedefKategori = manualData ? manualData.kategori : kategori;
             const hedefTipi = manualData ? manualData.islemTipi : islemTipi;
             const hedefGelirTuru = manualData ? manualData.gelirTuru : islemGelirTuru;
             const hedefBagliMaasId = manualData ? manualData.bagliMaasId : islemBagliMaasId;
             const hedefMaasDonemi = manualData ? (manualData.salaryPeriod || manualData.maasDonemi) : islemMaasDonemi;
+            const hedefEtiketIds = manualData ? (manualData.tagIds || []) : secilenEtiketIds;
             const maasOdemeTurleri = ["Maaş Ödemesi", "Maaş Avansı", "Maaş Farkı", "Ek Maaş"];
 
             if (!hedefHesapId) {
@@ -267,6 +385,10 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
             }
             if (!hedefTutar) {
                 toast.warning("Lütfen tutar giriniz.");
+                return false;
+            }
+            if (!hedefKategori) {
+                toast.warning("Lütfen kategori seçiniz.");
                 return false;
             }
 
@@ -313,7 +435,9 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
             }
 
             const batch = writeBatch(db);
-            batch.set(doc(collection(db, "nakit_islemleri")), yeniIslem);
+            const islemRef = doc(collection(db, "nakit_islemleri"));
+            batch.set(islemRef, yeniIslem);
+            await syncTransactionTags(islemRef.id, hedefEtiketIds, [], batch);
 
             batch.update(doc(db, "hesaplar", hedefHesapId), {
                 guncelBakiye: increment(hedefTipi === 'gelir' ? tutar : -tutar)
@@ -321,7 +445,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
             await batch.commit();
 
             if (!manualData) {
-                setIslemTutar(""); setIslemAciklama(""); setIslemTarihi(""); setIslemGelirTuru("Diğer Gelir"); setIslemBagliMaasId(""); setIslemMaasDonemi("");
+                setIslemTutar(""); setIslemAciklama(""); setIslemTarihi(""); setIslemGelirTuru("Diğer Gelir"); setIslemBagliMaasId(""); setIslemMaasDonemi(""); setSecilenEtiketIds([]);
             }
             toast.success("İşlem kaydedildi!");
             return true;
@@ -410,6 +534,9 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
                         }
 
                         // 4. İşlemi Sil
+                        transactionTags
+                            .filter((link) => (link.transaction_id || link.transactionId) === id)
+                            .forEach((link) => batch.delete(doc(db, "transaction_tags", link.id || buildTransactionTagId(id, link.tag_id || link.tagId))));
                         batch.delete(docRef);
 
                         // 5. Atomik İşlemi Uygula
@@ -506,6 +633,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
             }
 
             batch.update(doc(db, "nakit_islemleri", id), updateData);
+            await syncTransactionTags(id, secilenEtiketIds, null, batch);
             await batch.commit();
 
             toast.success("İşlem güncellendi.");
@@ -1534,6 +1662,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
         setIslemGelirTuru(v.gelirTuru || v.incomeType || "Diğer Gelir");
         setIslemBagliMaasId(v.bagliMaasId || v.recurringIncomeId || v.gelirId || "");
         setIslemMaasDonemi(v.salaryPeriod || v.maasDonemi || "");
+        setSecilenEtiketIds(uniqueTagIds(v.tagIds || (v.tags || []).map((tag) => tag?.id)));
     }
     const fillSubscriptionForm = (v) => { setAboAd(v.ad); setAboTutar(formatMoneyInputValue(v.tutar)); setAboGun(v.gun); setAboHesapId(v.hesapId); setAboKategori(v.kategori); }
     const fillInstallmentForm = (v) => { setTaksitBaslik(v.baslik); setTaksitToplamTutar(formatMoneyInputValue(v.toplamTutar)); setTaksitSayisi(v.taksitSayisi); setTaksitHesapId(v.hesapId); setTaksitKategori(v.kategori); if (v.alisTarihi) { const d = new Date(v.alisTarihi.seconds * 1000); setTaksitAlisTarihi(d.toISOString().split('T')[0]); } }
@@ -1560,6 +1689,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
         varsayilanOdemeAraci, setVarsayilanOdemeAraci,
         maasHesabi, setMaasHesabi, anaMaasHesabi, setAnaMaasHesabi, hesapMaasGunu, setHesapMaasGunu, bagliMaasId, setBagliMaasId,
         secilenHesapId, setSecilenHesapId, islemTutar, setIslemTutar, islemAciklama, setIslemAciklama, islemTipi, setIslemTipi, kategori, setKategori, islemTarihi, setIslemTarihi,
+        secilenEtiketIds, setSecilenEtiketIds,
         islemGelirTuru, setIslemGelirTuru, islemBagliMaasId, setIslemBagliMaasId, islemMaasDonemi, setIslemMaasDonemi,
         islemAdet, setIslemAdet, islemBirimFiyat, setIslemBirimFiyat, // Return new states
         transferKaynakId, setTransferKaynakId, transferHedefId, setTransferHedefId, transferTutar, setTransferTutar, transferUcreti, setTransferUcreti, transferAciklama, setTransferAciklama, transferTarihi, setTransferTarihi,
@@ -1575,6 +1705,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
 
         // Actions
         hesapEkle, hesapDuzenle,
+        ensureTag, renameTag, deleteTag,
         islemEkle, islemSil: islemSilAction, islemDuzenle, normalSil,
         transferYap, krediKartiBorcOde, krediKartiBorcOdemeKaydet,
         taksitEkle, taksitOde, taksitDuzenle,
