@@ -344,16 +344,9 @@ const getMonthlyDueDate = (item, year, month) => {
     return new Date(year, month, Math.min(day, 28));
 };
 
-const getBillStatus = (date, hasDebt) => {
+const getBillStatus = (hasDebt) => {
     if (hasDebt) return { label: 'Borç oluştu', tone: 'danger' };
-    if (!date) return { label: 'Tanımlı', tone: 'neutral' };
-
-    const todayTime = new Date().setHours(0, 0, 0, 0);
-    const dueTime = new Date(date).setHours(0, 0, 0, 0);
-    const diffDays = Math.ceil((dueTime - todayTime) / 86400000);
-
-    if (diffDays >= 0 && diffDays <= 7) return { label: 'Yaklaşıyor', tone: 'warning' };
-    return { label: 'Bekliyor', tone: 'neutral' };
+    return null;
 };
 
 const BudgetDashboard = ({
@@ -845,7 +838,7 @@ const BudgetDashboard = ({
                 title: bill.baslik || definition?.baslik || definition?.kurum || 'Fatura',
                 date: dueDate,
                 amount: parseAmount(bill.tutar),
-                status: getBillStatus(dueDate, true),
+                status: getBillStatus(true),
                 data: bill,
                 mode: 'pending',
             };
@@ -859,8 +852,10 @@ const BudgetDashboard = ({
                     id: `definition-${definition.id}`,
                     title: definition.baslik || definition.kurum || 'Fatura',
                     date: dueDate,
+                    meta: definition.aboneNo || 'Abone no yok',
                     amount: parseAmount(definition.tutar || definition.ortalamaTutar),
-                    status: getBillStatus(dueDate, false),
+                    amountMeta: 'Borç yoktur',
+                    status: getBillStatus(false),
                     data: definition,
                     mode: 'definition',
                 };
@@ -1415,9 +1410,10 @@ const BudgetDashboard = ({
                                 icon={ReceiptText}
                                 tone={bill.mode === 'pending' ? 'danger' : 'neutral'}
                                 title={bill.title}
-                                meta={bill.date ? `${formatDayMonth(bill.date)} · Fatura` : 'Tarih tanımsız'}
+                                meta={bill.meta || (bill.date ? `${formatDayMonth(bill.date)} · Fatura` : 'Tarih tanımsız')}
                                 amount={bill.amount > 0 ? formatPara(bill.amount) : undefined}
                                 amountTone={bill.mode === 'pending' ? 'danger' : undefined}
+                                amountMeta={bill.amountMeta}
                                 badge={bill.status}
                                 onClick={() => modalAc(bill.mode === 'pending' ? 'fatura_ode' : 'duzenle_fatura_tanim', bill.data)}
                                 actions={(

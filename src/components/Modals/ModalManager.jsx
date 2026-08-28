@@ -733,7 +733,7 @@ const ModalManager = ({
         if (!seciliVeri) return null; // STRICT SAFE ACCESS
         title = "İşlemi Düzenle";
         const isInvestment = (seciliVeri.islemTipi && seciliVeri.islemTipi.includes('yatirim')) || seciliVeri.kategori === 'Yatırım';
-        const isTransfer = seciliVeri.islemTipi === 'transfer' || seciliVeri.kategori === 'Transfer';
+        const isTransfer = seciliVeri.islemTipi === 'transfer';
         const isIncome = seciliVeri.islemTipi === 'gelir';
         const needsSalaryLink = isIncome && salaryPaymentTypes.includes(islemGelirTuru);
         const periodOptions = getPeriodOptions(islemTarihi || seciliVeri.tarih || new Date());
@@ -869,8 +869,6 @@ const ModalManager = ({
                     <label style={{ display: 'block', fontSize: '12px', color: '#4a5568', fontWeight: 'bold', marginBottom: '5px' }}>Kategori</label>
                     {seciliVeri.kategori === 'BES' ? (
                         <input value="BES" disabled style={{ ...inputStyle, background: '#f8fafc', color: '#94a3b8', padding: '12px 15px', fontSize: '14px', cursor: 'not-allowed' }} />
-                    ) : (isTransfer) ? (
-                        <input value={seciliVeri.kategori || "Transfer"} disabled style={{ ...inputStyle, background: '#f8fafc', color: '#94a3b8', padding: '12px 15px', fontSize: '14px', cursor: 'not-allowed' }} />
                     ) : (isInvestment) ? (
                         <select value={kategori} onChange={e => setKategori(e.target.value)} style={{ ...inputStyle, padding: '12px 15px', fontSize: '14px' }}>{yatirimTurleri.map(t => <option key={t} value={t}>{t}</option>)}</select>
                     ) : (

@@ -562,7 +562,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
             }
 
             const guncelTarih = islemTarihi ? new Date(islemTarihi) : new Date();
-            const isTransfer = veriler.islemTipi === 'transfer' || veriler.kategori === 'Transfer';
+            const isTransfer = veriler.islemTipi === 'transfer';
             const maasOdemeTurleri = ["Maaş Ödemesi", "Maaş Avansı", "Maaş Farkı", "Ek Maaş"];
             const eskiTutar = parseFloat(veriler.tutar || 0);
             const eskiHesapId = veriler.hesapId || "";
@@ -1602,22 +1602,74 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
         const eskiKod = alanKodu;
 
         try {
+            const mergeListById = (current = [], incoming = []) => {
+                const merged = [...(Array.isArray(current) ? current : [])];
+                const seen = new Set(merged.map(item => item?.id).filter(Boolean));
+
+                (Array.isArray(incoming) ? incoming : []).forEach(item => {
+                    if (item?.id && seen.has(item.id)) return;
+                    if (item?.id) seen.add(item.id);
+                    merged.push(item);
+                });
+
+                return merged;
+            };
+
+            const mergePrimitiveList = (current = [], incoming = []) => (
+                [...new Set([...(Array.isArray(current) ? current : []), ...(Array.isArray(incoming) ? incoming : [])])]
+            );
+
             const eskiAyarRef = doc(db, "ayarlar", eskiKod);
-            const eskiAyarSnap = await getDoc(eskiAyarRef);
+            const yeniAyarRef = doc(db, "ayarlar", yeniKod);
+            const [eskiAyarSnap, yeniAyarSnap] = await Promise.all([
+                getDoc(eskiAyarRef),
+                getDoc(yeniAyarRef)
+            ]);
+
             if (eskiAyarSnap.exists()) {
-                await setDoc(doc(db, "ayarlar", yeniKod), eskiAyarSnap.data());
-                await deleteDoc(eskiAyarRef);
+                const eskiAyar = eskiAyarSnap.data();
+                const yeniAyar = yeniAyarSnap.exists() ? yeniAyarSnap.data() : {};
+
+                await setDoc(yeniAyarRef, {
+                    ...eskiAyar,
+                    ...yeniAyar,
+                    kategoriler: mergePrimitiveList(eskiAyar.kategoriler, yeniAyar.kategoriler),
+                    yatirimTurleri: mergePrimitiveList(eskiAyar.yatirimTurleri, yeniAyar.yatirimTurleri),
+                    hedefler: mergeListById(yeniAyar.hedefler, eskiAyar.hedefler),
+                    envanter: mergeListById(yeniAyar.envanter, eskiAyar.envanter),
+                    satislar: mergeListById(yeniAyar.satislar, eskiAyar.satislar),
+                    bes_data: yeniAyar.bes_data || eskiAyar.bes_data || null,
+                    limit: yeniAyar.limit || eskiAyar.limit || 15000
+                }, { merge: true });
             }
 
-            const koleksiyonlar = ["hesaplar", "nakit_islemleri", "abonelikler", "taksitler", "maaslar", "portfoy", "bekleyen_faturalar", "fatura_tanimlari"];
+            const koleksiyonlar = [
+                "hesaplar",
+                "nakit_islemleri",
+                "tags",
+                "transaction_tags",
+                "abonelikler",
+                "taksitler",
+                "maaslar",
+                "portfoy",
+                "bekleyen_faturalar",
+                "fatura_tanimlari",
+                "borclar",
+                "cari_islemleri",
+                "calendar_events"
+            ];
 
             for (const kolAdi of koleksiyonlar) {
                 const q = query(collection(db, kolAdi), where("alanKodu", "==", eskiKod));
                 const snapshot = await getDocs(q);
-                const promises = snapshot.docs.map(belge =>
-                    updateDoc(doc(db, kolAdi, belge.id), { alanKodu: yeniKod })
-                );
-                await Promise.all(promises);
+
+                for (let i = 0; i < snapshot.docs.length; i += 450) {
+                    const batch = writeBatch(db);
+                    snapshot.docs.slice(i, i + 450).forEach(belge => {
+                        batch.update(doc(db, kolAdi, belge.id), { alanKodu: yeniKod });
+                    });
+                    await batch.commit();
+                }
             }
 
             Swal.fire('Başarılı!', 'Taşıma işlemi tamamlandı.', 'success');

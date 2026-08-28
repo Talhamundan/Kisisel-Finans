@@ -98,7 +98,12 @@ function App() {
     }, [theme]);
 
     const availablePeriods = useMemo(() => {
-        const dates = data.islemler.map((item) => item.tarih);
+        const dates = [
+            ...data.islemler.map((item) => item.tarih),
+            ...data.bekleyenFaturalar.map((item) => item.sonOdemeTarihi || item.tarih),
+            ...data.borclar.map((item) => item.sonOdemeTarihi),
+            ...data.cariIslemler.map((item) => item.sonOdemeTarihi || item.tarih),
+        ];
         const periods = buildAvailablePeriods(dates);
         if (periods.years.length > 0) return periods;
 
@@ -107,7 +112,7 @@ function App() {
             years: [fallback.year],
             monthsByYear: { [fallback.year]: [fallback.month] },
         };
-    }, [data.islemler]);
+    }, [data.islemler, data.bekleyenFaturalar, data.borclar, data.cariIslemler]);
 
     useEffect(() => {
         if (!availablePeriods.years.length) return;
