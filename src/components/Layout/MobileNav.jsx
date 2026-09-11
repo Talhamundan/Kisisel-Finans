@@ -1,10 +1,11 @@
 import React from 'react';
-import { Home, Briefcase, Target, CalendarDays, Banknote, Settings } from 'lucide-react';
+import { Home, Briefcase, Target, CalendarDays, Banknote, ClipboardList, Settings } from 'lucide-react';
 
 const items = [
     { id: 'butcem', label: 'Dashboard', icon: Home },
     { id: 'maasAnalizi', label: 'Maaş', icon: Banknote },
     { id: 'yatirimlar', label: 'Yatırım', icon: Briefcase },
+    { id: 'tanimlamalar', label: 'Tanım', icon: ClipboardList },
     { id: 'hedefler', label: 'Envanter', icon: Target },
     { id: 'takvim', label: 'Takvim', icon: CalendarDays },
     { id: 'ayarlar', label: 'Ayarlar', icon: Settings },

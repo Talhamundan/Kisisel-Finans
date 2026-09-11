@@ -3,6 +3,7 @@ import {
     Bell,
     Banknote,
     CalendarDays,
+    ClipboardList,
     Eye,
     EyeOff,
     Home,
@@ -24,6 +25,7 @@ const navItems = [
     { id: 'maasAnalizi', label: 'Maaş Analizi', icon: Banknote },
     { id: 'yatirimlar', label: 'Yatırımlar', icon: WalletCards },
     { id: 'finansmanlar', label: 'Finansmanlar', icon: Landmark },
+    { id: 'tanimlamalar', label: 'Tanımlamalar', icon: ClipboardList },
     { id: 'hedefler', label: 'Hedefler', icon: Target },
     { id: 'takvim', label: 'Takvim', icon: CalendarDays },
 ];
@@ -35,6 +37,7 @@ const pageMeta = {
     hedefler: ['Hedefler', 'Envanter ve birikim planları'],
     takvim: ['Finans Takvimi', 'Yaklaşan hareketlerini izle'],
     finansmanlar: ['Finansmanlar', 'Kredi ve nakit avans takibi'],
+    tanimlamalar: ['Tanımlamalar', 'Sabit gider, fatura ve taksit takip alanı'],
     ayarlar: ['Ayarlar', 'Tanımlar, kategoriler ve veri yönetimi'],
 };
 

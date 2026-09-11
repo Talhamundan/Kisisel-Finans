@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
-import { db } from './firebase'
+import { auth, db } from './firebase'
 import { doc, setDoc, writeBatch } from 'firebase/firestore'
+import { sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { Eye, EyeOff, LockKeyhole, Mail, ShieldCheck, TrendingDown, TrendingUp } from 'lucide-react';
@@ -13,6 +14,7 @@ import GlobalQuickTransaction from './components/Budget/GlobalQuickTransaction';
 import FinancingDashboard from './components/Financing/FinancingDashboard';
 import InvestmentDashboard from './components/Investment/InvestmentDashboard';
 import GoalsInventory from './components/Budget/GoalsInventory';
+import DefinitionsDashboard from './components/Definitions/DefinitionsDashboard';
 import FinanceCalendarDashboard from './components/Calendar/FinanceCalendarDashboard';
 import SalaryAnalysisDashboard from './components/Salary/SalaryAnalysisDashboard';
 import ModalManager from './components/Modals/ModalManager';
@@ -77,8 +79,16 @@ const getInitialTheme = () => {
 const getInitialTab = () => (
     typeof window !== 'undefined' && window.location.pathname.startsWith('/finansmanlar')
         ? 'finansmanlar'
-        : 'butcem'
+        : typeof window !== 'undefined' && window.location.pathname.startsWith('/tanimlamalar')
+            ? 'tanimlamalar'
+            : 'butcem'
 );
+
+const getTabFromPath = (path) => {
+    if (path.startsWith('/finansmanlar')) return 'finansmanlar';
+    if (path.startsWith('/tanimlamalar')) return 'tanimlamalar';
+    return 'butcem';
+};
 
 function App() {
     // 1. AUTH
@@ -103,6 +113,7 @@ function App() {
     const [loginRemember, setLoginRemember] = useState(false);
     const [loginPasswordVisible, setLoginPasswordVisible] = useState(false);
     const [loginSubmitting, setLoginSubmitting] = useState(false);
+    const [passwordResetSubmitting, setPasswordResetSubmitting] = useState(false);
 
     // 3. HOOKS initialization
     const data = useDataListeners(user, alanKodu);
@@ -118,19 +129,19 @@ function App() {
         url.pathname = path;
         window.history.pushState({}, '', `${url.pathname}${url.search}`);
         setRoutePath(path);
-        setAnaSekme(path.startsWith('/finansmanlar') ? 'finansmanlar' : 'butcem');
+        setAnaSekme(getTabFromPath(path));
     };
 
     const changeTab = (tab) => {
         setAnaSekme(tab);
-        if (tab === 'finansmanlar') {
+        if (tab === 'finansmanlar' || tab === 'tanimlamalar') {
             const url = new URL(window.location.href);
-            url.pathname = '/finansmanlar';
+            url.pathname = tab === 'finansmanlar' ? '/finansmanlar' : '/tanimlamalar';
             window.history.pushState({}, '', `${url.pathname}${url.search}`);
-            setRoutePath('/finansmanlar');
+            setRoutePath(url.pathname);
             return;
         }
-        if (window.location.pathname.startsWith('/finansmanlar')) {
+        if (window.location.pathname.startsWith('/finansmanlar') || window.location.pathname.startsWith('/tanimlamalar')) {
             const url = new URL(window.location.href);
             url.pathname = '/';
             window.history.pushState({}, '', `${url.pathname}${url.search}`);
@@ -142,7 +153,7 @@ function App() {
         const handlePopState = () => {
             const path = window.location.pathname;
             setRoutePath(path);
-            setAnaSekme(path.startsWith('/finansmanlar') ? 'finansmanlar' : 'butcem');
+            setAnaSekme(getTabFromPath(path));
         };
         window.addEventListener('popstate', handlePopState);
         return () => window.removeEventListener('popstate', handlePopState);
@@ -283,13 +294,54 @@ function App() {
     const premiumLoginSubmit = async (e) => {
         e.preventDefault();
         if (loginSubmitting) return;
+        const email = loginEmail.trim().toLowerCase();
+        if (!email || !loginPassword) {
+            toast.warning("E-posta ve şifreyi gir.");
+            return;
+        }
         setLoginSubmitting(true);
         try {
-            // TODO: Replace temporary Google sign-in submit flow
-            // with username/password authentication.
-            await girisYap();
+            await signInWithEmailAndPassword(auth, email, loginPassword);
+        } catch (error) {
+            console.error("Firebase email/password login failed:", {
+                code: error?.code,
+                message: error?.message,
+            });
+            if (error?.code === 'auth/invalid-credential' || error?.code === 'auth/wrong-password') {
+                toast.error("E-posta veya şifre hatalı.");
+            } else if (error?.code === 'auth/user-not-found') {
+                toast.error("Bu e-posta ile kayıtlı kullanıcı bulunamadı.");
+            } else {
+                toast.error("Giriş başarısız. Lütfen tekrar dene.");
+            }
         } finally {
             setLoginSubmitting(false);
+        }
+    }
+
+    const handlePasswordReset = async () => {
+        if (passwordResetSubmitting) return;
+        const enteredEmail = loginEmail.trim().toLowerCase();
+        const email = enteredEmail || window.prompt("Şifre sıfırlama e-postası için adresini gir:");
+        const normalizedEmail = email?.trim().toLowerCase();
+
+        if (!normalizedEmail) {
+            toast.info("Şifre sıfırlama için e-posta gerekli.");
+            return;
+        }
+
+        setPasswordResetSubmitting(true);
+        try {
+            await sendPasswordResetEmail(auth, normalizedEmail);
+            toast.success("Şifre sıfırlama e-postası gönderildi.");
+        } catch (error) {
+            console.error("Firebase password reset failed:", {
+                code: error?.code,
+                message: error?.message,
+            });
+            toast.error("Şifre sıfırlama e-postası gönderilemedi.");
+        } finally {
+            setPasswordResetSubmitting(false);
         }
     }
 
@@ -647,11 +699,17 @@ function App() {
                             />
                             <span>Beni hatırla</span>
                         </label>
-                        <button type="button" title="Yakında">Şifremi unuttum</button>
+                        <button type="button" onClick={handlePasswordReset} disabled={passwordResetSubmitting}>
+                            {passwordResetSubmitting ? 'Gönderiliyor...' : 'Şifremi unuttum'}
+                        </button>
                     </div>
 
                     <button type="submit" className="qw-login-submit" disabled={loginSubmitting}>
                         {loginSubmitting ? 'Giriş yapılıyor...' : 'Giriş Yap'}
+                    </button>
+
+                    <button type="button" className="qw-login-google" onClick={girisYap}>
+                        Google ile giriş yap
                     </button>
 
                     <p className="qw-login-trust">Giriş yaparak güvenli oturum akışını başlatırsın.</p>
@@ -934,7 +992,7 @@ function App() {
                 selectedPeriod={selectedPeriod}
                 setSelectedPeriod={setSelectedPeriod}
                 availablePeriods={availablePeriods}
-                showPeriodFilter={!['hedefler', 'takvim', 'maasAnalizi', 'ayarlar', 'finansmanlar'].includes(anaSekme)}
+                showPeriodFilter={!['hedefler', 'takvim', 'maasAnalizi', 'ayarlar', 'finansmanlar', 'tanimlamalar'].includes(anaSekme)}
                 theme={theme}
                 onThemeToggle={() => setTheme((currentTheme) => currentTheme === 'dark' ? 'light' : 'dark')}
             />
@@ -1080,6 +1138,16 @@ function App() {
                     gizliMod={gizliMod}
                     selectedFinancingId={selectedFinancingId}
                     navigateTo={navigateTo}
+                />
+            )}
+
+            {anaSekme === "tanimlamalar" && (
+                <DefinitionsDashboard
+                    data={data}
+                    gizliMod={gizliMod}
+                    routePath={routePath}
+                    navigateTo={navigateTo}
+                    modalAc={modalAc}
                 />
             )}
 

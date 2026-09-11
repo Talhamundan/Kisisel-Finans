@@ -91,6 +91,7 @@ export const EmptyState = ({ title = 'Veri bulunamadı', description, icon: Icon
 export const TransactionRow = ({
     icon,
     tone = 'neutral',
+    natureTone,
     title,
     meta,
     tags = [],
@@ -102,7 +103,7 @@ export const TransactionRow = ({
     onClick,
     actions,
 }) => (
-    <div className="qw-transaction-row" onClick={onClick} role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined}>
+    <div className={`qw-transaction-row${natureTone ? ` qw-transaction-row--${natureTone}` : ''}`} onClick={onClick} role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined}>
         <IconTile icon={icon} tone={tone} />
         <div className="qw-row-main">
             <div className="qw-transaction-title-line">

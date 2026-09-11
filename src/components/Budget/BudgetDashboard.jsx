@@ -60,6 +60,12 @@ import {
     getFinancingTypeLabel,
     summarizeFinancings,
 } from '../../utils/financing';
+import {
+    getAllInstallmentStatuses,
+    getBillDefinitionStatus,
+    statusLabels,
+    statusTones,
+} from '../../utils/definitions';
 
 const parseAmount = (value) => parseFloat(value) || 0;
 
@@ -127,6 +133,23 @@ const getFinancialTone = (value) => {
     if (amount < 0) return 'danger';
     return 'neutral';
 };
+
+const getInstallmentProgressFromText = (...values) => {
+    for (const value of values) {
+        const match = String(value || '').match(/\((\d+)\s*\/\s*(\d+)\)/);
+        if (!match) continue;
+
+        const number = parseInt(match[1]);
+        const count = parseInt(match[2]);
+        if (number > 0 && count > 0) return { number, count };
+    }
+
+    return { number: 0, count: 0 };
+};
+
+const isBillCategory = (transaction) => (
+    String(transaction?.kategori || '').trim().toLocaleLowerCase('tr-TR') === 'fatura'
+);
 
 const addMonthsClamped = (date, monthOffset) => {
     if (!date) return null;
@@ -390,11 +413,6 @@ const getMonthlyDueDate = (item, year, month) => {
     return new Date(year, month, Math.min(day, 28));
 };
 
-const getBillStatus = (hasDebt) => {
-    if (hasDebt) return { label: 'Borç oluştu', tone: 'danger' };
-    return null;
-};
-
 const BudgetDashboard = ({
     aktifAy,
     toplamGelir,
@@ -503,8 +521,14 @@ const BudgetDashboard = ({
             || transaction?.planId;
         if (installmentId) {
             const installment = installmentById.get(installmentId);
-            const number = parseInt(transaction?.installmentNumber || transaction?.taksitNo || transaction?.taksitSirasi);
-            const count = parseInt(transaction?.installmentCount || transaction?.taksitSayisi || installment?.taksitSayisi);
+            const textProgress = getInstallmentProgressFromText(
+                transaction?.aciklama,
+                transaction?.installmentPlanTitle,
+                transaction?.title,
+                installment?.baslik
+            );
+            const number = parseInt(transaction?.installmentNumber || transaction?.taksitNo || transaction?.taksitSirasi) || textProgress.number;
+            const count = parseInt(transaction?.installmentCount || transaction?.taksitSayisi || installment?.taksitSayisi) || textProgress.count;
             return {
                 type: 'installment',
                 title: installment?.baslik || transaction?.installmentPlanTitle || transaction?.aciklama || transaction?.kategori || 'Taksit',
@@ -528,7 +552,7 @@ const BudgetDashboard = ({
 
         const billId = transaction?.billId || transaction?.faturaId || transaction?.pendingBillId || transaction?.bekleyenFaturaId;
         const billDefinitionId = transaction?.billDefinitionId || transaction?.faturaTanimId || transaction?.tanimId;
-        if (billId || billDefinitionId) {
+        if (billId || billDefinitionId || isBillCategory(transaction)) {
             const bill = pendingBillById.get(billId);
             const definition = billDefinitionById.get(billDefinitionId || bill?.tanimId);
             return {
@@ -767,19 +791,6 @@ const BudgetDashboard = ({
         return count > 0 ? Math.min(paidCount, count) : paidCount;
     }, [linkedInstallmentPaymentCounts]);
 
-    const getInstallmentFinancials = useCallback((item) => {
-        const total = parseAmount(item.toplamTutar);
-        const monthly = parseAmount(item.aylikTutar);
-        const paid = getInstallmentPaidCount(item);
-        const count = parseInt(item.taksitSayisi) || 0;
-        const remainingCount = count > 0 ? Math.max(0, count - paid) : 0;
-        const remainingDebt = count > 0
-            ? Math.max(0, monthly * remainingCount)
-            : Math.max(0, total - (monthly * paid));
-
-        return { total, monthly, paid, count, remainingCount, remainingDebt };
-    }, [getInstallmentPaidCount]);
-
     const upcomingPayments = useMemo(() => {
         const periodDate = selectedPeriod?.month === 'all'
             ? new Date()
@@ -924,14 +935,20 @@ const BudgetDashboard = ({
         .sort((a, b) => (toDateSafe(a.sonOdemeTarihi || a.tarih)?.getTime() || Number.MAX_SAFE_INTEGER) - (toDateSafe(b.sonOdemeTarihi || b.tarih)?.getTime() || Number.MAX_SAFE_INTEGER))
         .slice(0, 8);
 
-    const allInstallmentRows = [...(taksitler || [])]
-        .map((item) => {
-            const financials = getInstallmentFinancials(item);
-            const { paid, count } = financials;
-            const baseDate = toDateSafe(item.alisTarihi || item.olusturmaTarihi);
-            const dueDate = addMonthsClamped(baseDate, paid);
-            const nextInstallmentNumber = count > 0 ? Math.min(paid + 1, count) : paid + 1;
-            return { ...item, ...financials, nextDueDate: dueDate, paidCount: paid, installmentCount: count, nextInstallmentNumber };
+    const allInstallmentRows = getAllInstallmentStatuses(taksitler, tumIslemler)
+        .map((status) => {
+            const item = status.installment;
+            return {
+                ...item,
+                total: status.total,
+                monthly: status.monthly,
+                paidCount: status.paidCount,
+                installmentCount: status.count,
+                remainingCount: status.remainingCount,
+                remainingDebt: status.remainingAmount,
+                nextDueDate: status.nextPayment?.dueDate || null,
+                nextInstallmentNumber: status.nextPayment?.installmentNumber || status.count,
+            };
         })
         .filter((item) => !(item.installmentCount > 0 && item.paidCount >= item.installmentCount))
         .sort((a, b) => (a.nextDueDate?.getTime() || Number.MAX_SAFE_INTEGER) - (b.nextDueDate?.getTime() || Number.MAX_SAFE_INTEGER));
@@ -951,42 +968,28 @@ const BudgetDashboard = ({
     const todayNet = todayStats.income - todayStats.expense;
     const currentMonthNet = currentMonthStats.income - currentMonthStats.expense;
     const budgetUsagePercent = parseAmount(aylikLimit) > 0 ? Math.round((currentMonthStats.expense / parseAmount(aylikLimit)) * 100) : null;
-    const billTotal = (bekleyenFaturalar || []).reduce((sum, item) => sum + parseAmount(item.tutar), 0);
-    const billDisplayRows = [
-        ...(bekleyenFaturalar || []).map((bill) => {
-            const definition = (tanimliFaturalar || []).find((item) => item.id === bill.tanimId);
-            const dueDate = toDateSafe(bill.sonOdemeTarihi || bill.tarih);
+    const billDisplayRows = (tanimliFaturalar || [])
+        .map((definition) => {
+            const billStatus = getBillDefinitionStatus(definition, {
+                pendingBills: bekleyenFaturalar,
+                transactions: tumIslemler,
+                monthCount: 1,
+            });
+            const current = billStatus.current;
             return {
-                id: `pending-${bill.id}`,
-                title: bill.baslik || definition?.baslik || definition?.kurum || 'Fatura',
-                date: dueDate,
-                amount: parseAmount(bill.tutar),
-                status: getBillStatus(true),
-                data: bill,
-                mode: 'pending',
+                id: `definition-${definition.id}`,
+                title: definition.baslik || definition.kurum || 'Fatura',
+                date: current?.dueDate,
+                meta: current?.dueDate ? `${formatDayMonth(current.dueDate)} · ${statusLabels[current.status]}` : statusLabels[current?.status],
+                amount: parseAmount(current?.expectedAmount),
+                status: { label: statusLabels[current?.status], tone: statusTones[current?.status] },
+                data: current?.pendingBill || definition,
+                mode: current?.pendingBill ? 'pending' : 'definition',
             };
-        }),
-        ...(tanimliFaturalar || [])
-            .filter((definition) => !(bekleyenFaturalar || []).some((bill) => bill.tanimId === definition.id))
-            .map((definition) => {
-                const today = new Date();
-                const dueDate = getMonthlyDueDate(definition, today.getFullYear(), today.getMonth());
-                return {
-                    id: `definition-${definition.id}`,
-                    title: definition.baslik || definition.kurum || 'Fatura',
-                    date: dueDate,
-                    meta: definition.aboneNo || 'Abone no yok',
-                    amount: parseAmount(definition.tutar || definition.ortalamaTutar),
-                    amountMeta: 'Borç yoktur',
-                    status: getBillStatus(false),
-                    data: definition,
-                    mode: 'definition',
-                };
-            })
-            .filter(Boolean),
-    ]
+        })
         .sort((a, b) => (a.date?.getTime() || Number.MAX_SAFE_INTEGER) - (b.date?.getTime() || Number.MAX_SAFE_INTEGER))
         .slice(0, 8);
+    const billTotal = billDisplayRows.reduce((sum, item) => item.mode === 'pending' ? sum + parseAmount(item.amount) : sum, 0);
     const debtTotal = (borclar || []).reduce((sum, item) => sum + parseAmount(item.kalanTutar ?? item.tutar), 0);
     const currentMonthDebtDue = (borclar || []).reduce((sum, item) => {
         const dueDate = toDateSafe(item.sonOdemeTarihi || item.tarih);
@@ -1388,6 +1391,7 @@ const BudgetDashboard = ({
                                     key={transaction.id}
                                     icon={transactionIcon(transaction)}
                                     tone={transactionTone(transaction)}
+                                    natureTone={transaction.presentation.type !== 'normal' ? transaction.presentation.type : undefined}
                                     title={transaction.presentation.title}
                                     meta={getTransactionMeta(transaction)}
                                     tags={transaction.tags || []}
@@ -1580,7 +1584,7 @@ const BudgetDashboard = ({
                                         <button type="button" className="qw-mini-icon-button" aria-label="Düzenle" onClick={(event) => { event.stopPropagation(); modalAc(bill.mode === 'pending' ? 'duzenle_bekleyen_fatura' : 'duzenle_fatura_tanim', bill.data); }}>
                                             <Edit3 size={14} />
                                         </button>
-                                        <button type="button" className="qw-mini-icon-button is-danger" aria-label="Sil" onClick={(event) => { event.stopPropagation(); normalSil(bill.mode === 'pending' ? 'bekleyen_faturalar' : 'tanimli_faturalar', bill.data.id); }}>
+                                        <button type="button" className="qw-mini-icon-button is-danger" aria-label="Sil" onClick={(event) => { event.stopPropagation(); normalSil(bill.mode === 'pending' ? 'bekleyen_faturalar' : 'fatura_tanimlari', bill.data.id); }}>
                                             <Trash2 size={14} />
                                         </button>
                                     </>
