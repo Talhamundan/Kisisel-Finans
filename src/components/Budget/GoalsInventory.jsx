@@ -241,13 +241,13 @@ const GoalsInventory = ({
                         <h4 style={{ margin: 0 }}>📦 Envanterim</h4>
                         <button onClick={openEnvanterEkle} style={{ background: '#38a169', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>+ Ürün Ekle</button>
                     </div>
-                    <table style={{ width: '100%', fontSize: '14px', borderCollapse: 'collapse' }}>
+                    <table style={{ width: '100%', fontSize: '14px', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                         <thead>
                             <tr style={{ color: '#a0aec0', borderBottom: '1px solid #edf2f7', textAlign: 'left' }}>
-                                <th style={{ padding: '8px' }}>Ürün</th>
-                                <th style={{ padding: '8px' }}>Maliyet</th>
-                                <th style={{ padding: '8px' }}>Eklenme</th>
-                                <th></th>
+                                <th style={{ padding: '8px', width: '36%' }}>Ürün</th>
+                                <th style={{ padding: '8px', width: '18%' }}>Maliyet</th>
+                                <th style={{ padding: '8px', width: '16%' }}>Eklenme</th>
+                                <th style={{ width: '30%' }}></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -286,15 +286,15 @@ const GoalsInventory = ({
                                             <td style={{ padding: '10px', fontSize: '12px', color: '#718096' }}>
                                                 {item.eklendiTarih?.seconds ? new Date(item.eklendiTarih.seconds * 1000).toLocaleDateString() : '—'}
                                             </td>
-                                            <td style={{ padding: '10px', display: 'flex', gap: '5px', justifyContent: 'flex-end', flexDirection: borcuVar ? 'column' : 'row', alignItems: 'flex-end' }}>
-                                                <div style={{ display: 'flex', gap: '5px' }}>
+                                            <td style={{ padding: '10px' }}>
+                                                <div style={{ display: 'flex', gap: '5px', justifyContent: 'flex-end', alignItems: 'center', whiteSpace: 'nowrap' }}>
+                                                    {borcuVar && (
+                                                        <button onClick={() => openEnvanterOdemeYap(item)} style={{ background: '#fc8181', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>Ödeme Yap</button>
+                                                    )}
                                                     <button onClick={() => openSatisYap(item)} style={{ background: '#3182ce', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>SAT</button>
                                                     <button onClick={() => openEnvanterDuzenle(item)} style={{ background: '#edf2f7', color: '#4a5568', border: 'none', padding: '5px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', outline: 'none' }}>✏️</button>
                                                     <button onClick={() => actions.envanterSil(item.id)} style={{ background: '#fee2e2', color: '#c53030', border: 'none', padding: '5px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', outline: 'none' }}>🗑️</button>
                                                 </div>
-                                                {borcuVar && (
-                                                    <button onClick={() => openEnvanterOdemeYap(item)} style={{ background: '#fc8181', color: 'white', border: 'none', padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '10px', fontWeight: 'bold', width: '100%' }}>Ödeme Yap</button>
-                                                )}
                                             </td>
                                         </tr>
                                     )
@@ -361,7 +361,7 @@ const GoalsInventory = ({
                                             <div><span style={{ color: '#a0aec0', marginRight: '5px' }}>Kalan:</span><b style={{ color: isTamam ? '#48bb78' : '#e53e3e' }}>{formatPara(kalan)}</b></div>
                                         </div>
                                         {!isTamam && (
-                                            <button onClick={() => openTahsilatEkle(satis)} style={{ width: '100%', marginTop: '10px', padding: '8px', background: '#ebf8ff', color: '#2b6cb0', border: '1px solid #bee3f8', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' }}>+ Tahsilat Ekle</button>
+                                            <button onClick={() => openTahsilatEkle(satis)} style={{ width: '100%', marginTop: '10px', padding: '8px', background: '#f0fff4', color: '#2f855a', border: '1px solid #9ae6b4', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' }}>+ Ödeme Al</button>
                                         )}
                                     </div>
                                 )
@@ -560,7 +560,7 @@ const GoalsInventory = ({
                 }}>
                     <div style={{ marginBottom: '15px', color: '#4a5568' }}>Kalan Borç: <b>{modalState.data ? formatPara(modalState.data.deger - (modalState.data.odenenTutar || 0)) : 0}</b></div>
                     <input type="number" autoFocus value={formEklenenBorcOdeme} onChange={e => setFormEklenenBorcOdeme(e.target.value)} placeholder="Ödenecek Tutar" style={{ ...inputStyle, marginBottom: '20px' }} required />
-                    <button type="submit" disabled={isProcessing} className="modal-success-btn">{isProcessing ? 'ÖDENİYOR...' : 'ÖDE'}</button>
+                    <button type="submit" disabled={isProcessing} className="modal-danger-btn">{isProcessing ? 'ÖDENİYOR...' : 'ÖDE'}</button>
                 </form>
             </HighQualityModal>
 

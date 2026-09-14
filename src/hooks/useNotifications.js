@@ -322,7 +322,7 @@ export const useNotifications = ({
                         mesaj: `🔔 ${s.alici}, ${s.urunAdi} için kalan ${formatCurrencyPlain(kalan)} ödemesini henüz yapmadı.`,
                         tutar: kalan,
                         data: s,
-                        renk: 'purple'
+                        renk: 'green'
                     });
                 }
             });

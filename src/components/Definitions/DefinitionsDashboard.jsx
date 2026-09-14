@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { arrayUnion, deleteDoc, doc, updateDoc } from 'firebase/firestore';
-import { ArrowLeft, CalendarClock, Ellipsis, Link2, ReceiptText, Repeat2, Trash2, WalletCards } from 'lucide-react';
+import { ArrowLeft, CalendarClock, CreditCard, Ellipsis, Landmark, Link2, ReceiptText, Repeat2, Trash2, TrendingUp, Wallet, WalletCards } from 'lucide-react';
 import { toast } from 'react-toastify';
 import Swal from 'sweetalert2';
 import { db } from '../../firebase';
@@ -61,25 +61,79 @@ const Actions = ({ onEdit, onPassive, onDelete }) => (
     </div>
 );
 
-const GroupedValueList = ({ title, items = [], emptyTitle, hidden = false }) => {
+const getValueItemVisuals = (item, listType) => {
+    if (listType === 'assets') {
+        if (item.group === 'Yatırımlar' || item.meta === 'Yatırım Hesabı') return { Icon: TrendingUp, tone: 'investment' };
+        return { Icon: Wallet, tone: item.meta === 'Nakit' ? 'cash' : 'account' };
+    }
+    if (item.group === 'Kredi Kartları') return { Icon: CreditCard, tone: 'credit-card' };
+    if (item.group === 'Finansmanlar') return { Icon: Landmark, tone: 'financing' };
+    if (item.meta === 'Taksit yükü') return { Icon: CalendarClock, tone: 'installment' };
+    return { Icon: ReceiptText, tone: 'manual-debt' };
+};
+
+const getDisplayGroup = (item, listType) => (
+    listType === 'debts' && item.meta === 'Taksit yükü' ? 'Taksit Yükü'
+        : listType === 'assets' && (item.group === 'Yatırımlar' || item.meta === 'Yatırım Hesabı') ? 'Yatırımlar'
+            : item.group
+);
+
+const sumItems = (items = []) => items.reduce((sum, item) => sum + item.value, 0);
+
+const toggleHiddenItem = (setHiddenItems, id) => {
+    setHiddenItems((current) => {
+        const next = new Set(current);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+    });
+};
+
+const GroupedValueList = ({ title, items = [], emptyTitle, hidden = false, listType = 'assets', hiddenItems, onToggleItem }) => {
     const groups = items.reduce((map, item) => {
-        if (!map.has(item.group)) map.set(item.group, []);
-        map.get(item.group).push(item);
+        const group = getDisplayGroup(item, listType);
+        if (!map.has(group)) map.set(group, []);
+        map.get(group).push(item);
         return map;
     }, new Map());
+    const activeItems = items.filter((item) => !hiddenItems?.has(item.id));
+    const total = sumItems(activeItems);
+    const countLabel = listType === 'assets' ? `${items.length} hesap` : `${items.length} borç kalemi`;
 
     return (
         <div className="definitions-value-list">
-            <h3>{title}</h3>
+            <div className="definitions-value-list-header">
+                <span><strong>{title}</strong><small>{countLabel}</small></span>
+                <b>{formatDefinitionMoney(total, hidden)}</b>
+            </div>
             {[...groups.entries()].map(([group, groupItems]) => (
                 <div key={group} className="definitions-value-group">
-                    <span>{group}</span>
-                    {groupItems.map((item) => (
-                        <div key={item.id} className="definitions-value-row">
-                            <p><strong>{item.label}</strong><small>{item.meta}</small></p>
-                            <b>{formatDefinitionMoney(item.value, hidden)}</b>
-                        </div>
-                    ))}
+                    <div className="definitions-value-group-header">
+                        <span>{group}</span>
+                        <b>{formatDefinitionMoney(sumItems(groupItems.filter((item) => !hiddenItems?.has(item.id))), hidden)}</b>
+                    </div>
+                    <div className="definitions-value-group-rows">
+                        {groupItems.map((item) => {
+                            const { Icon, tone } = getValueItemVisuals(item, listType);
+                            const isZero = Math.abs(item.value) < 0.01;
+                            const isActive = !hiddenItems?.has(item.id);
+                            const RowTag = onToggleItem ? 'button' : 'div';
+                            return (
+                                <RowTag
+                                    key={item.id}
+                                    type={onToggleItem ? 'button' : undefined}
+                                    className={`definitions-value-row definitions-value-row--${tone}${isZero || !isActive ? ' is-muted' : ''}`}
+                                    aria-pressed={onToggleItem ? isActive : undefined}
+                                    title={onToggleItem ? `${item.label} kalemini ${isActive ? 'grafikten çıkar' : 'grafiğe ekle'}` : undefined}
+                                    onClick={onToggleItem ? () => onToggleItem(item.id) : undefined}
+                                >
+                                    <span className="definitions-value-icon"><Icon size={15} /></span>
+                                    <p><strong>{item.label}</strong><small>{isActive ? item.meta : `${item.meta} · Kapalı`}</small></p>
+                                    <b>{formatDefinitionMoney(item.value, hidden)}</b>
+                                </RowTag>
+                            );
+                        })}
+                    </div>
                 </div>
             ))}
             {items.length === 0 && <EmptyState title={emptyTitle} />}
@@ -103,6 +157,8 @@ const InstallmentSummaryFooter = ({ status }) => (
 );
 
 const Overview = ({ data, gizliMod }) => {
+    const [hiddenAssetItems, setHiddenAssetItems] = useState(new Set());
+    const [hiddenDebtItems, setHiddenDebtItems] = useState(new Set());
     const summary = useMemo(() => summarizeDefinitionsOverview({
         accounts: data.hesaplar,
         portfolio: data.portfoy,
@@ -112,16 +168,21 @@ const Overview = ({ data, gizliMod }) => {
         transactions: data.islemler,
         besData: data.besVerisi,
     }), [data]);
+    const activeAssetItems = summary.assets.items.filter((item) => !hiddenAssetItems.has(item.id));
+    const activeDebtItems = summary.debts.items.filter((item) => !hiddenDebtItems.has(item.id));
+    const activeAssetTotal = sumItems(activeAssetItems);
+    const activeDebtTotal = sumItems(activeDebtItems);
 
     const assetChart = [
-        { name: 'Nakit / Vadesiz', value: summary.assets.cash, color: '#38bdf8' },
-        { name: 'Yatırım Hesapları', value: summary.assets.investmentAccounts + summary.assets.portfolioValue, color: '#8b5cf6' },
-        { name: 'Diğer Varlıklar', value: summary.assets.besValue, color: '#22c55e' },
+        { name: 'Nakit / Vadesiz', value: sumItems(activeAssetItems.filter((item) => getDisplayGroup(item, 'assets') === 'Hesaplar')), color: '#38bdf8' },
+        { name: 'Yatırım Hesapları', value: sumItems(activeAssetItems.filter((item) => getDisplayGroup(item, 'assets') === 'Yatırımlar')), color: '#8b5cf6' },
+        { name: 'Diğer Varlıklar', value: sumItems(activeAssetItems.filter((item) => getDisplayGroup(item, 'assets') === 'Diğer Varlıklar')), color: '#22c55e' },
     ];
     const debtChart = [
-        { name: 'Kredi Kartları', value: summary.debts.creditCards, color: '#f97316' },
-        { name: 'Finansmanlar', value: summary.debts.financings, color: '#ef4444' },
-        { name: 'Diğer Borçlar', value: summary.debts.manualDebt + summary.debts.installmentDebt, color: '#64748b' },
+        { name: 'Kredi Kartları', value: sumItems(activeDebtItems.filter((item) => getDisplayGroup(item, 'debts') === 'Kredi Kartları')), color: '#f97316' },
+        { name: 'Finansmanlar', value: sumItems(activeDebtItems.filter((item) => getDisplayGroup(item, 'debts') === 'Finansmanlar')), color: '#8b5cf6' },
+        { name: 'Manuel Borçlar', value: sumItems(activeDebtItems.filter((item) => getDisplayGroup(item, 'debts') === 'Manuel Borçlar')), color: '#ef4444' },
+        { name: 'Taksit Yükü', value: sumItems(activeDebtItems.filter((item) => getDisplayGroup(item, 'debts') === 'Taksit Yükü')), color: '#64748b' },
     ];
 
     return (
@@ -131,22 +192,18 @@ const Overview = ({ data, gizliMod }) => {
                 <PremiumCard><span>Toplam Borç</span><strong className="is-danger">{formatDefinitionMoney(summary.debts.total, gizliMod)}</strong></PremiumCard>
                 <PremiumCard><span>Net Varlık</span><strong className={summary.netWorth >= 0 ? 'is-success' : 'is-danger'}>{formatDefinitionMoney(summary.netWorth, gizliMod)}</strong></PremiumCard>
             </div>
-            <div className="definitions-chart-grid">
-                <PremiumCard hover={false}>
+            <div className="definitions-overview-grid">
+                <PremiumCard className="definitions-distribution-card" hover={false}>
                     <SectionHeader title="Varlık Dağılımı" />
-                    <PremiumDonutChart data={assetChart} centerValue={formatDefinitionMoney(summary.assets.total, gizliMod)} centerLabel="Varlık" height={190} innerRadius={54} outerRadius={76} />
+                    <PremiumDonutChart data={assetChart} centerValue={formatDefinitionMoney(activeAssetTotal, gizliMod)} centerLabel="Aktif varlık" height={250} innerRadius={76} outerRadius={102} />
+                    <div className="definitions-distribution-divider" />
+                    <GroupedValueList title="Hesaplar" items={summary.assets.items} emptyTitle="Varlık hesabı yok" hidden={gizliMod} listType="assets" hiddenItems={hiddenAssetItems} onToggleItem={(id) => toggleHiddenItem(setHiddenAssetItems, id)} />
                 </PremiumCard>
-                <PremiumCard hover={false}>
+                <PremiumCard className="definitions-distribution-card" hover={false}>
                     <SectionHeader title="Borç Dağılımı" />
-                    <PremiumDonutChart data={debtChart} centerValue={formatDefinitionMoney(summary.debts.total, gizliMod)} centerLabel="Borç" height={190} innerRadius={54} outerRadius={76} />
-                </PremiumCard>
-            </div>
-            <div className="definitions-ledger-grid">
-                <PremiumCard hover={false}>
-                    <GroupedValueList title="Hesaplar" items={summary.assets.items} emptyTitle="Varlık hesabı yok" hidden={gizliMod} />
-                </PremiumCard>
-                <PremiumCard hover={false}>
-                    <GroupedValueList title="Borçlar" items={summary.debts.items} emptyTitle="Borç kalemi yok" hidden={gizliMod} />
+                    <PremiumDonutChart data={debtChart} centerValue={formatDefinitionMoney(activeDebtTotal, gizliMod)} centerLabel="Aktif borç" height={250} innerRadius={76} outerRadius={102} />
+                    <div className="definitions-distribution-divider" />
+                    <GroupedValueList title="Borçlar" items={summary.debts.items} emptyTitle="Borç kalemi yok" hidden={gizliMod} listType="debts" hiddenItems={hiddenDebtItems} onToggleItem={(id) => toggleHiddenItem(setHiddenDebtItems, id)} />
                 </PremiumCard>
             </div>
         </div>

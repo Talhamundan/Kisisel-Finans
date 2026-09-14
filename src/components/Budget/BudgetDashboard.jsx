@@ -397,9 +397,8 @@ const TRANSACTION_NATURE_OPTIONS = [
     { value: 'transfer', label: 'Transfer' },
     { value: 'normal', label: 'Normal işlemler' },
     { value: 'installment', label: 'Taksitler' },
-    { value: 'subscription', label: 'Abonelikler' },
+    { value: 'subscription', label: 'Sabit Giderler' },
     { value: 'bill', label: 'Faturalar' },
-    { value: 'fixed', label: 'Sabit giderler' },
 ];
 
 const getMonthlyDueDate = (item, year, month) => {
@@ -545,8 +544,8 @@ const BudgetDashboard = ({
             const subscription = subscriptionById.get(subscriptionId);
             return {
                 type: 'subscription',
-                title: subscription?.ad || transaction?.subscriptionTitle || transaction?.aciklama || transaction?.kategori || 'Abonelik',
-                badges: [{ label: 'Abonelik', tone: 'subscription', icon: Repeat2 }],
+                title: subscription?.ad || transaction?.subscriptionTitle || transaction?.aciklama || transaction?.kategori || 'Sabit Gider',
+                badges: [{ label: 'Sabit Gider', tone: 'subscription', icon: Repeat2 }],
             };
         }
 

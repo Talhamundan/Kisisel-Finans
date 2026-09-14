@@ -1,5 +1,5 @@
-import { formatCurrencyPlain, toDateSafe } from './helpers';
-import { getFinancingMetrics } from './financing';
+import { formatCurrencyPlain, toDateSafe } from './helpers.js';
+import { getFinancingMetrics } from './financing.js';
 
 const parseAmount = (value) => parseFloat(value) || 0;
 const idOf = (value) => String(value || '').trim();
@@ -440,7 +440,9 @@ export const getInstallmentStatus = (installment, transactions = []) => {
     const paidCount = Math.max(paidRows.length, fallbackPaid);
     const total = parseAmount(installment?.toplamTutar);
     const monthly = parseAmount(installment?.aylikTutar || (count > 0 ? total / count : 0));
-    const paidAmount = rows.reduce((sum, row) => sum + (row.status === DEFINITION_STATUS.PAID ? (row.paidAmount || row.plannedAmount) : 0), 0) || (monthly * paidCount);
+    const paidAmount = rows.reduce((sum, row) => (
+        sum + (row.status === DEFINITION_STATUS.PAID && row.transaction ? parseAmount(row.paidAmount) : 0)
+    ), 0);
     const remainingAmount = Math.max(0, total - paidAmount);
     const nextPayment = rows.find((row) => row.status !== DEFINITION_STATUS.PAID) || null;
     const isCompleted = count > 0 && paidCount >= count;

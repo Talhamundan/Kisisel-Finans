@@ -1,4 +1,4 @@
-import { formatCurrencyPlain, toDateSafe } from './helpers';
+import { formatCurrencyPlain, toDateSafe } from './helpers.js';
 
 export const FINANCING_TYPES = [
     { value: 'personal_loan', label: 'İhtiyaç Kredisi' },
