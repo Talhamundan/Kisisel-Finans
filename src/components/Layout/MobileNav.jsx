@@ -6,7 +6,7 @@ const items = [
     { id: 'maasAnalizi', label: 'Maaş', icon: Banknote },
     { id: 'yatirimlar', label: 'Yatırım', icon: Briefcase },
     { id: 'tanimlamalar', label: 'Tanım', icon: ClipboardList },
-    { id: 'hedefler', label: 'Envanter', icon: Target },
+    { id: 'hedefler', label: 'Varlık', icon: Target },
     { id: 'takvim', label: 'Takvim', icon: CalendarDays },
     { id: 'ayarlar', label: 'Ayarlar', icon: Settings },
 ];

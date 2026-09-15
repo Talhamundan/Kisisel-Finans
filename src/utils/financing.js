@@ -21,6 +21,37 @@ const parseAmount = (value) => parseFloat(value) || 0;
 
 const amountToCents = (value) => Math.round(parseAmount(value) * 100);
 const centsToAmount = (value) => Math.round(value) / 100;
+const idOf = (value) => String(value || '').trim();
+const normalizeText = (value) => String(value || '')
+    .normalize('NFKC')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLocaleLowerCase('tr-TR');
+const isExpenseTransaction = (transaction) => transaction?.islemTipi === 'gider' || transaction?.islemTipi === 'yatirim_alis';
+
+const isSameCalendarMonth = (left, right) => {
+    const leftDate = toDateSafe(left);
+    const rightDate = toDateSafe(right);
+    if (!leftDate || !rightDate) return false;
+    return leftDate.getFullYear() === rightDate.getFullYear() && leftDate.getMonth() === rightDate.getMonth();
+};
+
+const hasCompatibleAmount = (transaction, row) => (
+    Math.abs(parseAmount(transaction?.tutar) - parseAmount(row?.plannedAmount)) <= 1
+);
+
+const hasCompatibleTitle = (transaction, financing) => {
+    const financingTitle = normalizeText(financing?.ad);
+    if (!financingTitle) return false;
+    const transactionTitle = normalizeText([
+        transaction?.installmentPlanTitle,
+        transaction?.baslik,
+        transaction?.title,
+        transaction?.aciklama,
+        transaction?.kategori,
+    ].filter(Boolean).join(' '));
+    return transactionTitle.includes(financingTitle) || financingTitle.includes(transactionTitle);
+};
 
 export const getFinancingTypeLabel = (value) => (
     FINANCING_TYPES.find((type) => type.value === value)?.label || value || 'Diğer'
@@ -129,14 +160,41 @@ export const findPaymentTransactionForRow = (row, financing, transactions = []) 
         return (transactions || []).find((transaction) => transaction.id === row.linkedTransactionId) || null;
     }
 
-    if (!financing?.installmentId) return null;
-    return (transactions || []).find((transaction) => {
-        const samePlan = transaction.taksitId === financing.installmentId ||
-            transaction.installmentId === financing.installmentId ||
-            transaction.planId === financing.installmentId;
+    const linkedPlanIds = [
+        financing?.installmentId,
+        financing?.id,
+    ].map(idOf).filter(Boolean);
+
+    const directMatch = (transactions || []).find((transaction) => {
+        const transactionPlanIds = [
+            transaction?.taksitId,
+            transaction?.installmentId,
+            transaction?.installmentPlanId,
+            transaction?.planId,
+            transaction?.sourceId,
+            transaction?.generatedFrom,
+            transaction?.financingId,
+            transaction?.financeFinancingId,
+        ].map(idOf).filter(Boolean);
+        const samePlan = linkedPlanIds.some((id) => transactionPlanIds.includes(id));
         if (!samePlan) return false;
         const transactionNumber = parseInt(transaction.installmentNumber || transaction.taksitNo || transaction.taksitSirasi);
         return transactionNumber === row.installmentNumber;
+    });
+    if (directMatch) return directMatch;
+
+    return (transactions || []).find((transaction) => {
+        if (!isExpenseTransaction(transaction)) return false;
+        const transactionNumber = parseInt(transaction.installmentNumber || transaction.taksitNo || transaction.taksitSirasi);
+        if (transactionNumber !== row.installmentNumber) return false;
+        const transactionCount = parseInt(transaction.installmentCount || transaction.taksitSayisi);
+        const financingCount = parseInt(financing?.installmentCount || financing?.paymentPlan?.length);
+        if (transactionCount && financingCount && transactionCount !== financingCount) return false;
+        if (!hasCompatibleAmount(transaction, row)) return false;
+        if (!hasCompatibleTitle(transaction, financing)) return false;
+        const rowDate = toDateSafe(row.dueDate);
+        const transactionDate = toDateSafe(transaction.tarih);
+        return !rowDate || !transactionDate || isSameCalendarMonth(rowDate, transactionDate);
     }) || null;
 };
 

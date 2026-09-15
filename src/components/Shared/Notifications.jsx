@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { Hourglass } from 'lucide-react';
 import { formatCurrencyPlain } from '../../utils/helpers';
 
 const CREDIT_CARD_LIMIT_ACK_KEY = 'kisisel_finans_kk_limit_ack_v1';
@@ -23,22 +24,87 @@ const persistAcknowledgedCreditCardLimitAlert = (key) => {
     }
 };
 
-const notificationAccent = (renk) => {
-    if (renk === 'green') return '#48bb78';
-    if (renk === 'orange') return '#ed8936';
-    return '#fc8181';
+const NOTIFICATION_TONES = {
+    kk_hatirlatma: {
+        accent: '#d97706',
+        amount: '#c75b00',
+        button: '#d97706',
+        background: '#fff4e6',
+    },
+    kk_limit: {
+        accent: '#d97706',
+        amount: '#c75b00',
+        button: '#d97706',
+        background: '#fff4e6',
+    },
+    abonelik: {
+        accent: '#2563eb',
+        amount: '#1d4ed8',
+        button: '#2563eb',
+        background: '#eff6ff',
+    },
+    taksit: {
+        accent: '#7c3aed',
+        amount: '#6d28d9',
+        button: '#7c3aed',
+        background: '#f5f3ff',
+    },
+    fatura: {
+        accent: '#e11d48',
+        amount: '#be123c',
+        button: '#e11d48',
+        background: '#fff1f2',
+    },
+    borc_hatirlatma: {
+        accent: '#e11d48',
+        amount: '#be123c',
+        button: '#e11d48',
+        background: '#fff1f2',
+    },
+    bes_odeme: {
+        accent: '#0f766e',
+        amount: '#0f766e',
+        button: '#0f766e',
+        background: '#f0fdfa',
+    },
+    maas: {
+        accent: '#047857',
+        amount: '#047857',
+        button: '#047857',
+        background: '#ecfdf5',
+    },
+    alacak: {
+        accent: '#059669',
+        amount: '#047857',
+        button: '#059669',
+        background: '#ecfdf5',
+    },
 };
 
-const notificationAmountColor = (renk) => {
-    if (renk === 'green') return '#48bb78';
-    if (renk === 'orange') return '#ed8936';
-    return '#e53e3e';
+const URGENCY_TONES = {
+    red: {
+        accent: 'var(--destructive)',
+        amount: 'var(--destructive)',
+        button: 'var(--destructive)',
+        background: 'var(--danger-soft)',
+    },
+    orange: {
+        accent: 'var(--warning)',
+        amount: 'var(--warning)',
+        button: 'var(--warning)',
+        background: 'var(--warning-soft)',
+    },
+    green: {
+        accent: 'var(--success)',
+        amount: 'var(--success)',
+        button: 'var(--success)',
+        background: 'var(--success-soft)',
+    },
 };
 
-const notificationButtonColor = (renk) => {
-    if (renk === 'green') return '#48bb78';
-    if (renk === 'orange') return '#ed8936';
-    return '#c53030';
+const notificationTone = (notification) => {
+    if (notification?.renk === 'red') return URGENCY_TONES.red;
+    return NOTIFICATION_TONES[notification?.tip] || URGENCY_TONES[notification?.renk] || URGENCY_TONES.orange;
 };
 
 const buttonLabel = (tip) => {
@@ -88,59 +154,36 @@ const Notifications = ({
     if (visibleNotifications.length === 0) return null;
 
     return (
-        <div style={{ marginBottom: '8px', background: '#fff5f5', border: '1px solid #feb2b2', borderRadius: '10px', padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <h4 style={{ margin: 0, color: '#c53030', display: 'flex', alignItems: 'center', gap: '5px' }}>⏳ Bekleyen İşlemler</h4>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '10px' }}>
+        <section className="qw-notifications-panel">
+            <div className="qw-notifications-header">
+                <h2><Hourglass size={16} strokeWidth={2.35} aria-hidden="true" /> Bekleyen İşlemler</h2>
+            </div>
+            <div className="qw-notifications-grid">
                 {visibleNotifications.map((b, i) => {
-                    const accentColor = notificationAccent(b.renk);
-                    const amountColor = notificationAmountColor(b.renk);
-                    const buttonColor = notificationButtonColor(b.renk);
+                    const tone = notificationTone(b);
 
                     return (
                         <div
                             key={i}
+                            className="qw-notification-card"
                             style={{
-                                background: '#ffffff',
-                                border: '1px solid rgba(15, 23, 42, 0.08)',
-                                borderLeft: `4px solid ${accentColor}`,
-                                borderRadius: '8px',
-                                boxShadow: '0 6px 18px rgba(15, 23, 42, 0.06)',
-                                padding: '10px',
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                gap: '10px',
-                                minHeight: '82px',
+                                '--notification-accent': tone.accent,
+                                '--notification-amount': tone.amount,
+                                '--notification-button': tone.button,
+                                '--notification-bg': tone.background,
                             }}
                         >
-                            <span style={{
-                                color: '#2d3748',
-                                fontSize: '14px',
-                                fontWeight: 600,
-                                lineHeight: 1.45,
-                                minWidth: 0,
-                            }}>
+                            <span className="qw-notification-message">
                                 {b.mesaj}
                             </span>
 
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: '0 0 auto' }}>
-                                <span style={{ color: amountColor, fontWeight: 'bold', whiteSpace: 'nowrap' }}>
+                            <div className="qw-notification-actions">
+                                <span>
                                     {formatPara(b.tutar)}
                                 </span>
                                 <button
                                     type="button"
                                     onClick={() => handleNotificationAction(b)}
-                                    style={{
-                                        background: buttonColor,
-                                        color: '#ffffff',
-                                        border: 'none',
-                                        borderRadius: '5px',
-                                        cursor: 'pointer',
-                                        fontSize: '12px',
-                                        fontWeight: 700,
-                                        padding: '5px 10px',
-                                        whiteSpace: 'nowrap',
-                                    }}
                                 >
                                     {buttonLabel(b.tip)}
                                 </button>
@@ -149,7 +192,7 @@ const Notifications = ({
                     );
                 })}
             </div>
-        </div>
+        </section>
     );
 };
 

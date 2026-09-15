@@ -4,7 +4,7 @@ import { formatCurrencyPlain } from '../../utils/helpers';
 import { DONUT_PALETTE } from './chartPalettes';
 
 const chartText = {
-    fill: '#0f172a',
+    fill: 'var(--foreground)',
     fontFamily: 'inherit',
 };
 
@@ -34,19 +34,19 @@ const DonutTooltip = ({ active, payload, formatValue }) => {
 
     return (
         <div style={{
-            background: '#ffffff',
-            border: '1px solid rgba(148, 163, 184, 0.28)',
+            background: 'var(--popover)',
+            border: '1px solid var(--border)',
             borderRadius: 12,
             padding: '10px 12px',
             minWidth: 132,
         }}>
-            <div style={{ color: '#64748b', fontSize: 12, fontWeight: 800, marginBottom: 8 }}>
+            <div style={{ color: 'var(--muted-foreground)', fontSize: 12, fontWeight: 800, marginBottom: 8 }}>
                 {data.name}
             </div>
-            <div style={{ color: '#0f172a', fontSize: 15, fontWeight: 900, lineHeight: 1.1 }}>
+            <div style={{ color: 'var(--foreground)', fontSize: 15, fontWeight: 900, lineHeight: 1.1 }}>
                 {formatValue(data.value)}
             </div>
-            <div style={{ color: '#94a3b8', fontSize: 12, fontWeight: 800, marginTop: 4 }}>
+            <div style={{ color: 'var(--muted-foreground)', fontSize: 12, fontWeight: 800, marginTop: 4 }}>
                 %{data.yuzde}
             </div>
         </div>
@@ -101,7 +101,7 @@ const PremiumDonutChart = ({
     return (
         <div style={{ width: '100%' }}>
             {title && (
-                <div style={{ color: '#334155', fontSize: 12, fontWeight: 800, marginBottom: 8, textAlign: 'center' }}>
+                <div style={{ color: 'var(--foreground)', fontSize: 12, fontWeight: 800, marginBottom: 8, textAlign: 'center' }}>
                     {title}
                 </div>
             )}
@@ -130,7 +130,7 @@ const PremiumDonutChart = ({
                                 <Cell
                                     key={`${entry.name}-${index}`}
                                     fill={entry.color}
-                                    stroke="#ffffff"
+                                    stroke="var(--card)"
                                     strokeWidth={3}
                                     opacity={
                                         activeIndex === null || activeIndex === index
@@ -156,7 +156,7 @@ const PremiumDonutChart = ({
                                 y="57%"
                                 textAnchor="middle"
                                 dominantBaseline="middle"
-                                style={{ fill: '#94a3b8', fontSize: 10.5, fontWeight: 800, letterSpacing: 0 }}
+                                style={{ fill: 'var(--muted-foreground)', fontSize: 10.5, fontWeight: 800, letterSpacing: 0 }}
                             >
                                 {centerLabel}
                             </text>

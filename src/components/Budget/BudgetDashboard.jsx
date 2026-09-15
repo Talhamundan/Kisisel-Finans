@@ -1002,12 +1002,21 @@ const BudgetDashboard = ({
         : `${filteredCount} işlem`;
     const financingContext = useMemo(() => ({ transactions: tumIslemler, installments: taksitler }), [tumIslemler, taksitler]);
     const financingSummary = useMemo(() => summarizeFinancings(finansmanlar, financingContext), [finansmanlar, financingContext]);
+    const financingSelectedPeriodDue = useMemo(() => {
+        if (selectedPeriod?.month === 'all') return financingSummary.monthlyDue;
+        return (finansmanlar || []).reduce((sum, financing) => {
+            const metrics = getFinancingMetrics(financing, financingContext);
+            if (metrics.effectiveStatus === FINANCING_STATUS.CLOSED) return sum;
+            return sum + metrics.paymentRows.reduce((rowSum, row) => {
+                if (row.isPaid || !isDateInPeriod(row.dueDate, selectedPeriod)) return rowSum;
+                return rowSum + parseAmount(row.plannedAmount);
+            }, 0);
+        }, 0);
+    }, [finansmanlar, financingContext, financingSummary.monthlyDue, selectedPeriod]);
     const financingRows = useMemo(() => (finansmanlar || [])
         .map((financing) => ({ financing, metrics: getFinancingMetrics(financing, financingContext) }))
+        .filter(({ metrics }) => metrics.effectiveStatus !== FINANCING_STATUS.CLOSED)
         .sort((a, b) => {
-            if (a.metrics.effectiveStatus !== b.metrics.effectiveStatus) {
-                return a.metrics.effectiveStatus === FINANCING_STATUS.ACTIVE ? -1 : 1;
-            }
             return (toDateSafe(b.financing.usageDate)?.getTime() || 0) - (toDateSafe(a.financing.usageDate)?.getTime() || 0);
         })
         .slice(0, 4), [finansmanlar, financingContext]);
@@ -1525,7 +1534,7 @@ const BudgetDashboard = ({
                     <SectionHeader
                         title="Sabit Giderler"
                         description={`${(abonelikler || []).length} sabit gider`}
-                        action={<QuickActionButton icon={Plus} onClick={() => modalAc('abonelik_ekle')}>Sabit gider</QuickActionButton>}
+                        action={<QuickActionButton icon={Plus} onClick={() => modalAc('abonelik_ekle')}>Sabit Gider</QuickActionButton>}
                     />
                     <div className="qw-summary-lines">
                         <SummaryLine label="Aylık toplam" value={formatPara(toplamSabitGider)} tone="info" />
@@ -1560,7 +1569,7 @@ const BudgetDashboard = ({
                     <SectionHeader
                         title="Faturalar"
                         description={`${billDisplayRows.length} fatura`}
-                        action={<QuickActionButton icon={Plus} onClick={() => modalAc('fatura_tanim_ekle')}>Fatura tanımı</QuickActionButton>}
+                        action={<QuickActionButton icon={Plus} onClick={() => modalAc('fatura_tanim_ekle')}>Fatura Tanımı</QuickActionButton>}
                     />
                     <div className="qw-summary-lines">
                         <SummaryLine label="Bekleyen toplam tutar" value={formatPara(billTotal)} tone="danger" />
@@ -1641,7 +1650,7 @@ const BudgetDashboard = ({
                     <SectionHeader
                         title="Borçlar"
                         description={`${(borclar || []).length} borç kaydı`}
-                        action={<QuickActionButton icon={Plus} onClick={() => modalAc('borc_tanimla')}>Borç ekle</QuickActionButton>}
+                        action={<QuickActionButton icon={Plus} onClick={() => modalAc('borc_tanimla')}>Borç Ekle</QuickActionButton>}
                     />
                     <div className="qw-summary-lines qw-debt-summary">
                         <SummaryLine label="Kalan Borç" value={formatPara(debtTotal)} tone="danger" />
@@ -1682,7 +1691,7 @@ const BudgetDashboard = ({
                     />
                     <div className="qw-summary-lines qw-debt-summary">
                         <SummaryLine label="Kalan Borç" value={formatFinancingMoney(financingSummary.activeDebt, gizliMod)} tone="danger" />
-                        <SummaryLine label="Bu Ay Ödenecek" value={formatFinancingMoney(financingSummary.monthlyDue, gizliMod)} />
+                        <SummaryLine label="Bu Ay Ödenecek" value={formatFinancingMoney(financingSelectedPeriodDue, gizliMod)} />
                     </div>
                     <div className="qw-module-list qw-module-list--debt">
                         {financingRows.map(({ financing, metrics }) => {

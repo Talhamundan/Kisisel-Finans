@@ -1,6 +1,8 @@
 import React from 'react';
-import { Search, Inbox } from 'lucide-react';
+import { Search, Inbox, Filter } from 'lucide-react';
 import { titleCaseTr } from '../../utils/helpers';
+import { Badge } from '../ui/badge';
+import { Card } from '../ui/card';
 
 export const PremiumCard = ({
     children,
@@ -9,13 +11,14 @@ export const PremiumCard = ({
     hover = true,
     as: component = 'section',
     ...props
-}) => React.createElement(
-    component,
-    {
-        className: `qw-card ${hover ? 'qw-card--hover' : ''} ${tone ? `qw-card--${tone}` : ''} ${className}`.trim(),
-        ...props,
-    },
-    children
+}) => (
+    <Card
+        as={component}
+        className={`qw-card ${hover ? 'qw-card--hover' : ''} ${tone ? `qw-card--${tone}` : ''} ${className}`.trim()}
+        {...props}
+    >
+        {children}
+    </Card>
 );
 
 export const SectionHeader = ({ eyebrow, title, description, action }) => (
@@ -36,9 +39,9 @@ export const IconTile = ({ icon: Icon, tone = 'neutral', className = '' }) => (
 );
 
 export const StatusBadge = ({ children, tone = 'neutral', className = '' }) => (
-    <span className={`qw-badge qw-badge--${tone} ${className}`.trim()}>
+    <Badge className={`qw-badge qw-badge--${tone} ${className}`.trim()}>
         {children}
-    </span>
+    </Badge>
 );
 
 export const MetricChangeBadge = ({ children, tone = 'neutral' }) => (
@@ -86,6 +89,15 @@ export const EmptyState = ({ title = 'Veri bulunamadı', description, icon: Icon
         <strong>{titleCaseTr(title)}</strong>
         {description && <span>{titleCaseTr(description)}</span>}
     </div>
+);
+
+const ToolbarFilterSelect = ({ className = '', children, ...props }) => (
+    <span className="qw-toolbar-filter-wrap">
+        <select className={`qw-toolbar-filter-select ${className}`.trim()} {...props}>
+            {children}
+        </select>
+        <Filter size={14} strokeWidth={2.35} aria-hidden="true" />
+    </span>
 );
 
 export const TransactionRow = ({
@@ -183,31 +195,31 @@ export const DashboardToolbar = ({
             />
         </label>
         {tags.length > 0 && (
-            <select className="qw-toolbar-filter-select qw-toolbar-filter-select--tag" value={tagValue} onChange={(event) => onTagChange(event.target.value)}>
+            <ToolbarFilterSelect className="qw-toolbar-filter-select--tag" value={tagValue} onChange={(event) => onTagChange(event.target.value)}>
                 <option value="Tümü">Tüm etiketler</option>
                 {tags.map((tag) => (
                     <option key={tag.id} value={tag.id}>#{tag.name}</option>
                 ))}
-            </select>
+            </ToolbarFilterSelect>
         )}
-        <select className="qw-toolbar-filter-select qw-toolbar-filter-select--account" value={accountValue} onChange={(event) => onAccountChange(event.target.value)}>
+        <ToolbarFilterSelect className="qw-toolbar-filter-select--account" value={accountValue} onChange={(event) => onAccountChange(event.target.value)}>
             <option value="Tümü">Tüm hesaplar</option>
             {accounts.map((account) => (
                 <option key={account.id} value={account.id}>{account.hesapAdi || 'İsimsiz hesap'}</option>
             ))}
-        </select>
-        <select className="qw-toolbar-filter-select qw-toolbar-filter-select--category" value={categoryValue} onChange={(event) => onCategoryChange(event.target.value)}>
+        </ToolbarFilterSelect>
+        <ToolbarFilterSelect className="qw-toolbar-filter-select--category" value={categoryValue} onChange={(event) => onCategoryChange(event.target.value)}>
             <option value="Tümü">Tüm kategoriler</option>
             {categories.map((category) => (
                 <option key={category} value={category}>{category}</option>
             ))}
-        </select>
+        </ToolbarFilterSelect>
         {typeOptions.length > 0 && (
-            <select className="qw-toolbar-filter-select qw-toolbar-filter-select--type" value={typeValue} onChange={(event) => onTypeChange(event.target.value)}>
+            <ToolbarFilterSelect className="qw-toolbar-filter-select--type" value={typeValue} onChange={(event) => onTypeChange(event.target.value)}>
                 {typeOptions.map((option) => (
                     <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
-            </select>
+            </ToolbarFilterSelect>
         )}
         {actions && <div className="qw-toolbar-actions">{actions}</div>}
     </div>
