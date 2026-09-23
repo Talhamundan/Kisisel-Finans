@@ -235,6 +235,7 @@ const ModalManager = ({
     aktifModal, setAktifModal,
     seciliVeri,
     hesaplar,
+    cariler = [],
     tumIslemler,
     hesapAdi, setHesapAdi,
     hesapTipi, setHesapTipi,
@@ -336,12 +337,14 @@ const ModalManager = ({
     onConfirmLogout,
 
     // ADDED: New props for add actions (Already passed, but ensuring they are destructured if not)
-    maasEkle, hesapEkle, faturaTanimEkle, abonelikEkle, gecmisIslemEkle,
+    maasEkle, hesapEkle, faturaTanimEkle, abonelikEkle, taksitEkle, gecmisIslemEkle,
     // Fix: islemSil destructured here to fix undefined error
     islemSil,
 
     // Borç Props
+    borcTipi, setBorcTipi,
     borcAd, setBorcAd,
+    borcAciklama, setBorcAciklama,
     borcTutar, setBorcTutar,
     borcKalanTutar, setBorcKalanTutar,
     borcTarih, setBorcTarih,
@@ -381,13 +384,14 @@ const ModalManager = ({
 
     useEffect(() => {
         if (aktifModal === 'borc_ode') {
-            setBorcOdemeTutarState("");
+            const remaining = seciliVeri?.kalanTutar ?? seciliVeri?.tutar ?? seciliVeri?.toplamTutar ?? "";
+            setBorcOdemeTutarState(remaining ? String(remaining) : "");
             setBorcSecilenHesapIdState(defaultPaymentAccountId || "");
         } else {
             setBorcOdemeTutarState("");
             setBorcSecilenHesapIdState("");
         }
-    }, [aktifModal, defaultPaymentAccountId]);
+    }, [aktifModal, defaultPaymentAccountId, seciliVeri]);
 
     useEffect(() => {
         if (aktifModal !== 'duzenle_islem') return;
@@ -943,13 +947,21 @@ const ModalManager = ({
     }
 
     else if (aktifModal === 'borc_tanimla') {
-        title = "Borç Tanımla";
+        title = "Alacak / Verecek Tanımla";
         icon = "💸";
         content = (
             <form onSubmit={(e) => borcEkle(e).then(res => res && close())}>
-                <input placeholder="Borç Adı (Örn: Babam, Trafik Cezası)" value={borcAd || ''} onChange={e => setBorcAd(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} required />
-                <input type="number" placeholder="Toplam Borç Tutarı (₺)" value={borcTutar || ''} onChange={e => setBorcTutar(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} required />
-                <input type="number" placeholder="Kalan Borç (Boşsa tamamı olur)" value={borcKalanTutar || ''} onChange={e => setBorcKalanTutar(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} />
+                <select value={borcTipi || 'VERECEK'} onChange={e => setBorcTipi(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }}>
+                    <option value="VERECEK">Verecek - Ödeyeceğim para</option>
+                    <option value="ALACAK">Alacak - Tahsil edeceğim para</option>
+                </select>
+                <input list="cari-listesi" placeholder="Cari (Kişi / kurum)" value={borcAd || ''} onChange={e => setBorcAd(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} required />
+                <datalist id="cari-listesi">
+                    {(cariler || []).map((cari) => <option key={cari.id} value={cari.ad || cari.name} />)}
+                </datalist>
+                <input placeholder="Açıklama (Örn: Sandisk SSD)" value={borcAciklama || ''} onChange={e => setBorcAciklama(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} />
+                <input type="number" placeholder="Tutar (₺)" value={borcTutar || ''} onChange={e => setBorcTutar(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} required />
+                <input type="number" placeholder="Kalan tutar (Boşsa tamamı olur)" value={borcKalanTutar || ''} onChange={e => setBorcKalanTutar(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} />
                 <div style={{ marginBottom: '15px' }}>
                     <label style={{ display: 'block', fontSize: '13px', color: '#666', marginBottom: '5px' }}>Kategori Seçin</label>
                     <select value={borcKategori || ''} onChange={e => setBorcKategori(e.target.value)} style={inputStyle}>
@@ -957,7 +969,7 @@ const ModalManager = ({
                     </select>
                 </div>
                 <div style={{ marginBottom: '20px' }}>
-                    <label style={{ display: 'block', fontSize: '13px', color: '#666', marginBottom: '5px' }}>Son Ödeme Tarihi (Opsiyonel)</label>
+                    <label style={{ display: 'block', fontSize: '13px', color: '#666', marginBottom: '5px' }}>Vade tarihi (Opsiyonel)</label>
                     <input type="date" value={borcTarih || ''} onChange={e => setBorcTarih(e.target.value)} style={inputStyle} />
                 </div>
                 <button type="submit" style={{ width: '100%', background: '#e53e3e', color: 'white', padding: '14px', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer' }}>KAYDET</button>
@@ -966,13 +978,18 @@ const ModalManager = ({
     }
 
     else if (aktifModal === 'duzenle_borc') {
-        title = "Borcu Düzenle";
+        title = "Kaydı Düzenle";
         icon = "✏️";
         content = (
             <form onSubmit={(e) => borcDuzenle(e, seciliVeri.id).then(res => res && close())}>
-                <input placeholder="Borç Adı" value={borcAd || ''} onChange={e => setBorcAd(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} required />
-                <input type="number" placeholder="Toplam Borç Tutarı (₺)" value={borcTutar || ''} onChange={e => setBorcTutar(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} required />
-                <input type="number" placeholder="Kalan Borç" value={borcKalanTutar || ''} onChange={e => setBorcKalanTutar(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} required />
+                <select value={borcTipi || 'VERECEK'} onChange={e => setBorcTipi(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }}>
+                    <option value="VERECEK">Verecek</option>
+                    <option value="ALACAK">Alacak</option>
+                </select>
+                <input list="cari-listesi" placeholder="Cari (Kişi / kurum)" value={borcAd || ''} onChange={e => setBorcAd(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} required />
+                <input placeholder="Açıklama" value={borcAciklama || ''} onChange={e => setBorcAciklama(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} />
+                <input type="number" placeholder="Toplam tutar (₺)" value={borcTutar || ''} onChange={e => setBorcTutar(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} required />
+                <input type="number" placeholder="Kalan tutar" value={borcKalanTutar || ''} onChange={e => setBorcKalanTutar(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} required />
                 <div style={{ marginBottom: '15px' }}>
                     <label style={{ display: 'block', fontSize: '13px', color: '#666', marginBottom: '5px' }}>Kategori Seçin</label>
                     <select value={borcKategori || ''} onChange={e => setBorcKategori(e.target.value)} style={inputStyle}>
@@ -980,7 +997,7 @@ const ModalManager = ({
                     </select>
                 </div>
                 <div style={{ marginBottom: '20px' }}>
-                    <label style={{ display: 'block', fontSize: '13px', color: '#666', marginBottom: '5px' }}>Son Ödeme Tarihi (Opsiyonel)</label>
+                    <label style={{ display: 'block', fontSize: '13px', color: '#666', marginBottom: '5px' }}>Vade tarihi (Opsiyonel)</label>
                     <input type="date" value={borcTarih || ''} onChange={e => setBorcTarih(e.target.value)} style={inputStyle} />
                 </div>
                 <button type="submit" style={{ width: '100%', background: '#3182ce', color: 'white', padding: '14px', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer' }}>GÜNCELLE</button>
@@ -989,7 +1006,10 @@ const ModalManager = ({
     }
 
     else if (aktifModal === 'borc_ode') {
-        title = "Borç Öde";
+        const debtType = seciliVeri?.type === 'ALACAK' ? 'ALACAK' : 'VERECEK';
+        const isReceivable = debtType === 'ALACAK';
+        const remainingAmount = seciliVeri?.kalanTutar ?? seciliVeri?.tutar ?? seciliVeri?.toplamTutar;
+        title = isReceivable ? "Tahsil Et" : "Ödeme Yap";
         icon = "💳";
 
         content = (
@@ -1003,8 +1023,8 @@ const ModalManager = ({
 
                 if (res.borcKapandi) {
                     const karar = await Swal.fire({
-                        title: 'Borç Kapandı! 🎉',
-                        text: `${res.borcAd} borcu tamamlandı. Listeden kaldırılsın mı?`,
+                        title: isReceivable ? 'Alacak Tahsil Edildi!' : 'Verecek Ödendi!',
+                        text: `${res.borcAd} kaydı tamamlandı. Listeden kaldırılsın mı?`,
                         icon: 'success',
                         showCancelButton: true,
                         confirmButtonText: 'Kaldır',
@@ -1019,14 +1039,14 @@ const ModalManager = ({
             }}>
                 <div style={{ marginBottom: '20px', padding: '15px', background: '#fdf2f8', borderRadius: '12px', color: '#831843' }}>
                     <p style={{ margin: 0, fontWeight: 'bold', fontSize: '16px' }}>{seciliVeri?.ad}</p>
-                    <p style={{ margin: '8px 0 0 0', fontSize: '13px' }}>Kalan Borç: <b>{formatPara(seciliVeri?.kalanTutar)}</b></p>
+                    <p style={{ margin: '8px 0 0 0', fontSize: '13px' }}>{isReceivable ? 'Tahsil edilecek' : 'Ödenecek'} tutar: <b>{formatPara(remainingAmount)}</b></p>
                 </div>
-                <input type="number" autoFocus placeholder="Kaç TL ödeyeceksin?" value={borcOdemeTutarState} onChange={e => setBorcOdemeTutarState(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} required />
+                <input type="number" autoFocus placeholder={isReceivable ? "Kaç TL tahsil edildi?" : "Kaç TL ödenecek?"} value={borcOdemeTutarState} onChange={e => setBorcOdemeTutarState(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} required />
                 <select value={borcSecilenHesapIdState} onChange={e => setBorcSecilenHesapIdState(e.target.value)} style={{ ...inputStyle, marginBottom: '20px' }} required>
-                    <option value="">Ödeme Aracı (Hangi Hesaptan?)</option>
+                    <option value="">{isReceivable ? "Para hangi hesaba geldi?" : "Hangi hesaptan ödenecek?"}</option>
                     {(hesaplar || []).map(h => <option key={h.id} value={h.id}>{h.hesapAdi} ({formatPara(h.guncelBakiye)})</option>)}
                 </select>
-                <button type="submit" style={{ width: '100%', background: '#805ad5', color: 'white', padding: '14px', borderRadius: '12px', border: 'none', fontWeight: 'bold', fontSize: '16px', cursor: 'pointer' }}>ÖDEMEYİ YAP</button>
+                <button type="submit" style={{ width: '100%', background: isReceivable ? '#16a34a' : '#805ad5', color: 'white', padding: '14px', borderRadius: '12px', border: 'none', fontWeight: 'bold', fontSize: '16px', cursor: 'pointer' }}>{isReceivable ? 'TAHSİL ET' : 'ÖDEME YAP'}</button>
             </form>
         );
     }
@@ -1250,6 +1270,28 @@ const ModalManager = ({
         );
     }
 
+    else if (aktifModal === 'taksit_ekle') {
+        title = "Yeni Taksit Ekle";
+        content = (
+            <form onSubmit={async (e) => {
+                e.preventDefault();
+                setIsProcessing(true);
+                const success = await taksitEkle(e);
+                setIsProcessing(false);
+                if (success) close();
+            }}>
+                <input value={taksitBaslik} onChange={e => setTaksitBaslik(e.target.value)} placeholder="Ne aldın?" style={{ ...inputStyle, marginBottom: '15px' }} />
+                <input type="number" value={taksitToplamTutar} onChange={e => setTaksitToplamTutar(e.target.value)} placeholder="Toplam Borç" style={{ ...inputStyle, marginBottom: '15px' }} />
+                <input type="number" value={taksitSayisi} onChange={e => setTaksitSayisi(e.target.value)} placeholder="Taksit Sayısı" style={{ ...inputStyle, marginBottom: '15px' }} />
+                <input type="date" value={taksitAlisTarihi || ""} onChange={e => setTaksitAlisTarihi(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} />
+                <select value={taksitKategori} onChange={e => setTaksitKategori(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }}>{siraliKategoriListesi.map(k => <option key={k} value={k}>{k}</option>)}</select>
+                <select value={taksitHesapId} onChange={e => setTaksitHesapId(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }}><option value="">Hangi Karttan?</option>{hesaplar.map(h => <option key={h.id} value={h.id}>{h.hesapAdi}</option>)}</select>
+                <div style={{ marginBottom: '20px', fontSize: '14px', color: '#6366f1', fontWeight: 'bold' }}>Aylık: {taksitToplamTutar && taksitSayisi ? formatPara(taksitToplamTutar / taksitSayisi) : formatPara(0)}</div>
+                <button type="submit" disabled={isProcessing} style={{ width: '100%', background: '#6366f1', color: 'white', padding: '14px', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold', opacity: isProcessing ? 0.7 : 1 }}>{isProcessing ? 'KAYDEDİLİYOR...' : 'Kaydet'}</button>
+            </form>
+        );
+    }
+
     else if (aktifModal === 'duzenle_taksit') {
         title = "Taksit Düzenle";
         content = (
@@ -1456,7 +1498,7 @@ const ModalManager = ({
     }
 
     else if (aktifModal === 'tahsilat_ekle') {
-        title = "Tahsilat Ekle (Ödeme Al)";
+        title = "Tahsilat Ekle (Tahsil Et)";
         icon = "💸";
         content = (
             <form onSubmit={async (e) => {

@@ -1,5 +1,5 @@
 import { dateToKey } from './calendarUtils.js';
-import { getCreditCardPaymentPlan } from '../../utils/creditCardPayments.js';
+import { getCreditCardStatementPaymentSummary } from '../../utils/creditCardPayments.js';
 import { buildSubscriptionOccurrences } from '../../utils/recurringPayments.js';
 
 const toDateValue = (value) => {
@@ -181,12 +181,13 @@ export const buildCalendarEventsFromData = (data, anchorDate = new Date()) => {
 
             if (sameMonth(paymentDate, baseYear, baseMonth)) {
                 const periodKey = `${paymentDate.getFullYear()}-${String(paymentDate.getMonth() + 1).padStart(2, '0')}`;
-                const paymentPlan = getCreditCardPaymentPlan(account, periodKey);
+                const paymentPlan = getCreditCardStatementPaymentSummary(account, transactions, periodKey);
+                if (paymentPlan.remainingMinimumPayment <= 0.5) return;
                 events.push(buildEvent({
                     title: `${accountName} Son Ödeme`,
                     date: dateToKey(paymentDate),
                     type: 'credit_card_payment',
-                    amount: paymentPlan.plannedPayment,
+                    amount: paymentPlan.remainingMinimumPayment,
                     source: 'credit_card',
                     sourceId: account.id,
                     description: 'Planlanan kredi kartı ödemesi',
@@ -194,6 +195,10 @@ export const buildCalendarEventsFromData = (data, anchorDate = new Date()) => {
                         statementDebt: paymentPlan.statementDebt,
                         minimumPayment: paymentPlan.minimumPayment,
                         plannedPayment: paymentPlan.plannedPayment,
+                        paidAmount: paymentPlan.paidAmount,
+                        remainingMinimumPayment: paymentPlan.remainingMinimumPayment,
+                        remainingStatementDebt: paymentPlan.remainingStatementDebt,
+                        paymentStatus: paymentPlan.status,
                         carryoverDebt: paymentPlan.carryoverDebt,
                         strategy: paymentPlan.strategy,
                     },
@@ -358,17 +363,21 @@ export const buildCalendarEventsFromData = (data, anchorDate = new Date()) => {
 
     debts.forEach((debt) => {
         if (isInactive(debt)) return;
+        if (debt?.durum === 'completed' || debt?.status === 'completed') return;
         const date = toDateValue(debt.sonOdemeTarihi || debt.tarih || debt.vadeTarihi);
         if (!date || !sameMonth(date, baseYear, baseMonth)) return;
+        const debtType = debt.type === 'ALACAK' ? 'ALACAK' : 'VERECEK';
+        const isReceivable = debtType === 'ALACAK';
         events.push(buildEvent({
-            title: debt.ad || debt.baslik || 'Borç',
+            title: debt.ad || debt.baslik || (isReceivable ? 'Alacak' : 'Verecek'),
             date: dateToKey(date),
-            type: 'loan_payment',
+            type: isReceivable ? 'debt_collection' : 'loan_payment',
             amount: formatAmount(debt.kalanTutar ?? debt.tutar ?? debt.toplamTutar),
             currency: 'TRY',
             source: 'loan',
             sourceId: debt.id,
-            description: 'Borç ödeme tarihi',
+            description: isReceivable ? 'Tahsil Et' : 'Ödeme Yap',
+            meta: { debtType },
         }));
     });
 

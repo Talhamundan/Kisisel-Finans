@@ -35,6 +35,7 @@ import Feedback from './components/Feedback';
 // Helpers
 import { formatMoneyInputValue, inputStyle, toDateSafe } from './utils/helpers';
 import { buildAvailablePeriods, getDefaultPeriod, getLatestAvailablePeriod, isPeriodAvailable, readInitialPeriod } from './utils/period';
+import { selectHasInvestmentAccount } from './utils/accounts';
 
 const normalizeCategoryKey = (value) => String(value || '')
     .normalize('NFKC')
@@ -81,12 +82,15 @@ const getInitialTab = () => (
         ? 'finansmanlar'
         : typeof window !== 'undefined' && window.location.pathname.startsWith('/tanimlamalar')
             ? 'tanimlamalar'
-            : 'butcem'
+            : typeof window !== 'undefined' && window.location.pathname.startsWith('/yatirimlar')
+                ? 'yatirimlar'
+                : 'butcem'
 );
 
 const getTabFromPath = (path) => {
     if (path.startsWith('/finansmanlar')) return 'finansmanlar';
     if (path.startsWith('/tanimlamalar')) return 'tanimlamalar';
+    if (path.startsWith('/yatirimlar')) return 'yatirimlar';
     return 'butcem';
 };
 
@@ -118,11 +122,13 @@ function App() {
     // 3. HOOKS initialization
     const data = useDataListeners(user, alanKodu);
     const calculations = useCalculations(data, gizliMod, data.aylikLimit, selectedPeriod);
-    const budgetActions = useBudgetActions(user, alanKodu, data.hesaplar, data.kategoriListesi, data.tanimliFaturalar, data.etiketler, data.transactionTags);
+    const budgetActions = useBudgetActions(user, alanKodu, data.hesaplar, data.kategoriListesi, data.tanimliFaturalar, data.etiketler, data.transactionTags, data.cariler);
     const investmentActions = useInvestmentActions(user, alanKodu);
     const defaultPaymentAccount = useDefaultPaymentAccount(data.hesaplar);
     const defaultPaymentAccountId = defaultPaymentAccount?.id || "";
     const selectedFinancingId = routePath.match(/^\/finansmanlar\/([^/]+)/)?.[1] || null;
+    const hasInvestmentAccount = useMemo(() => selectHasInvestmentAccount(data.hesaplar), [data.hesaplar]);
+    const showInvestmentFeature = data.hesaplarLoaded ? hasInvestmentAccount : true;
 
     const navigateTo = (path) => {
         const url = new URL(window.location.href);
@@ -133,21 +139,40 @@ function App() {
     };
 
     const changeTab = (tab) => {
-        setAnaSekme(tab);
-        if (tab === 'finansmanlar' || tab === 'tanimlamalar') {
+        const nextTab = tab === 'yatirimlar' && data.hesaplarLoaded && !hasInvestmentAccount
+            ? 'butcem'
+            : tab;
+
+        setAnaSekme(nextTab);
+        if (nextTab === 'finansmanlar' || nextTab === 'tanimlamalar' || nextTab === 'yatirimlar') {
             const url = new URL(window.location.href);
-            url.pathname = tab === 'finansmanlar' ? '/finansmanlar' : '/tanimlamalar';
+            url.pathname = nextTab === 'finansmanlar'
+                ? '/finansmanlar'
+                : nextTab === 'tanimlamalar'
+                    ? '/tanimlamalar'
+                    : '/yatirimlar';
             window.history.pushState({}, '', `${url.pathname}${url.search}`);
             setRoutePath(url.pathname);
             return;
         }
-        if (window.location.pathname.startsWith('/finansmanlar') || window.location.pathname.startsWith('/tanimlamalar')) {
+        if (
+            window.location.pathname.startsWith('/finansmanlar')
+            || window.location.pathname.startsWith('/tanimlamalar')
+            || window.location.pathname.startsWith('/yatirimlar')
+        ) {
             const url = new URL(window.location.href);
             url.pathname = '/';
             window.history.pushState({}, '', `${url.pathname}${url.search}`);
             setRoutePath('/');
         }
     };
+
+    useEffect(() => {
+        if (!data.hesaplarLoaded) return;
+        if (anaSekme !== 'yatirimlar') return;
+        if (hasInvestmentAccount) return;
+        changeTab('butcem');
+    }, [anaSekme, data.hesaplarLoaded, hasInvestmentAccount]);
 
     useEffect(() => {
         const handlePopState = () => {
@@ -861,6 +886,7 @@ function App() {
                 aktifModal={aktifModal} setAktifModal={setAktifModal}
                 seciliVeri={seciliVeri}
                 hesaplar={data.hesaplar}
+                cariler={data.cariler}
                 tumIslemler={data.islemler}
                 // Budget Actions & State
                 hesapAdi={budgetActions.hesapAdi} setHesapAdi={budgetActions.setHesapAdi}
@@ -969,7 +995,9 @@ function App() {
                 gecmisIslemEkle={investmentActions.gecmisIslemEkle}
                 islemSil={budgetActions.islemSil}
 
+                borcTipi={budgetActions.borcTipi} setBorcTipi={budgetActions.setBorcTipi}
                 borcAd={budgetActions.borcAd} setBorcAd={budgetActions.setBorcAd}
+                borcAciklama={budgetActions.borcAciklama} setBorcAciklama={budgetActions.setBorcAciklama}
                 borcTutar={budgetActions.borcTutar} setBorcTutar={budgetActions.setBorcTutar}
                 borcKalanTutar={budgetActions.borcKalanTutar} setBorcKalanTutar={budgetActions.setBorcKalanTutar}
                 borcTarih={budgetActions.borcTarih} setBorcTarih={budgetActions.setBorcTarih}
@@ -995,11 +1023,12 @@ function App() {
                 showPeriodFilter={!['hedefler', 'takvim', 'maasAnalizi', 'ayarlar', 'finansmanlar', 'tanimlamalar'].includes(anaSekme)}
                 theme={theme}
                 onThemeToggle={() => setTheme((currentTheme) => currentTheme === 'dark' ? 'light' : 'dark')}
+                hasInvestmentAccount={showInvestmentFeature}
             />
 
             <Notifications
                 bildirimler={calculations.bildirimler.filter(b => {
-                    if (anaSekme === 'butcem') return ['fatura', 'abonelik', 'maas', 'taksit', 'kk_hatirlatma', 'kk_limit', 'borc_hatirlatma'].includes(b.tip);
+                    if (anaSekme === 'butcem') return ['fatura', 'abonelik', 'maas', 'taksit', 'kk_hatirlatma', 'kk_limit', 'borc_hatirlatma', 'alacak_hatirlatma'].includes(b.tip);
                     if (anaSekme === 'yatirimlar') return ['bes_odeme'].includes(b.tip);
                     if (anaSekme === 'hedefler') return ['alacak'].includes(b.tip);
                     return false;
@@ -1032,6 +1061,7 @@ function App() {
                     selectedPeriod={selectedPeriod}
                     sadeceCuzdanNakiti={calculations.sadeceCuzdanNakiti}
                     genelToplamYatirimGucu={calculations.genelToplamYatirimGucu}
+                    hasInvestmentAccount={hasInvestmentAccount}
                     netVarlik={calculations.netVarlik}
                     tanimliFaturalar={data.tanimliFaturalar}
                     bekleyenFaturalar={filteredPendingBills}
@@ -1113,6 +1143,7 @@ function App() {
                     faturaGirisAciklama={budgetActions.faturaGirisAciklama} setFaturaGirisAciklama={budgetActions.setFaturaGirisAciklama}
 
                     borclar={filteredDebts}
+                    cariler={data.cariler}
                     finansmanlar={data.finansmanlar}
                     navigateTo={navigateTo}
                     toplamKalanBorc={calculations.toplamKalanBorc}
@@ -1123,6 +1154,7 @@ function App() {
                     excelIndir={() => budgetActions.excelIndir(data.islemler)}
                     excelYukle={budgetActions.excelYukle}
                     islemSil={budgetActions.islemSil}
+                    hesapSil={budgetActions.hesapSil}
                     setAnaSekme={changeTab}
                 />
             )}
@@ -1148,6 +1180,8 @@ function App() {
                     routePath={routePath}
                     navigateTo={navigateTo}
                     modalAc={modalAc}
+                    cariler={data.cariler}
+                    borcOde={budgetActions.borcOde}
                 />
             )}
 
@@ -1188,6 +1222,7 @@ function App() {
                     modalAc={modalAc}
                     islemSil={budgetActions.islemSil}
                     normalSil={budgetActions.normalSil}
+                    hasInvestmentAccount={hasInvestmentAccount}
                 />
             )}
 
@@ -1256,6 +1291,7 @@ function App() {
                     user={user}
                     alanKodu={alanKodu}
                     gizliMod={gizliMod}
+                    onDebtAction={(debt) => modalAc('borc_ode', debt)}
                     sourceData={{
                         accounts: data.hesaplar,
                         transactions: data.islemler,
@@ -1264,6 +1300,7 @@ function App() {
                         bills: data.bekleyenFaturalar,
                         billDefinitions: data.tanimliFaturalar,
                         debts: data.borclar,
+                        cariler: data.cariler,
                         salaries: data.maaslar,
                         goals: data.hedefler,
                         inventory: data.envanter,
@@ -1286,6 +1323,7 @@ function App() {
                 anaSekme={anaSekme}
                 setAnaSekme={changeTab}
                 modalAc={modalAc}
+                hasInvestmentAccount={showInvestmentFeature}
             />
         </div>
     );

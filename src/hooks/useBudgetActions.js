@@ -5,6 +5,7 @@ import { toast } from 'react-toastify';
 import Swal from 'sweetalert2';
 import { formatCurrencyPlain, formatMoneyInputValue } from '../utils/helpers';
 import { canBeDefaultPaymentAccount } from '../utils/defaultPaymentAccount';
+import { getCariNameKey, normalizeCariName } from '../utils/cari';
 import { buildTransactionTagId, normalizeTagKey, normalizeTagName, uniqueTagIds } from '../utils/tags';
 import {
     CREDIT_CARD_PAYMENT_STRATEGIES,
@@ -15,7 +16,7 @@ import {
     validateCreditCardPayment,
 } from '../utils/creditCardPayments';
 
-export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tanimliFaturalar, etiketler = [], transactionTags = []) => {
+export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tanimliFaturalar, etiketler = [], transactionTags = [], cariler = []) => {
     // --- FORM STATES ---
     // Hesap
     const [hesapAdi, setHesapAdi] = useState("");
@@ -79,7 +80,9 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
     const [maasTur, setMaasTur] = useState("Maaş");
 
     // Borç
+    const [borcTipi, setBorcTipi] = useState("VERECEK");
     const [borcAd, setBorcAd] = useState("");
+    const [borcAciklama, setBorcAciklama] = useState("");
     const [borcTutar, setBorcTutar] = useState("");
     const [borcKalanTutar, setBorcKalanTutar] = useState("");
     const [borcTarih, setBorcTarih] = useState("");
@@ -364,6 +367,39 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
         }
     }
 
+    const hesapSil = async (account) => {
+        if (!account?.id) return false;
+        const result = await Swal.fire({
+            title: 'Hesap silinsin mi?',
+            text: `${account.hesapAdi || 'Bu hesap'} aktif hesap listesinden kaldırılacak. Geçmiş işlemler korunacaktır.`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            confirmButtonText: 'Evet, Sil',
+            cancelButtonText: 'Vazgeç'
+        });
+        if (!result.isConfirmed) return false;
+
+        try {
+            await updateDoc(doc(db, "hesaplar", account.id), {
+                aktif: false,
+                active: false,
+                silindi: true,
+                isDeleted: true,
+                deletedAt: new Date(),
+                varsayilanOdemeAraci: false,
+                anaMaasHesabi: false,
+                guncellemeTarihi: new Date(),
+            });
+            toast.info("Hesap silindi. Geçmiş işlemler korundu.");
+            return true;
+        } catch (error) {
+            console.error("Hesap silme hatası:", error);
+            toast.error("Hesap silinemedi.");
+            return false;
+        }
+    }
+
     const islemEkle = async (e, manualData = null) => {
         if (e) e.preventDefault();
 
@@ -530,7 +566,16 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
                         // 3. Borç Ödeme Durumu
                         if (data.borcId) {
                             const borcRef = doc(db, "borclar", data.borcId);
-                            batch.update(borcRef, { kalanTutar: increment(tutar) });
+                            batch.update(borcRef, {
+                                kalanTutar: increment(tutar),
+                                durum: "active",
+                                status: "active",
+                                tamamlanmaTarihi: deleteField(),
+                                completedAt: deleteField(),
+                                tamamlayanIslemId: deleteField(),
+                                completedTransactionId: deleteField(),
+                                sonIslemTarihi: new Date()
+                            });
                         }
 
                         // 4. İşlemi Sil
@@ -743,7 +788,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
                     krediKartiOdeme: true,
                     kkOdemeTipi: odemeTipi,
                     ...metadata,
-                    upcomingPaymentStatus: isStatementPayment ? (metadata.statementPaid ? 'paid' : 'partial') : 'independent',
+                    upcomingPaymentStatus: isStatementPayment ? metadata.statementPaymentStatus : 'independent',
                     paidAt: isStatementPayment && metadata.statementPaid ? safePaymentDate : null,
                 });
                 transaction.update(sourceRef, { guncelBakiye: appliedPayment.sourceBalance });
@@ -1016,7 +1061,8 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
     const borcEkle = async (e, close) => {
         if (e) e.preventDefault();
         try {
-            if (!borcAd || !borcTutar) {
+            const cariAdi = normalizeCariName(borcAd);
+            if (!cariAdi || !borcTutar) {
                 toast.error("Eksik bilgi");
                 return false;
             }
@@ -1026,6 +1072,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
                 return false;
             }
             const kalan = borcKalanTutar ? parseFloat(borcKalanTutar) : tutar;
+            const cari = await ensureCari(cariAdi);
             const borcQuery = query(collection(db, "borclar"), where("alanKodu", "==", alanKodu));
             const borcSnap = await getDocs(borcQuery);
             const maxOrderIndex = borcSnap.docs.reduce((max, belge) => {
@@ -1035,7 +1082,14 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
 
             const data = {
                 uid: user.uid, alanKodu,
-                ad: borcAd, toplamTutar: tutar, kalanTutar: kalan,
+                ad: cariAdi,
+                cariId: cari?.id || "",
+                cariAd: cariAdi,
+                aciklama: normalizeCariName(borcAciklama),
+                toplamTutar: tutar, kalanTutar: kalan,
+                type: borcTipi === "ALACAK" ? "ALACAK" : "VERECEK",
+                durum: "active",
+                status: "active",
                 kategori: borcKategori || "Borç Ödemesi",
                 orderIndex: maxOrderIndex + 1,
                 eklenmeTarihi: new Date()
@@ -1043,8 +1097,8 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
             if (borcTarih) data.sonOdemeTarihi = borcTarih;
 
             await addDoc(collection(db, "borclar"), data);
-            setBorcAd(""); setBorcTutar(""); setBorcKalanTutar(""); setBorcTarih(""); setBorcKategori(kategoriListesi && kategoriListesi[0] ? kategoriListesi[0] : "");
-            toast.success("Borç tanımlandı.");
+            setBorcTipi("VERECEK"); setBorcAd(""); setBorcAciklama(""); setBorcTutar(""); setBorcKalanTutar(""); setBorcTarih(""); setBorcKategori(kategoriListesi && kategoriListesi[0] ? kategoriListesi[0] : "");
+            toast.success(borcTipi === "ALACAK" ? "Alacak tanımlandı." : "Verecek tanımlandı.");
             if (close) close();
             return true;
         } catch (err) {
@@ -1057,17 +1111,23 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
     const borcDuzenle = async (e, id, close) => {
         if (e) e.preventDefault();
         try {
+            const cariAdi = normalizeCariName(borcAd);
+            const cari = await ensureCari(cariAdi);
             const data = {
-                ad: borcAd,
+                ad: cariAdi,
+                cariId: cari?.id || "",
+                cariAd: cariAdi,
+                aciklama: normalizeCariName(borcAciklama),
                 toplamTutar: parseFloat(borcTutar),
                 kalanTutar: parseFloat(borcKalanTutar),
+                type: borcTipi === "ALACAK" ? "ALACAK" : "VERECEK",
                 kategori: borcKategori || "Borç Ödemesi"
             };
             if (borcTarih) data.sonOdemeTarihi = borcTarih;
             else data.sonOdemeTarihi = deleteField(); // Remove field if left empty on edit
 
             await updateDoc(doc(db, "borclar", id), data);
-            toast.success("Borç güncellendi.");
+            toast.success("Kayıt güncellendi.");
             if (close) close();
             return true;
         } catch (err) {
@@ -1092,46 +1152,92 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
     const borcOde = async (borc, odemeTutar, secilenHesapId) => {
         try {
             const odeme = parseFloat(odemeTutar);
-            const mevcutKalan = parseFloat(borc?.kalanTutar) || 0;
+            const borcTip = borc?.type === "ALACAK" ? "ALACAK" : "VERECEK";
+            const mevcutKalan = parseFloat(borc?.kalanTutar ?? borc?.tutar ?? borc?.toplamTutar) || 0;
             if (isNaN(odeme) || odeme <= 0) {
-                toast.error("Geçerli bir ödeme tutarı girin");
+                toast.error(borcTip === "ALACAK" ? "Geçerli bir tahsilat tutarı girin" : "Geçerli bir ödeme tutarı girin");
+                return { success: false };
+            }
+            if (!secilenHesapId) {
+                toast.error("Hesap seçimi gerekli.");
+                return { success: false };
+            }
+            if (mevcutKalan <= 0 || borc?.durum === "completed" || borc?.status === "completed") {
+                toast.warning("Bu kayıt zaten tamamlanmış.");
                 return { success: false };
             }
 
-            const batch = writeBatch(db);
+            const isAlacak = borcTip === "ALACAK";
+            const islemRef = doc(collection(db, "nakit_islemleri"));
+            const now = new Date();
+            const category = isAlacak ? "Alacak Tahsilatı" : "Verecek Ödemesi";
+            let yeniKalan = mevcutKalan;
+            let tamamlandi = false;
 
-            // 1. İşlemi Kaydet (Gider)
-            batch.set(doc(collection(db, "nakit_islemleri")), {
-                uid: user.uid, alanKodu,
-                hesapId: secilenHesapId,
-                islemTipi: "gider", kategori: borc.kategori || "Borç Ödemesi",
-                borcId: borc.id, // Reversion için id bilgisini ekliyoruz
-                tutar: odeme, aciklama: `${borc.ad} - Borç Ödemesi`,
-                tarih: new Date()
+            await runTransaction(db, async (transaction) => {
+                const borcRef = doc(db, "borclar", borc.id);
+                const hesapRef = doc(db, "hesaplar", secilenHesapId);
+                const borcSnap = await transaction.get(borcRef);
+                const hesapSnap = await transaction.get(hesapRef);
+
+                if (!borcSnap.exists()) throw new Error("Kayıt bulunamadı.");
+                if (!hesapSnap.exists()) throw new Error("Hesap bulunamadı.");
+
+                const freshBorc = borcSnap.data();
+                const freshType = freshBorc?.type === "ALACAK" ? "ALACAK" : "VERECEK";
+                const freshRemaining = parseFloat(freshBorc?.kalanTutar ?? freshBorc?.tutar ?? freshBorc?.toplamTutar) || 0;
+                if (freshType !== borcTip) throw new Error("Kayıt tipi değişmiş. Lütfen tekrar deneyin.");
+                if (freshRemaining <= 0 || freshBorc?.durum === "completed" || freshBorc?.status === "completed") {
+                    throw new Error("Bu kayıt zaten tamamlanmış.");
+                }
+
+                yeniKalan = Math.max(0, freshRemaining - odeme);
+                tamamlandi = yeniKalan <= 0;
+
+                transaction.set(islemRef, {
+                    uid: user.uid,
+                    alanKodu,
+                    hesapId: secilenHesapId,
+                    islemTipi: isAlacak ? "gelir" : "gider",
+                    kategori: category,
+                    borcId: borc.id,
+                    debtId: borc.id,
+                    debtType: borcTip,
+                    excludeFromBudgetStats: true,
+                    tutar: odeme,
+                    aciklama: `${freshBorc.ad || freshBorc.baslik || borc.ad || "Kayıt"} - ${isAlacak ? "Alacak Tahsilatı" : "Verecek Ödemesi"}`,
+                    tarih: now
+                });
+
+                transaction.update(hesapRef, {
+                    guncelBakiye: increment(isAlacak ? odeme : -odeme)
+                });
+
+                transaction.update(borcRef, {
+                    kalanTutar: yeniKalan,
+                    durum: tamamlandi ? "completed" : "active",
+                    status: tamamlandi ? "completed" : "active",
+                    tamamlanmaTarihi: tamamlandi ? now : null,
+                    completedAt: tamamlandi ? now : null,
+                    tamamlananHesapId: secilenHesapId,
+                    completedAccountId: secilenHesapId,
+                    tamamlayanIslemId: islemRef.id,
+                    completedTransactionId: islemRef.id,
+                    sonIslemTarihi: now
+                });
             });
 
-            // 2. Bakiyeden Düş
-            batch.update(doc(db, "hesaplar", secilenHesapId), { guncelBakiye: increment(-odeme) });
-
-            // 3. Borcun Kalan Tutarını Düş
-            const yeniKalan = mevcutKalan - odeme;
-            if (yeniKalan <= 0) {
-                batch.update(doc(db, "borclar", borc.id), { kalanTutar: 0 });
-            } else {
-                batch.update(doc(db, "borclar", borc.id), { kalanTutar: yeniKalan });
-            }
-            await batch.commit();
-
-            toast.success("Ödeme işlendi.");
+            toast.success(isAlacak ? "Tahsilat işlendi." : "Ödeme işlendi.");
             return {
                 success: true,
                 borcKapandi: yeniKalan <= 0,
                 borcId: borc.id,
-                borcAd: borc.ad
+                borcAd: borc.ad,
+                borcTipi: borcTip
             };
         } catch (err) {
             console.error(err);
-            toast.error("Ödeme işlenemedi");
+            toast.error("İşlem kaydedilemedi");
             return { success: false };
         }
     }
@@ -1148,6 +1254,39 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
             return false;
         }
     }
+
+    const ensureCari = async (name) => {
+        const ad = normalizeCariName(name);
+        const nameKey = getCariNameKey(ad);
+        if (!ad || !nameKey) return null;
+
+        const local = (cariler || []).find((cari) => (
+            cari.id === name ||
+            cari.nameKey === nameKey ||
+            getCariNameKey(cari.ad || cari.name) === nameKey
+        ));
+        if (local) return local;
+
+        const cariQuery = query(collection(db, "cariler"), where("alanKodu", "==", alanKodu), where("nameKey", "==", nameKey));
+        const snap = await getDocs(cariQuery);
+        if (!snap.empty) {
+            const first = snap.docs[0];
+            return { id: first.id, ...first.data() };
+        }
+
+        const cariRef = doc(collection(db, "cariler"));
+        const now = new Date();
+        await setDoc(cariRef, {
+            uid: user.uid,
+            alanKodu,
+            ad,
+            name: ad,
+            nameKey,
+            createdAt: now,
+            updatedAt: now,
+        });
+        return { id: cariRef.id, uid: user.uid, alanKodu, ad, name: ad, nameKey };
+    };
 
     // --- CARİ / ŞİRKET ALACAKLARI ---
     const cariHarcamaEkle = async (e, close) => {
@@ -1748,8 +1887,8 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
     const fillSubscriptionForm = (v) => { setAboAd(v.ad); setAboTutar(formatMoneyInputValue(v.tutar)); setAboGun(v.gun); setAboHesapId(v.hesapId); setAboKategori(v.kategori); }
     const fillInstallmentForm = (v) => { setTaksitBaslik(v.baslik); setTaksitToplamTutar(formatMoneyInputValue(v.toplamTutar)); setTaksitSayisi(v.taksitSayisi); setTaksitHesapId(v.hesapId); setTaksitKategori(v.kategori); if (v.alisTarihi) { const d = new Date(v.alisTarihi.seconds * 1000); setTaksitAlisTarihi(d.toISOString().split('T')[0]); } }
     const fillSalaryForm = (v) => { setMaasAd(v.ad); setMaasTutar(formatMoneyInputValue(v.tutar)); setMaasGun(v.gun); setMaasHesapId(v.beklenenHesapId || v.hesapId); setMaasTur(v.tur || v.gelirTuru || "Maaş"); }
-    const fillBorcForm = (v) => { setBorcAd(v.ad); setBorcTutar(formatMoneyInputValue(v.toplamTutar)); setBorcKalanTutar(formatMoneyInputValue(v.kalanTutar)); setBorcTarih(v.sonOdemeTarihi || ""); setBorcKategori(v.kategori || (kategoriListesi && kategoriListesi[0] ? kategoriListesi[0] : "")); }
-    const resetBorcForm = () => { setBorcAd(""); setBorcTutar(""); setBorcKalanTutar(""); setBorcTarih(""); setBorcKategori(kategoriListesi && kategoriListesi[0] ? kategoriListesi[0] : ""); }
+    const fillBorcForm = (v) => { setBorcTipi(v.type === "ALACAK" ? "ALACAK" : "VERECEK"); setBorcAd(v.cariAd || v.ad || ""); setBorcAciklama(v.aciklama || v.description || v.not || ""); setBorcTutar(formatMoneyInputValue(v.toplamTutar)); setBorcKalanTutar(formatMoneyInputValue(v.kalanTutar ?? v.tutar ?? v.toplamTutar)); setBorcTarih(v.sonOdemeTarihi || ""); setBorcKategori(v.kategori || (kategoriListesi && kategoriListesi[0] ? kategoriListesi[0] : "")); }
+    const resetBorcForm = () => { setBorcTipi("VERECEK"); setBorcAd(""); setBorcAciklama(""); setBorcTutar(""); setBorcKalanTutar(""); setBorcTarih(""); setBorcKategori(kategoriListesi && kategoriListesi[0] ? kategoriListesi[0] : ""); }
     const fillBillForm = (v) => { setFaturaGirisTutar(formatMoneyInputValue(v.tutar)); setFaturaGirisTarih(v.sonOdemeTarihi); setFaturaGirisAciklama(v.aciklama || ""); }
     const fillBillDefForm = (v) => { setTanimBaslik(v.baslik); setTanimKurum(v.kurum); setTanimAboneNo(v.aboneNo); setTanimHesapId(v.hesapId || ""); }
     const fillCCForm = (v) => {
@@ -1777,7 +1916,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
         aboAd, setAboAd, aboTutar, setAboTutar, aboGun, setAboGun, aboHesapId, setAboHesapId, aboKategori, setAboKategori,
         taksitBaslik, setTaksitBaslik, taksitToplamTutar, setTaksitToplamTutar, taksitSayisi, setTaksitSayisi, taksitHesapId, setTaksitHesapId, taksitKategori, setTaksitKategori, taksitAlisTarihi, setTaksitAlisTarihi,
         maasAd, setMaasAd, maasTutar, setMaasTutar, maasGun, setMaasGun, maasHesapId, setMaasHesapId, maasTur, setMaasTur,
-        borcAd, setBorcAd, borcTutar, setBorcTutar, borcKalanTutar, setBorcKalanTutar, borcTarih, setBorcTarih, borcKategori, setBorcKategori,
+        borcTipi, setBorcTipi, borcAd, setBorcAd, borcAciklama, setBorcAciklama, borcTutar, setBorcTutar, borcKalanTutar, setBorcKalanTutar, borcTarih, setBorcTarih, borcKategori, setBorcKategori,
         cariBaslik, setCariBaslik, cariTutar, setCariTutar, cariHesapId, setCariHesapId, cariKategori, setCariKategori, cariTarih, setCariTarih, cariNot, setCariNot,
         cariIadeTutar, setCariIadeTutar, cariIadeHesapId, setCariIadeHesapId,
         tanimBaslik, setTanimBaslik, tanimKurum, setTanimKurum, tanimAboneNo, setTanimAboneNo, tanimHesapId, setTanimHesapId, secilenTanimId, setSecilenTanimId, faturaGirisTutar, setFaturaGirisTutar, faturaGirisTarih, setFaturaGirisTarih, faturaGirisAciklama, setFaturaGirisAciklama,
@@ -1785,7 +1924,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
         tasimaIslemiSuruyor, setTasimaIslemiSuruyor, yeniKodInput, setYeniKodInput,
 
         // Actions
-        hesapEkle, hesapDuzenle,
+        hesapEkle, hesapDuzenle, hesapSil,
         ensureTag, renameTag, deleteTag,
         islemEkle, islemSil: islemSilAction, islemDuzenle, normalSil,
         transferYap, krediKartiBorcOde, krediKartiBorcOdemeKaydet,

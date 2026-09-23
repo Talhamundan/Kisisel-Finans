@@ -361,7 +361,7 @@ const GoalsInventory = ({
                                             <div><span style={{ color: '#a0aec0', marginRight: '5px' }}>Kalan:</span><b style={{ color: isTamam ? '#48bb78' : '#e53e3e' }}>{formatPara(kalan)}</b></div>
                                         </div>
                                         {!isTamam && (
-                                            <button onClick={() => openTahsilatEkle(satis)} style={{ width: '100%', marginTop: '10px', padding: '8px', background: '#f0fff4', color: '#2f855a', border: '1px solid #9ae6b4', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' }}>+ Ödeme Al</button>
+                                            <button onClick={() => openTahsilatEkle(satis)} style={{ width: '100%', marginTop: '10px', padding: '8px', background: '#f0fff4', color: '#2f855a', border: '1px solid #9ae6b4', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' }}>+ Tahsil Et</button>
                                         )}
                                     </div>
                                 )

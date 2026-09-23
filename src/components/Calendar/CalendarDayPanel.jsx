@@ -7,7 +7,7 @@ const getCashFlowValue = (event) => {
     const amount = Number(event?.amount);
     if (!Number.isFinite(amount) || amount === 0) return 0;
 
-    if (event.type === 'salary') return Math.abs(amount);
+    if (event.type === 'salary' || event.type === 'debt_collection') return Math.abs(amount);
     if (['bill', 'subscription', 'installment', 'loan_payment', 'credit_card_statement', 'credit_card_payment', 'investment'].includes(event.type)) {
         return -Math.abs(amount);
     }
@@ -36,6 +36,7 @@ const CalendarDayPanel = ({
     events = [],
     gizliMod = false,
     onClose,
+    onEventAction,
 }) => {
     if (!dateKey) return null;
 
@@ -68,6 +69,7 @@ const CalendarDayPanel = ({
                             const amountTone = getTone(cashFlowValue);
                             const hasAmount = ev.amount !== null && ev.amount !== undefined && ev.amount !== '';
                             const amountStr = hasAmount ? formatSignedAmount(cashFlowValue, ev.currency, gizliMod) : '';
+                            const isDebtAction = ev.source === 'loan' && (ev.type === 'debt_collection' || ev.type === 'loan_payment');
 
                             return (
                                 <li key={`${ev.id}-${ev.occurrenceDate}-${i}`} className="cal-event-list__item">
@@ -79,6 +81,11 @@ const CalendarDayPanel = ({
                                         accentColor={meta.color}
                                         metaLabel={ev.status === 'planned' ? 'Planlandı' : ev.status === 'paid' ? 'Ödendi' : 'Durum'}
                                         metaValue={ev.description || 'Yaklaşan kayıt'}
+                                        action={isDebtAction ? (
+                                            <button type="button" className="finance-event-card__button" onClick={() => onEventAction?.(ev)}>
+                                                {ev.type === 'debt_collection' ? 'Tahsil Et' : 'Ödeme Yap'}
+                                            </button>
+                                        ) : null}
                                     />
                                 </li>
                             );

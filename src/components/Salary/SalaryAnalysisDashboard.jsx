@@ -445,7 +445,7 @@ const buildIncomeRows = ({ salaries, incomeTransactions, period, accounts = [], 
     });
 };
 
-const SalaryTooltip = ({ active, payload }) => {
+const SalaryTooltip = ({ active, payload, hasInvestmentAccount = true }) => {
     if (!active || !payload?.length) return null;
     const item = payload[0].payload;
     return (
@@ -455,7 +455,9 @@ const SalaryTooltip = ({ active, payload }) => {
             <span><em>Gelir</em><b className="is-success">{formatPara(item.income)}</b></span>
             <span><em>Harcama</em><b className="is-danger">{formatPara(item.realExpense)}</b></span>
             <span><em>Borç</em><b className="is-warning">{formatPara(item.debtPayment)}</b></span>
-            <span><em>Yatırım</em><b className="is-info">{formatPara(item.investment)}</b></span>
+            {hasInvestmentAccount && (
+                <span><em>Yatırım</em><b className="is-info">{formatPara(item.investment)}</b></span>
+            )}
             <span><em>Transfer girişi</em><b className="is-success">{formatPara(item.transferIn)}</b></span>
             <span><em>Transfer</em><b className="is-purple">{formatPara(item.transfer)}</b></span>
             <span><em>Gün sonu kalan</em><b className={moneyTone(item.remaining) === 'danger' ? 'is-danger' : 'is-success'}>{formatPara(item.remaining)}</b></span>
@@ -472,6 +474,7 @@ const SalaryAnalysisDashboard = ({
     modalAc,
     islemSil,
     normalSil,
+    hasInvestmentAccount = true,
 }) => {
     const salaryAccounts = useMemo(() => (hesaplar || []).filter(isSalaryAccount), [hesaplar]);
     const defaultAccount = salaryAccounts.find((account) => account.anaMaasHesabi) || salaryAccounts[0] || null;
@@ -563,7 +566,7 @@ const SalaryAnalysisDashboard = ({
         { key: 'investment', label: 'Yatırım', value: summary.investment, description: 'Yatırım hesapları ve varlık alımları' },
         { key: 'transfer', label: 'Diğer Transferler', value: summary.transfer, description: 'Maaş dışı hesaplar arası aktarımlar' },
         { key: 'remaining', label: 'Kalan', value: Math.max(0, periodNet), description: periodNet < 0 ? 'Negatif kalan dönem başı bakiyeden kullanıldı' : 'Dönem içinde kalan tutar' },
-    ];
+    ].filter((row) => row.key !== 'investment' || hasInvestmentAccount);
 
     const expenseByCategory = Object.values(summary.movements
         .filter((movement) => movement.counted !== false && movement.bucket === 'realExpense')
@@ -618,7 +621,10 @@ const SalaryAnalysisDashboard = ({
     });
 
     const importantMovements = summary.movements
-        .filter((item) => item.counted !== false && item.transaction && ['realExpense', 'debtPayment', 'investment', 'transfer'].includes(item.bucket))
+        .filter((item) => {
+            if (item.bucket === 'investment' && !hasInvestmentAccount) return false;
+            return item.counted !== false && item.transaction && ['realExpense', 'debtPayment', 'investment', 'transfer'].includes(item.bucket);
+        })
         .sort((a, b) => parseAmount(b.transaction.tutar) - parseAmount(a.transaction.tutar))
         .slice(0, 5);
     const debtRatio = periodIncome > 0 ? Math.round((summary.debtPayment / periodIncome) * 100) : 0;
@@ -667,7 +673,9 @@ const SalaryAnalysisDashboard = ({
                 <StatCard title="Gerçekleşen Gelir" value={formatPara(receivedIncomeTotal)} description={`${incomeRows.filter((row) => row.actualAmount > 0).length} gelir hareketi`} icon={ArrowDownRight} tone="success" />
                 <StatCard title="Gerçek Harcama" value={formatPara(summary.realExpense)} description={`${periodIncome > 0 ? Math.round((summary.realExpense / periodIncome) * 100) : 0}% maaşa oran`} icon={TrendingDown} tone="danger" />
                 <StatCard title="Kredi ve Kart Ödemeleri" value={formatPara(summary.debtPayment)} description={`${debtRatio}% maaşa oran`} icon={CreditCard} tone="warning" />
-                <StatCard title="Yatırıma Aktarılan" value={formatPara(summary.investment)} description={`${investmentRatio}% maaşa oran`} icon={PiggyBank} tone="info" />
+                {hasInvestmentAccount && (
+                    <StatCard title="Yatırıma Aktarılan" value={formatPara(summary.investment)} description={`${investmentRatio}% maaşa oran`} icon={PiggyBank} tone="info" />
+                )}
                 <StatCard title="Dönem Sonu Kalan" value={formatPara(periodNet)} description="Dönem içi net kalan" icon={Wallet} tone={moneyTone(periodNet)} />
             </div>
 
@@ -807,7 +815,7 @@ const SalaryAnalysisDashboard = ({
                             <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
                             <YAxis tickFormatter={(value) => `${Math.round(value / 1000)} B`} tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
                             <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="4 4" />
-                            <Tooltip content={<SalaryTooltip />} cursor={{ stroke: '#cbd5e1', strokeWidth: 1 }} />
+                            <Tooltip content={<SalaryTooltip hasInvestmentAccount={hasInvestmentAccount} />} cursor={{ stroke: '#cbd5e1', strokeWidth: 1 }} />
                             <Area type="monotone" dataKey="remaining" name="Gün sonu kalan" stroke={periodNet < 0 ? '#ef4444' : '#6d5dfc'} fill="url(#salaryRemainingFill)" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
                         </AreaChart>
                     </ResponsiveContainer>
@@ -833,14 +841,16 @@ const SalaryAnalysisDashboard = ({
                         <ComparisonRow label="Gelir" current={periodIncome} previous={(previousSummary?.income || 0) + (previousSummary?.refund || 0)} positiveHigher />
                         <ComparisonRow label="Gerçek Harcama" current={summary.realExpense} previous={previousSummary?.realExpense || 0} positiveLower />
                         <ComparisonRow label="Borç" current={summary.debtPayment} previous={previousSummary?.debtPayment || 0} positiveLower />
-                        <ComparisonRow label="Yatırım" current={summary.investment} previous={previousSummary?.investment || 0} positiveHigher />
+                        {hasInvestmentAccount && (
+                            <ComparisonRow label="Yatırım" current={summary.investment} previous={previousSummary?.investment || 0} positiveHigher />
+                        )}
                         <ComparisonRow label="Kalan" current={summary.remaining} previous={previousSummary?.remaining || 0} positiveHigher />
                     </div>
                 </PremiumCard>
             </div>
 
             <PremiumCard className="salary-card salary-card--compact salary-periods-card">
-                <SectionHeader title="Son 6 Maaş Dönemi" description="Gelir, gerçek harcama, borç, yatırım ve kalan trendi." />
+                <SectionHeader title="Son 6 Maaş Dönemi" description={hasInvestmentAccount ? 'Gelir, gerçek harcama, borç, yatırım ve kalan trendi.' : 'Gelir, gerçek harcama, borç ve kalan trendi.'} />
                 <ResponsiveContainer width="100%" height={280}>
                     <BarChart data={last6Periods} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(148, 163, 184, 0.18)" />
@@ -852,7 +862,9 @@ const SalaryAnalysisDashboard = ({
                         <Bar name="Gelir" dataKey="gelir" fill="#10b981" radius={[8, 8, 0, 0]} />
                         <Bar name="Gerçek Harcama" dataKey="harcama" fill="#ef4444" radius={[8, 8, 0, 0]} />
                         <Bar name="Borç" dataKey="borc" fill="#f59e0b" radius={[8, 8, 0, 0]} />
-                        <Bar name="Yatırım" dataKey="yatirim" fill="#3b82f6" radius={[8, 8, 0, 0]} />
+                        {hasInvestmentAccount && (
+                            <Bar name="Yatırım" dataKey="yatirim" fill="#3b82f6" radius={[8, 8, 0, 0]} />
+                        )}
                         <Bar name="Kalan" dataKey="kalan" fill="#8b5cf6" radius={[8, 8, 0, 0]} />
                     </BarChart>
                 </ResponsiveContainer>

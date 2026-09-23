@@ -11,10 +11,12 @@ const items = [
     { id: 'ayarlar', label: 'Ayarlar', icon: Settings },
 ];
 
-const MobileNav = ({ anaSekme, setAnaSekme }) => {
+const MobileNav = ({ anaSekme, setAnaSekme, hasInvestmentAccount = true }) => {
+    const visibleItems = items.filter((item) => item.id !== 'yatirimlar' || hasInvestmentAccount);
+
     return (
         <nav className="mobile-bottom-nav show-on-mobile" aria-label="Mobil navigasyon">
-            {items.map(({ id, label, icon: Icon }) => {
+            {visibleItems.map(({ id, label, icon: Icon }) => {
                 const isActive = anaSekme === id;
 
                 return (

@@ -72,7 +72,8 @@ const Header = ({
     availablePeriods,
     showPeriodFilter = true,
     theme = 'light',
-    onThemeToggle
+    onThemeToggle,
+    hasInvestmentAccount = true
 }) => {
     const years = availablePeriods?.years?.length ? availablePeriods.years : [selectedPeriod.year];
     const availableMonths = availablePeriods?.monthsByYear?.[selectedPeriod.year] || [];
@@ -81,6 +82,7 @@ const Header = ({
     const displayDescription = titleCaseTr(description);
     const userName = user?.displayName?.split(' ')[0] || 'Profil';
     const initial = userName?.[0]?.toLocaleUpperCase('tr-TR') || 'P';
+    const visibleNavItems = navItems.filter((item) => item.id !== 'yatirimlar' || hasInvestmentAccount);
 
     return (
         <SidebarProvider>
@@ -91,7 +93,7 @@ const Header = ({
 
                 <SidebarContent>
                     <SidebarMenu className="qw-sidebar-nav">
-                        {navItems.map(({ id, label, icon: Icon }) => (
+                        {visibleNavItems.map(({ id, label, icon: Icon }) => (
                             <SidebarMenuButton
                                 key={id}
                                 isActive={anaSekme === id}

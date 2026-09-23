@@ -4,6 +4,7 @@ import {
     applyCreditCardPaymentToBalances,
     CREDIT_CARD_PAYMENT_TYPES,
     getCreditCardPaymentAmountOptions,
+    getCreditCardStatementPaymentSummary,
     isCreditCardStatementPaymentTransaction,
     validateCreditCardPayment,
 } from './creditCardPayments.js';
@@ -176,4 +177,63 @@ test('ekstre takibi ara ödemeyi ödeme olarak saymaz', () => {
 
     assert.equal(isCreditCardStatementPaymentTransaction(statementPayment, 'card-1'), true);
     assert.equal(isCreditCardStatementPaymentTransaction(interimPayment, 'card-1'), false);
+});
+
+test('asgari kısmi ödenince yaklaşan ödeme kalan asgariyi gösterir', () => {
+    const summary = getCreditCardStatementPaymentSummary(card({ guncelBakiye: -400, asgariOdemeTutari: 100 }), [{
+        islemTipi: 'transfer',
+        hedefId: 'card-1',
+        kategori: 'Kredi Kartı Ödemesi',
+        creditCardPaymentType: CREDIT_CARD_PAYMENT_TYPES.STATEMENT,
+        tutar: 60,
+        appliedToStatement: 60,
+        statementDebtBeforePayment: 500,
+        minimumPayment: 100,
+        tarih: new Date('2026-09-15T12:00:00'),
+    }], '2026-09');
+
+    assert.equal(summary.status, 'minimum_partial');
+    assert.equal(summary.paidAmount, 60);
+    assert.equal(summary.remainingMinimumPayment, 40);
+    assert.equal(summary.remainingStatementDebt, 440);
+});
+
+test('asgari ödenince yaklaşan ödeme kapanır ama ekstre borcu kalır', () => {
+    const summary = getCreditCardStatementPaymentSummary(card({ guncelBakiye: -380, asgariOdemeTutari: 100 }), [{
+        islemTipi: 'transfer',
+        hedefId: 'card-1',
+        kategori: 'Kredi Kartı Ödemesi',
+        creditCardPaymentType: CREDIT_CARD_PAYMENT_TYPES.STATEMENT,
+        tutar: 120,
+        appliedToStatement: 120,
+        statementDebtBeforePayment: 500,
+        minimumPayment: 100,
+        tarih: new Date('2026-09-15T12:00:00'),
+    }], '2026-09');
+
+    assert.equal(summary.status, 'minimum_paid');
+    assert.equal(summary.minimumPaid, true);
+    assert.equal(summary.statementPaid, false);
+    assert.equal(summary.remainingMinimumPayment, 0);
+    assert.equal(summary.remainingStatementDebt, 380);
+});
+
+test('ekstre tamamen ödenince statement_paid olur', () => {
+    const summary = getCreditCardStatementPaymentSummary(card({ guncelBakiye: 0, asgariOdemeTutari: 100 }), [{
+        islemTipi: 'transfer',
+        hedefId: 'card-1',
+        kategori: 'Kredi Kartı Ödemesi',
+        creditCardPaymentType: CREDIT_CARD_PAYMENT_TYPES.STATEMENT,
+        tutar: 500,
+        appliedToStatement: 500,
+        statementDebtBeforePayment: 500,
+        minimumPayment: 100,
+        tarih: new Date('2026-09-15T12:00:00'),
+    }], '2026-09');
+
+    assert.equal(summary.status, 'statement_paid');
+    assert.equal(summary.minimumPaid, true);
+    assert.equal(summary.statementPaid, true);
+    assert.equal(summary.remainingMinimumPayment, 0);
+    assert.equal(summary.remainingStatementDebt, 0);
 });

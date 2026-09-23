@@ -26,6 +26,7 @@ import {
     Wallet,
 } from 'lucide-react';
 import { formatCurrencyPlain, tarihFormatla, titleCaseTr, toDateSafe, sortTurkishText } from '../../utils/helpers';
+import { buildCariSummaries } from '../../utils/cari';
 import { isDateInPeriod, MONTH_NAMES } from '../../utils/period';
 import {
     formatSalaryPeriodRange,
@@ -50,7 +51,8 @@ import {
     UpcomingPaymentRow,
 } from '../Shared/PremiumUI';
 import QuickTransactionForm from './QuickTransactionForm';
-import { getCreditCardPaymentPlan, isCreditCardPaymentTransaction, isCreditCardStatementPaymentTransaction } from '../../utils/creditCardPayments';
+import CariDetailModal from '../Shared/CariDetailModal';
+import { getCreditCardStatementPaymentSummary, isCreditCardPaymentTransaction } from '../../utils/creditCardPayments';
 import { buildSubscriptionOccurrences } from '../../utils/recurringPayments';
 import {
     FINANCING_STATUS,
@@ -61,8 +63,10 @@ import {
     summarizeFinancings,
 } from '../../utils/financing';
 import {
+    DEFINITION_STATUS,
     getAllInstallmentStatuses,
     getBillDefinitionStatus,
+    getBillPeriodRows,
     statusLabels,
     statusTones,
 } from '../../utils/definitions';
@@ -184,19 +188,6 @@ const getCreditCardBillingDay = (account) => {
         || account?.ekstreKesimGunu;
     const day = parseInt(rawDay) || 0;
     return day >= 1 && day <= 31 ? day : null;
-};
-
-const getCreditCardPaymentsInPeriod = (transactions = [], accountId, year, month) => {
-    if (!accountId) return 0;
-
-    return (transactions || []).reduce((sum, transaction) => {
-        if (!isCreditCardStatementPaymentTransaction(transaction, accountId)) return sum;
-
-        const date = toDateSafe(transaction.tarih);
-        if (!date || date.getFullYear() !== year || date.getMonth() !== month) return sum;
-
-        return sum + parseAmount(transaction.tutar);
-    }, 0);
 };
 
 const getStatementPeriod = (account, selectedPeriod) => {
@@ -323,28 +314,89 @@ const SummaryLine = ({ label, value, tone }) => (
     </div>
 );
 
-const ModuleRow = ({ icon, tone = 'neutral', title, meta, amount, amountTone, amountMeta, badge, onClick, actions }) => (
-    <div className={`qw-module-row ${onClick ? 'is-clickable' : ''}`} onClick={onClick}>
+const InlineMetrics = ({ items = [] }) => (
+    <div className="qw-inline-metrics">
+        {items.filter(Boolean).map((item) => (
+            <span className="qw-inline-metric" key={item.label}>
+                <em>{titleCaseTr(item.label)}</em>
+                <strong className={item.tone ? `is-${item.tone}` : ''}>{item.value}</strong>
+            </span>
+        ))}
+    </div>
+);
+
+const WidgetFooterSummary = ({ countLabel, items = [] }) => (
+    <div className="qw-widget-footer-summary">
+        <span>{typeof countLabel === 'string' ? titleCaseTr(countLabel) : countLabel}</span>
+        {items.length > 0 && (
+            <div className="qw-widget-footer-summary__metrics">
+                {items.map((item) => (
+                    <span key={item.label}>
+                        <em>{titleCaseTr(item.label)}</em>
+                        <strong className={item.tone ? `is-${item.tone}` : ''}>{item.value}</strong>
+                    </span>
+                ))}
+            </div>
+        )}
+    </div>
+);
+
+const DashboardWidget = ({ title, action, metrics, footer, children }) => (
+    <PremiumCard className="qw-module-card qw-dashboard-widget">
+        <div className="qw-dashboard-widget__header">
+            <h2>{titleCaseTr(title)}</h2>
+            {action && <div className="qw-dashboard-widget__action">{action}</div>}
+        </div>
+        {metrics?.length > 0 && <InlineMetrics items={metrics} />}
+        <div className="qw-dashboard-widget__body">
+            {children}
+        </div>
+        {footer && <div className="qw-dashboard-widget__footer">{typeof footer === 'string' ? titleCaseTr(footer) : footer}</div>}
+    </PremiumCard>
+);
+
+const ModuleRow = ({ icon, tone = 'neutral', title, meta, amount, amountTone, amountMeta, badge, onClick, actions }) => {
+    const badgeTone = typeof badge === 'object' ? badge?.tone : null;
+    const badgeLabel = typeof badge === 'object' ? badge?.label : badge;
+    return (
+        <div
+            className={`qw-module-row ${onClick ? 'is-clickable' : ''} ${badgeTone ? `has-status-line is-status-${badgeTone}` : ''}`}
+            title={badgeLabel ? titleCaseTr(badgeLabel) : undefined}
+            onClick={onClick}
+        >
         <IconTile icon={icon} tone={tone} />
         <div className="qw-module-row__main">
-            <strong>{title}</strong>
-            {meta && <span>{meta}</span>}
+            <strong>{typeof title === 'string' ? titleCaseTr(title) : title}</strong>
+            {meta && <span>{typeof meta === 'string' ? titleCaseTr(meta) : meta}</span>}
         </div>
-        <div className="qw-module-row__side">
+        <div className={`qw-module-row__side ${badge ? 'has-badge' : ''}`}>
             {amount !== undefined && <b className={amountTone ? `is-${amountTone}` : ''}>{amount}</b>}
-            {amountMeta && <small>{amountMeta}</small>}
-            {badge && <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>}
+            {amountMeta && <small>{typeof amountMeta === 'string' ? titleCaseTr(amountMeta) : amountMeta}</small>}
             {actions && <div className="qw-row-actions">{actions}</div>}
         </div>
     </div>
-);
+    );
+};
 
 const isBudgetTransaction = (transaction) => (
     transaction?.kategori !== 'BES' &&
     transaction?.islemTipi !== 'yatirim_alis' &&
     transaction?.kategori !== 'Yatırım' &&
-    transaction?.islemTipi !== 'cari_iade'
+    transaction?.islemTipi !== 'cari_iade' &&
+    !transaction?.excludeFromBudgetStats &&
+    !transaction?.debtId &&
+    !transaction?.borcId
 );
+
+const getDebtType = (debt) => debt?.type === 'ALACAK' ? 'ALACAK' : 'VERECEK';
+
+const isDebtCompleted = (debt) => (
+    debt?.durum === 'completed' ||
+    debt?.status === 'completed' ||
+    parseAmount(debt?.kalanTutar ?? debt?.tutar ?? debt?.toplamTutar) <= 0
+);
+
+const getDebtAmount = (debt) => parseAmount(debt?.kalanTutar ?? debt?.tutar ?? debt?.toplamTutar);
 
 const isCreditCardCashOutTransaction = (transaction, accounts = []) => (
     (accounts || []).some((account) => (
@@ -352,6 +404,11 @@ const isCreditCardCashOutTransaction = (transaction, accounts = []) => (
         isCreditCardPaymentTransaction(transaction, account.id)
     ))
 );
+
+const formatMonthlyDay = (day) => {
+    const value = parseInt(day);
+    return Number.isFinite(value) && value > 0 ? `${value}. gün` : '-';
+};
 
 const matchesTransactionNatureFilter = (transaction, filterValue, accounts = []) => {
     if (filterValue === 'all') return true;
@@ -377,18 +434,6 @@ const isSameCalendarMonth = (date, target) => (
     date.getMonth() === target.getMonth() &&
     date.getFullYear() === target.getFullYear()
 );
-
-const getSelectedPeriodEnd = (period) => {
-    if (!period || period.month === 'all') return null;
-    return new Date(Number(period.year), Number(period.month), 0, 23, 59, 59, 999);
-};
-
-const isDueBySelectedPeriodEnd = (date, period) => {
-    if (!period || period.month === 'all') return true;
-    const dueDate = toDateSafe(date);
-    if (!dueDate) return true;
-    return dueDate.getTime() <= getSelectedPeriodEnd(period).getTime();
-};
 
 const TRANSACTION_NATURE_OPTIONS = [
     { value: 'all', label: 'Tüm işlemler' },
@@ -429,6 +474,7 @@ const BudgetDashboard = ({
     selectedPeriod,
     sadeceCuzdanNakiti,
     genelToplamYatirimGucu,
+    hasInvestmentAccount = true,
     netVarlik,
     tanimliFaturalar,
     bekleyenFaturalar,
@@ -477,12 +523,14 @@ const BudgetDashboard = ({
     filtreKategori, setFiltreKategori,
     filtreEtiket, setFiltreEtiket,
     borclar,
+    cariler = [],
     finansmanlar = [],
     navigateTo,
     maaslar = [],
     excelIndir,
     excelYukle,
     islemSil,
+    hesapSil,
     setAnaSekme
 }) => {
     const [historyAccount, setHistoryAccount] = useState(null);
@@ -490,6 +538,7 @@ const BudgetDashboard = ({
     const [flowChartMode, setFlowChartMode] = useState('expense');
     const [hiddenExpenseCategories, setHiddenExpenseCategories] = useState(() => new Set());
     const [transactionNatureFilter, setTransactionNatureFilter] = useState('all');
+    const [selectedCariSummary, setSelectedCariSummary] = useState(null);
     const isNestedModalOpen = Boolean(historyAccount && aktifModal);
     const formatPara = (tutar) => gizliMod ? '****' : formatCurrencyPlain(parseAmount(tutar));
     const siraliKategoriListesi = sortTurkishText(kategoriListesi || []);
@@ -625,6 +674,7 @@ const BudgetDashboard = ({
         const bucketMap = new Map(buckets.map((item, index) => [item.key, { item, index }]));
 
         (filtrelenmisIslemler || []).forEach((transaction) => {
+            if (!isBudgetTransaction(transaction)) return;
             const date = toDateSafe(transaction.tarih);
             if (!date) return;
             const key = selectedPeriod?.month === 'all'
@@ -676,20 +726,18 @@ const BudgetDashboard = ({
             }, { income: 0, expense: 0, count: 0 });
     }, [tumIslemler]);
 
-    const currentMonthStats = useMemo(() => {
-        const today = new Date();
+    const selectedPeriodStats = useMemo(() => {
         return (tumIslemler || [])
             .filter(isBudgetTransaction)
             .reduce((acc, transaction) => {
-                const date = toDateSafe(transaction.tarih);
-                if (!isSameCalendarMonth(date, today)) return acc;
+                if (!isDateInPeriod(transaction.tarih, selectedPeriod)) return acc;
                 const amount = parseAmount(transaction.tutar);
                 if (transaction.islemTipi === 'gelir') acc.income += amount;
                 if (transaction.islemTipi === 'gider') acc.expense += amount;
                 acc.count += 1;
                 return acc;
             }, { income: 0, expense: 0, count: 0 });
-    }, [tumIslemler]);
+    }, [selectedPeriod, tumIslemler]);
 
     const toggleExpenseCategory = useCallback((categoryName) => {
         setHiddenExpenseCategories((current) => {
@@ -791,11 +839,15 @@ const BudgetDashboard = ({
     }, [linkedInstallmentPaymentCounts]);
 
     const upcomingPayments = useMemo(() => {
-        const periodDate = selectedPeriod?.month === 'all'
-            ? new Date()
-            : new Date(selectedPeriod.year, selectedPeriod.month - 1, 1);
-        const currentYear = periodDate.getFullYear();
-        const currentMonth = periodDate.getMonth();
+        const today = startOfDay(new Date());
+        const hasSelectedMonth = selectedPeriod?.month && selectedPeriod.month !== 'all';
+        const targetYear = hasSelectedMonth ? Number(selectedPeriod.year) : today.getFullYear();
+        const targetMonth = hasSelectedMonth ? Number(selectedPeriod.month) - 1 : today.getMonth();
+        const targetMonthStart = startOfDay(new Date(targetYear, targetMonth, 1));
+        const targetMonthEnd = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59, 999);
+        const rangeStart = targetMonthStart > today ? targetMonthStart : today;
+        const currentYear = targetYear;
+        const currentMonth = targetMonth;
         const periodKey = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
 
         const rows = [];
@@ -838,9 +890,9 @@ const BudgetDashboard = ({
             .forEach((account) => {
                 const day = parseInt(account.kesimGunu) || null;
                 const dueDate = day ? new Date(currentYear, currentMonth, Math.min(day, 28)) : null;
-                const paymentPlan = getCreditCardPaymentPlan(account, periodKey);
-                const paidThisPeriod = getCreditCardPaymentsInPeriod(tumIslemler, account.id, currentYear, currentMonth);
-                const displayAmount = paymentPlan.plannedPayment;
+                const paymentPlan = getCreditCardStatementPaymentSummary(account, tumIslemler, periodKey);
+                const paidThisPeriod = paymentPlan.paidAmount;
+                const displayAmount = paymentPlan.remainingMinimumPayment;
                 if (displayAmount <= 0) return;
                 rows.push({
                     id: `card-statement-${account.id}`,
@@ -901,13 +953,38 @@ const BudgetDashboard = ({
             });
         });
 
+        (borclar || [])
+            .filter((debt) => !isDebtCompleted(debt))
+            .forEach((debt) => {
+                const dueDate = toDateSafe(debt.sonOdemeTarihi || debt.vadeTarihi || debt.tarih);
+                if (!dueDate) return;
+                const debtType = getDebtType(debt);
+                const isReceivable = debtType === 'ALACAK';
+                const isOverdue = startOfDay(dueDate) < startOfDay(new Date());
+                rows.push({
+                    id: `debt-${debt.id}`,
+                    title: debt.ad || debt.baslik || (isReceivable ? 'Alacak' : 'Verecek'),
+                    type: isReceivable ? 'Tahsilat' : 'Ödeme',
+                    badgeLabel: isReceivable ? 'Tahsil Et' : 'Ödeme Yap',
+                    date: dueDate,
+                    amount: getDebtAmount(debt),
+                    icon: isReceivable ? ArrowDownRight : CreditCard,
+                    tone: isReceivable ? 'success' : (isOverdue ? 'danger' : 'warning'),
+                    isOverdue: !isReceivable && isOverdue,
+                    onClick: () => modalAc('borc_ode', debt),
+                });
+            });
+
         return rows
-            .filter((row) => row.date)
+            .filter((row) => {
+                const date = startOfDay(row.date);
+                return date && date >= rangeStart && date <= targetMonthEnd;
+            })
             .sort((a, b) => {
                 if (a.isOverdue !== b.isOverdue) return a.isOverdue ? -1 : 1;
                 return (a.date?.getTime() || Number.MAX_SAFE_INTEGER) - (b.date?.getTime() || Number.MAX_SAFE_INTEGER);
             });
-    }, [abonelikler, abonelikOde, bekleyenFaturalar, getInstallmentPaidCount, hesaplar, modalAc, selectedPeriod, taksitOde, taksitler, tanimliFaturalar, tumIslemler]);
+    }, [abonelikler, abonelikOde, bekleyenFaturalar, borclar, getInstallmentPaidCount, hesaplar, modalAc, selectedPeriod, taksitOde, taksitler, tanimliFaturalar, tumIslemler]);
 
     const recentTransactions = [...(filtrelenmisIslemler || [])]
         .sort((a, b) => (toDateSafe(b.tarih)?.getTime() || 0) - (toDateSafe(a.tarih)?.getTime() || 0))
@@ -916,7 +993,12 @@ const BudgetDashboard = ({
             presentation: getTransactionNature(transaction),
         }));
     const displayedTransactions = recentTransactions.filter((transaction) => (
-        matchesTransactionNatureFilter(transaction, transactionNatureFilter, hesaplar)
+        matchesTransactionNatureFilter(transaction, transactionNatureFilter, hesaplar) &&
+        !(
+            hiddenExpenseCategories.size > 0 &&
+            transaction.islemTipi === 'gider' &&
+            hiddenExpenseCategories.has(transaction.kategori)
+        )
     ));
     const filteredTransactionsNet = displayedTransactions.reduce((sum, transaction) => {
         const amount = parseAmount(transaction.tutar);
@@ -930,9 +1012,17 @@ const BudgetDashboard = ({
         .sort((a, b) => (parseInt(a.gun) || 32) - (parseInt(b.gun) || 32))
         .slice(0, 8);
 
-    const debtRows = [...(borclar || [])]
-        .sort((a, b) => (toDateSafe(a.sonOdemeTarihi || a.tarih)?.getTime() || Number.MAX_SAFE_INTEGER) - (toDateSafe(b.sonOdemeTarihi || b.tarih)?.getTime() || Number.MAX_SAFE_INTEGER))
+    const cariSummaries = useMemo(() => buildCariSummaries(borclar, cariler), [borclar, cariler]);
+    const activeCariSummaries = cariSummaries.filter((summary) => summary.activeCount > 0);
+    const receivableCariRows = activeCariSummaries
+        .filter((summary) => summary.netBalance > 0)
         .slice(0, 8);
+    const payableCariRows = activeCariSummaries
+        .filter((summary) => summary.netBalance < 0)
+        .slice(0, 8);
+    const neutralCariRows = activeCariSummaries
+        .filter((summary) => Math.abs(summary.netBalance) < 0.01)
+        .slice(0, 4);
 
     const allInstallmentRows = getAllInstallmentStatuses(taksitler, tumIslemler)
         .map((status) => {
@@ -953,9 +1043,9 @@ const BudgetDashboard = ({
         .sort((a, b) => (a.nextDueDate?.getTime() || Number.MAX_SAFE_INTEGER) - (b.nextDueDate?.getTime() || Number.MAX_SAFE_INTEGER));
     const periodInstallmentRows = selectedPeriod?.month === 'all'
         ? allInstallmentRows
-        : allInstallmentRows.filter((item) => isDueBySelectedPeriodEnd(item.nextDueDate, selectedPeriod));
+        : allInstallmentRows.filter((item) => isDateInPeriod(item.nextDueDate, selectedPeriod));
     const installmentRows = periodInstallmentRows.slice(0, 8);
-    const installmentRemainingTotal = periodInstallmentRows.reduce((sum, item) => sum + item.remainingDebt, 0);
+    const installmentGeneralTotal = allInstallmentRows.reduce((sum, item) => sum + item.remainingDebt, 0);
     const monthlyInstallmentLoad = periodInstallmentRows.reduce((sum, item) => (
         sum + Math.min(item.monthly, item.remainingDebt)
     ), 0);
@@ -965,8 +1055,36 @@ const BudgetDashboard = ({
 
     const selectedPeriodNet = toplamGelir - toplamGider;
     const todayNet = todayStats.income - todayStats.expense;
-    const currentMonthNet = currentMonthStats.income - currentMonthStats.expense;
-    const budgetUsagePercent = parseAmount(aylikLimit) > 0 ? Math.round((currentMonthStats.expense / parseAmount(aylikLimit)) * 100) : null;
+    const selectedPeriodCardTitle = selectedPeriod?.month === 'all'
+        ? `${selectedPeriod?.year || ''}`
+        : MONTH_NAMES[(Number(selectedPeriod?.month) || 1) - 1] || 'Bu Ay';
+    const selectedPeriodNetForCard = selectedPeriodStats.income - selectedPeriodStats.expense;
+    const budgetUsagePercent = parseAmount(aylikLimit) > 0 ? Math.round((selectedPeriodStats.expense / parseAmount(aylikLimit)) * 100) : null;
+    const billPeriodDate = selectedPeriod?.month === 'all'
+        ? new Date()
+        : new Date(Number(selectedPeriod.year), Number(selectedPeriod.month) - 1, 1);
+    const billPeriodKey = `${billPeriodDate.getFullYear()}-${String(billPeriodDate.getMonth() + 1).padStart(2, '0')}`;
+    const subscriptionPeriodRemainingTotal = buildSubscriptionOccurrences({
+        subscriptions: abonelikler,
+        transactions: tumIslemler,
+        year: billPeriodDate.getFullYear(),
+        month: billPeriodDate.getMonth(),
+    }).reduce((sum, occurrence) => (
+        occurrence.status === 'paid' ? sum : sum + parseAmount(occurrence.expectedAmount)
+    ), 0);
+    const subscriptionStatusDate = new Date();
+    const showSubscriptionMonthlyStatus = selectedPeriod?.month === 'all' || (
+        Number(selectedPeriod?.year) === subscriptionStatusDate.getFullYear() &&
+        Number(selectedPeriod?.month) - 1 === subscriptionStatusDate.getMonth()
+    );
+    const subscriptionStatusById = showSubscriptionMonthlyStatus
+        ? new Map(buildSubscriptionOccurrences({
+            subscriptions: abonelikler,
+            transactions: tumIslemler,
+            year: subscriptionStatusDate.getFullYear(),
+            month: subscriptionStatusDate.getMonth(),
+        }).map((occurrence) => [String(occurrence.subscriptionId), occurrence]))
+        : new Map();
     const billDisplayRows = (tanimliFaturalar || [])
         .map((definition) => {
             const billStatus = getBillDefinitionStatus(definition, {
@@ -975,11 +1093,12 @@ const BudgetDashboard = ({
                 monthCount: 1,
             });
             const current = billStatus.current;
+            const displayDate = current?.paidDate || current?.transaction?.tarih || current?.dueDate || current?.pendingBill?.tarih || current?.pendingBill?.sonOdemeTarihi;
             return {
                 id: `definition-${definition.id}`,
                 title: definition.baslik || definition.kurum || 'Fatura',
-                date: current?.dueDate,
-                meta: current?.dueDate ? `${formatDayMonth(current.dueDate)} · ${statusLabels[current.status]}` : statusLabels[current?.status],
+                date: displayDate,
+                meta: displayDate ? formatDayMonth(displayDate) : 'Tarih yok',
                 amount: parseAmount(current?.expectedAmount),
                 status: { label: statusLabels[current?.status], tone: statusTones[current?.status] },
                 data: current?.pendingBill || definition,
@@ -988,17 +1107,31 @@ const BudgetDashboard = ({
         })
         .sort((a, b) => (a.date?.getTime() || Number.MAX_SAFE_INTEGER) - (b.date?.getTime() || Number.MAX_SAFE_INTEGER))
         .slice(0, 8);
-    const billTotal = billDisplayRows.reduce((sum, item) => item.mode === 'pending' ? sum + parseAmount(item.amount) : sum, 0);
-    const debtTotal = (borclar || []).reduce((sum, item) => sum + parseAmount(item.kalanTutar ?? item.tutar), 0);
-    const currentMonthDebtDue = (borclar || []).reduce((sum, item) => {
+    const billGeneralTotal = (tanimliFaturalar || []).reduce((sum, definition) => (
+        sum + parseAmount(definition.tutar || definition.ortalamaTutar)
+    ), 0);
+    const billPeriodRemainingTotal = (tanimliFaturalar || []).reduce((sum, definition) => {
+        const row = getBillPeriodRows(definition, {
+            pendingBills: bekleyenFaturalar,
+            transactions: tumIslemler,
+            monthCount: 24,
+        }).find((item) => item.periodKey === billPeriodKey);
+        const expectedAmount = parseAmount(row?.expectedAmount || definition.tutar || definition.ortalamaTutar);
+        return row?.status === DEFINITION_STATUS.PAID ? sum : sum + expectedAmount;
+    }, 0);
+    const upcomingPaymentsTotal = upcomingPayments.reduce((sum, payment) => sum + parseAmount(payment.amount), 0);
+    const debtTotal = activeCariSummaries.reduce((sum, item) => sum + item.activePayable, 0);
+    const receivableTotal = activeCariSummaries.reduce((sum, item) => sum + item.activeReceivable, 0);
+    const selectedPeriodDebtDue = (borclar || []).filter((item) => getDebtType(item) === 'VERECEK' && !isDebtCompleted(item)).reduce((sum, item) => {
         const dueDate = toDateSafe(item.sonOdemeTarihi || item.tarih);
-        return isSameCalendarMonth(dueDate, new Date()) ? sum + parseAmount(item.kalanTutar ?? item.tutar) : sum;
+        return isSameCalendarMonth(dueDate, billPeriodDate) ? sum + getDebtAmount(item) : sum;
     }, 0);
     const filteredCount = displayedTransactions.length;
-    const isFiltering = Boolean(aramaMetni) || filtreHesap !== 'Tümü' || filtreKategori !== 'Tümü' || filtreEtiket !== 'Tümü' || transactionNatureFilter !== 'all';
+    const isChartFiltering = hiddenExpenseCategories.size > 0;
+    const isFiltering = Boolean(aramaMetni) || filtreHesap !== 'Tümü' || filtreKategori !== 'Tümü' || filtreEtiket !== 'Tümü' || transactionNatureFilter !== 'all' || isChartFiltering;
     const totalComparableTransactions = isFiltering ? (tumIslemler || []).filter(isBudgetTransaction).length : filteredCount;
     const transactionDescription = isFiltering
-        ? `${totalComparableTransactions} işlemden ${filteredCount} sonuç`
+        ? `${totalComparableTransactions} işlemden ${filteredCount} sonuç${isChartFiltering ? ' · grafik filtresi' : ''}`
         : `${filteredCount} işlem`;
     const financingContext = useMemo(() => ({ transactions: tumIslemler, installments: taksitler }), [tumIslemler, taksitler]);
     const financingSummary = useMemo(() => summarizeFinancings(finansmanlar, financingContext), [finansmanlar, financingContext]);
@@ -1206,7 +1339,7 @@ const BudgetDashboard = ({
                 </PremiumCard>
 
                 <PremiumCard className="qw-compact-summary-card">
-                    <SectionHeader title="Bugün" description={`${todayStats.count} işlem`} />
+                    <SectionHeader title="Bugün" />
                     <div className="qw-summary-lines">
                         <SummaryLine label="Gelir" value={formatPara(todayStats.income)} tone="success" />
                         <SummaryLine label="Gider" value={formatPara(todayStats.expense)} tone="danger" />
@@ -1216,14 +1349,13 @@ const BudgetDashboard = ({
 
                 <PremiumCard className="qw-compact-summary-card">
                     <SectionHeader
-                        title="Bu Ay"
-                        description={budgetUsagePercent === null ? 'Limit tanımsız' : `Bütçe %${budgetUsagePercent}`}
+                        title={selectedPeriodCardTitle}
                         action={budgetUsagePercent !== null && budgetUsagePercent > 100 ? <StatusBadge tone="warning">Limit aşıldı</StatusBadge> : null}
                     />
                     <div className="qw-summary-lines">
-                        <SummaryLine label="Gelir" value={formatPara(currentMonthStats.income)} tone="success" />
-                        <SummaryLine label="Gider" value={formatPara(currentMonthStats.expense)} tone="danger" />
-                        <SummaryLine label="Net" value={formatPara(currentMonthNet)} tone={getFinancialTone(currentMonthNet)} />
+                        <SummaryLine label="Gelir" value={formatPara(selectedPeriodStats.income)} tone="success" />
+                        <SummaryLine label="Gider" value={formatPara(selectedPeriodStats.expense)} tone="danger" />
+                        <SummaryLine label="Net" value={formatPara(selectedPeriodNetForCard)} tone={getFinancialTone(selectedPeriodNetForCard)} />
                     </div>
                     {budgetUsagePercent !== null && (
                         <div className="qw-progress-track">
@@ -1233,10 +1365,12 @@ const BudgetDashboard = ({
                 </PremiumCard>
 
                 <PremiumCard className="qw-compact-summary-card">
-                    <SectionHeader title="Mevcut Durum" description="Hesap ve varlık özeti" />
+                    <SectionHeader title="Mevcut Durum" />
                     <div className="qw-summary-lines">
                         <SummaryLine label="Cüzdan nakdi" value={formatPara(sadeceCuzdanNakiti)} tone={sadeceCuzdanNakiti >= 0 ? undefined : 'danger'} />
-                        <SummaryLine label="Yatırım gücü" value={formatPara(genelToplamYatirimGucu)} tone="info" />
+                        {hasInvestmentAccount && (
+                            <SummaryLine label="Yatırım gücü" value={formatPara(genelToplamYatirimGucu)} tone="info" />
+                        )}
                         <SummaryLine label="Hesap sayısı" value={`${(hesaplar || []).length} hesap`} />
                         <SummaryLine label="Hareket sayısı" value={`${filteredCount} kayıt`} />
                     </div>
@@ -1343,6 +1477,12 @@ const BudgetDashboard = ({
                         {upcomingPayments.length === 0 && (
                             <EmptyState title="Yaklaşan ödeme yok" description="Seçili dönemde bekleyen ödeme görünmüyor." icon={Bell} />
                         )}
+                    </div>
+                    <div className="qw-dashboard-widget__footer">
+                        <WidgetFooterSummary
+                            countLabel={`${upcomingPayments.length} ödeme`}
+                            items={[{ label: 'Toplam', value: formatPara(upcomingPaymentsTotal) }]}
+                        />
                     </div>
                 </PremiumCard>
             </div>
@@ -1455,6 +1595,9 @@ const BudgetDashboard = ({
                                             <button type="button" className="qw-mini-icon-button" aria-label="Düzenle" onClick={(event) => { event.stopPropagation(); modalAc('duzenle_hesap', account); }}>
                                                 <Edit3 size={14} />
                                             </button>
+                                            <button type="button" className="qw-mini-icon-button is-danger" aria-label="Sil" onClick={(event) => { event.stopPropagation(); hesapSil?.(account); }}>
+                                                <Trash2 size={14} />
+                                            </button>
                                         </span>
                                     </span>
                                 </button>
@@ -1466,7 +1609,7 @@ const BudgetDashboard = ({
             </div>
 
             <div className="qw-secondary-grid">
-                <PremiumCard>
+                <PremiumCard className="qw-expense-distribution-card">
                     <SectionHeader
                         title="Harcama Dağılımı"
                         description="Kategorileri tıklayarak grafikten çıkarın"
@@ -1530,50 +1673,55 @@ const BudgetDashboard = ({
             </div>
 
             <div className="qw-module-grid">
-                <PremiumCard className="qw-module-card">
-                    <SectionHeader
-                        title="Sabit Giderler"
-                        description={`${(abonelikler || []).length} sabit gider`}
-                        action={<QuickActionButton icon={Plus} onClick={() => modalAc('abonelik_ekle')}>Sabit Gider</QuickActionButton>}
-                    />
-                    <div className="qw-summary-lines">
-                        <SummaryLine label="Aylık toplam" value={formatPara(toplamSabitGider)} tone="info" />
-                    </div>
+                <DashboardWidget
+                    title="Sabit Giderler"
+                    footer={(
+                        <WidgetFooterSummary
+                            countLabel={`${(abonelikler || []).length} sabit gider`}
+                            items={[
+                                { label: 'Genel toplam', value: formatPara(toplamSabitGider) },
+                                { label: 'Bu ay kalan', value: formatPara(subscriptionPeriodRemainingTotal) },
+                            ]}
+                        />
+                    )}
+                >
                     <div className="qw-module-list">
-                        {subscriptionRows.map((subscription) => (
-                            <ModuleRow
-                                key={subscription.id}
-                                icon={Repeat2}
-                                tone="info"
-                                title={subscription.ad || 'Sabit gider'}
-                                meta={`Her ayın ${subscription.gun || '-'} günü`}
-                                amount={formatPara(subscription.tutar)}
-                                onClick={() => abonelikOde(subscription)}
-                                actions={(
-                                    <>
-                                        <button type="button" className="qw-mini-icon-button" aria-label="Düzenle" onClick={(event) => { event.stopPropagation(); modalAc('duzenle_abonelik', subscription); }}>
-                                            <Edit3 size={14} />
-                                        </button>
-                                        <button type="button" className="qw-mini-icon-button is-danger" aria-label="Sil" onClick={(event) => { event.stopPropagation(); normalSil('abonelikler', subscription.id); }}>
-                                            <Trash2 size={14} />
-                                        </button>
-                                    </>
-                                )}
-                            />
-                        ))}
+                        {subscriptionRows.map((subscription) => {
+                            const monthlyStatus = subscriptionStatusById.get(String(subscription.id))?.status;
+                            const badge = monthlyStatus === 'paid'
+                                ? { label: 'Ödendi', tone: 'success' }
+                                : monthlyStatus === 'overdue'
+                                    ? { label: 'Gecikti', tone: 'danger' }
+                                    : null;
+                            return (
+                                <ModuleRow
+                                    key={subscription.id}
+                                    icon={Repeat2}
+                                    tone="info"
+                                    title={subscription.ad || 'Sabit gider'}
+                                    meta={formatMonthlyDay(subscription.gun)}
+                                    amount={formatPara(subscription.tutar)}
+                                    badge={badge}
+                                    onClick={() => abonelikOde(subscription)}
+                                />
+                            );
+                        })}
                         {subscriptionRows.length === 0 && <EmptyState title="Sabit gider yok" description="Sabit gider ekleyerek takip edebilirsiniz." icon={Repeat2} />}
                     </div>
-                </PremiumCard>
+                </DashboardWidget>
 
-                <PremiumCard className="qw-module-card">
-                    <SectionHeader
-                        title="Faturalar"
-                        description={`${billDisplayRows.length} fatura`}
-                        action={<QuickActionButton icon={Plus} onClick={() => modalAc('fatura_tanim_ekle')}>Fatura Tanımı</QuickActionButton>}
-                    />
-                    <div className="qw-summary-lines">
-                        <SummaryLine label="Bekleyen toplam tutar" value={formatPara(billTotal)} tone="danger" />
-                    </div>
+                <DashboardWidget
+                    title="Faturalar"
+                    footer={(
+                        <WidgetFooterSummary
+                            countLabel={`${billDisplayRows.length} fatura`}
+                            items={[
+                                { label: 'Genel toplam', value: formatPara(billGeneralTotal) },
+                                { label: 'Bu ay kalan', value: formatPara(billPeriodRemainingTotal) },
+                            ]}
+                        />
+                    )}
+                >
                     <div className="qw-module-list">
                         {billDisplayRows.map((bill) => (
                             <ModuleRow
@@ -1581,34 +1729,30 @@ const BudgetDashboard = ({
                                 icon={ReceiptText}
                                 tone={bill.mode === 'pending' ? 'danger' : 'neutral'}
                                 title={bill.title}
-                                meta={bill.meta || (bill.date ? `${formatDayMonth(bill.date)} · Fatura` : 'Tarih tanımsız')}
+                                meta={bill.meta || (bill.date ? `${formatDayMonth(bill.date)} · Fatura` : 'Tarih yok')}
                                 amount={bill.amount > 0 ? formatPara(bill.amount) : undefined}
                                 amountTone={bill.mode === 'pending' ? 'danger' : undefined}
                                 amountMeta={bill.amountMeta}
                                 badge={bill.status}
-                                onClick={() => modalAc(bill.mode === 'pending' ? 'fatura_ode' : 'duzenle_fatura_tanim', bill.data)}
-                                actions={(
-                                    <>
-                                        <button type="button" className="qw-mini-icon-button" aria-label="Düzenle" onClick={(event) => { event.stopPropagation(); modalAc(bill.mode === 'pending' ? 'duzenle_bekleyen_fatura' : 'duzenle_fatura_tanim', bill.data); }}>
-                                            <Edit3 size={14} />
-                                        </button>
-                                        <button type="button" className="qw-mini-icon-button is-danger" aria-label="Sil" onClick={(event) => { event.stopPropagation(); normalSil(bill.mode === 'pending' ? 'bekleyen_faturalar' : 'fatura_tanimlari', bill.data.id); }}>
-                                            <Trash2 size={14} />
-                                        </button>
-                                    </>
-                                )}
+                                onClick={bill.mode === 'pending' ? () => modalAc('fatura_ode', bill.data) : undefined}
                             />
                         ))}
                         {billDisplayRows.length === 0 && <EmptyState title="Fatura tanımı yok" description="Fatura tanımı ekleyerek takip edebilirsiniz." icon={ReceiptText} />}
                     </div>
-                </PremiumCard>
+                </DashboardWidget>
 
-                <PremiumCard className="qw-module-card">
-                    <SectionHeader title="Taksitler" description={installmentSectionDescription} />
-                    <div className="qw-summary-lines qw-installment-summary">
-                        <SummaryLine label="Kalan Taksit Borcu" value={formatPara(installmentRemainingTotal)} tone="purple" />
-                        <SummaryLine label="Bu Ay Taksitler" value={formatPara(monthlyInstallmentLoad)} tone="danger" />
-                    </div>
+                <DashboardWidget
+                    title="Taksitler"
+                    footer={(
+                        <WidgetFooterSummary
+                            countLabel={installmentSectionDescription}
+                            items={[
+                                { label: 'Genel toplam', value: formatPara(installmentGeneralTotal) },
+                                { label: 'Bu ay kalan', value: formatPara(monthlyInstallmentLoad) },
+                            ]}
+                        />
+                    )}
+                >
                     <div className="qw-module-list">
                         {installmentRows.map((installment) => {
                             const paid = installment.paidCount;
@@ -1627,72 +1771,86 @@ const BudgetDashboard = ({
                                     amount={formatPara(installment.monthly)}
                                     amountTone="purple"
                                     onClick={() => taksitOde(installmentForPayment)}
-                                    actions={(
-                                        <>
-                                            <button type="button" className="qw-mini-icon-button" aria-label="Düzenle" onClick={(event) => { event.stopPropagation(); modalAc('duzenle_taksit', installment); }}>
-                                                <Edit3 size={14} />
-                                            </button>
-                                            <button type="button" className="qw-mini-icon-button is-danger" aria-label="Sil" onClick={(event) => { event.stopPropagation(); normalSil('taksitler', installment.id); }}>
-                                                <Trash2 size={14} />
-                                            </button>
-                                        </>
-                                    )}
                                 />
                             );
                         })}
                         {installmentRows.length === 0 && <EmptyState title="Aktif taksit yok" description="Taksit planlarınız burada görünür." icon={CalendarClock} />}
                     </div>
-                </PremiumCard>
+                </DashboardWidget>
             </div>
 
             <div className="qw-debt-grid qw-debt-grid--single">
-                <PremiumCard className="qw-module-card">
-                    <SectionHeader
-                        title="Borçlar"
-                        description={`${(borclar || []).length} borç kaydı`}
-                        action={<QuickActionButton icon={Plus} onClick={() => modalAc('borc_tanimla')}>Borç Ekle</QuickActionButton>}
-                    />
-                    <div className="qw-summary-lines qw-debt-summary">
-                        <SummaryLine label="Kalan Borç" value={formatPara(debtTotal)} tone="danger" />
-                        <SummaryLine label="Bu Ay Ödenecek" value={formatPara(currentMonthDebtDue)} />
-                    </div>
+                <DashboardWidget
+                    title="Alacak / Verecek"
+                    action={<QuickActionButton icon={Plus} onClick={() => modalAc('borc_tanimla')}>Kayıt Ekle</QuickActionButton>}
+                    footer={(
+                        <WidgetFooterSummary
+                            countLabel={`${activeCariSummaries.length} cari`}
+                            items={[
+                                { label: 'Alacak', value: formatPara(receivableTotal), tone: 'success' },
+                                { label: 'Verecek', value: formatPara(debtTotal), tone: 'danger' },
+                                { label: 'Bu ay', value: formatPara(selectedPeriodDebtDue) },
+                            ]}
+                        />
+                    )}
+                >
                     <div className="qw-module-list qw-module-list--debt">
-                        {debtRows.map((debt) => (
+                        {receivableCariRows.length > 0 && <div className="qw-list-section-label">Alacaklı Cariler</div>}
+                        {receivableCariRows.map((cari) => (
                             <ModuleRow
-                                key={debt.id}
-                                icon={CreditCard}
-                                tone="warning"
-                                title={debt.ad || debt.baslik || 'Borç'}
-                                meta={debt.sonOdemeTarihi ? `${formatDayMonth(toDateSafe(debt.sonOdemeTarihi))} · Borç` : 'Borç'}
-                                amount={formatPara(debt.kalanTutar ?? debt.tutar)}
-                                amountTone="danger"
-                                onClick={() => modalAc('borc_ode', debt)}
-                                actions={(
-                                    <>
-                                        <button type="button" className="qw-mini-icon-button" aria-label="Düzenle" onClick={(event) => { event.stopPropagation(); modalAc('duzenle_borc', debt); }}>
-                                            <Edit3 size={14} />
-                                        </button>
-                                        <button type="button" className="qw-mini-icon-button is-danger" aria-label="Sil" onClick={(event) => { event.stopPropagation(); normalSil('borclar', debt.id); }}>
-                                            <Trash2 size={14} />
-                                        </button>
-                                    </>
-                                )}
+                                key={cari.key}
+                                icon={ArrowDownRight}
+                                tone="success"
+                                title={cari.name}
+                                meta={`${cari.activeItems.length} açık işlem · ${formatPara(cari.activeReceivable)} alacak`}
+                                amount={`${formatPara(cari.netBalance)} Alacak`}
+                                amountTone="success"
+                                onClick={() => setSelectedCariSummary(cari)}
                             />
                         ))}
-                        {debtRows.length === 0 && <EmptyState title="Borç kaydı yok" description="Yeni borç ekleyerek takip edebilirsiniz." icon={CreditCard} />}
+                        {payableCariRows.length > 0 && <div className="qw-list-section-label">Verecekli Cariler</div>}
+                        {payableCariRows.map((cari) => (
+                            <ModuleRow
+                                key={cari.key}
+                                icon={CreditCard}
+                                tone="warning"
+                                title={cari.name}
+                                meta={`${cari.activeItems.length} açık işlem · ${formatPara(cari.activePayable)} verecek`}
+                                amount={`${formatPara(Math.abs(cari.netBalance))} Verecek`}
+                                amountTone="danger"
+                                onClick={() => setSelectedCariSummary(cari)}
+                            />
+                        ))}
+                        {neutralCariRows.length > 0 && <div className="qw-list-section-label">Dengelenmiş Cariler</div>}
+                        {neutralCariRows.map((cari) => (
+                            <ModuleRow
+                                key={cari.key}
+                                icon={CreditCard}
+                                tone="neutral"
+                                title={cari.name}
+                                meta={`${cari.activeItems.length} açık işlem`}
+                                amount={formatPara(0)}
+                                amountTone="neutral"
+                                onClick={() => setSelectedCariSummary(cari)}
+                            />
+                        ))}
+                        {activeCariSummaries.length === 0 && <EmptyState title="Alacak / verecek kaydı yok" description="Yeni kayıt ekleyerek takip edebilirsiniz." icon={CreditCard} />}
                     </div>
-                </PremiumCard>
+                </DashboardWidget>
 
-                <PremiumCard className="qw-module-card">
-                    <SectionHeader
-                        title="Finansmanlar"
-                        description={`${financingSummary.activeCount} aktif finansman`}
-                        action={<QuickActionButton icon={ArrowRight} onClick={() => navigateTo?.('/finansmanlar')}>Tümünü Gör</QuickActionButton>}
-                    />
-                    <div className="qw-summary-lines qw-debt-summary">
-                        <SummaryLine label="Kalan Borç" value={formatFinancingMoney(financingSummary.activeDebt, gizliMod)} tone="danger" />
-                        <SummaryLine label="Bu Ay Ödenecek" value={formatFinancingMoney(financingSelectedPeriodDue, gizliMod)} />
-                    </div>
+                <DashboardWidget
+                    title="Finansmanlar"
+                    action={<QuickActionButton icon={ArrowRight} onClick={() => navigateTo?.('/finansmanlar')}>Tümünü Gör</QuickActionButton>}
+                    footer={(
+                        <WidgetFooterSummary
+                            countLabel={`${financingSummary.activeCount} aktif finansman`}
+                            items={[
+                                { label: 'Kalan borç', value: formatFinancingMoney(financingSummary.activeDebt, gizliMod) },
+                                { label: 'Bu ay', value: formatFinancingMoney(financingSelectedPeriodDue, gizliMod) },
+                            ]}
+                        />
+                    )}
+                >
                     <div className="qw-module-list qw-module-list--debt">
                         {financingRows.map(({ financing, metrics }) => {
                             const isClosed = metrics.effectiveStatus === FINANCING_STATUS.CLOSED;
@@ -1716,8 +1874,16 @@ const BudgetDashboard = ({
                         })}
                         {financingRows.length === 0 && <EmptyState title="Finansman yok" description="Kredi ve nakit avans takipleri burada görünür." icon={Landmark} />}
                     </div>
-                </PremiumCard>
+                </DashboardWidget>
             </div>
+
+            <CariDetailModal
+                isOpen={Boolean(selectedCariSummary)}
+                summary={selectedCariSummary}
+                onClose={() => setSelectedCariSummary(null)}
+                gizliMod={gizliMod}
+                modalAc={modalAc}
+            />
 
             <HighQualityModal
                 isOpen={Boolean(historyAccount)}

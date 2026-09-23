@@ -1,5 +1,5 @@
 /**
- * @typedef {'salary' | 'credit_card_statement' | 'credit_card_payment' | 'loan_payment' | 'subscription' | 'bill' | 'investment' | 'reminder' | 'custom'} CalendarEventType
+ * @typedef {'salary' | 'credit_card_statement' | 'credit_card_payment' | 'debt_collection' | 'loan_payment' | 'subscription' | 'bill' | 'investment' | 'reminder' | 'custom'} CalendarEventType
  */
 
 /**

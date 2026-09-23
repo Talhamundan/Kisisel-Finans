@@ -1,11 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { arrayUnion, deleteDoc, doc, updateDoc } from 'firebase/firestore';
-import { ArrowLeft, CalendarClock, CreditCard, Ellipsis, Landmark, Link2, ReceiptText, Repeat2, Trash2, TrendingUp, Wallet, WalletCards } from 'lucide-react';
+import { ArrowDownRight, ArrowLeft, CalendarClock, CreditCard, Edit3, Landmark, Link2, Plus, ReceiptText, Repeat2, Trash2, TrendingUp, Wallet, WalletCards } from 'lucide-react';
 import { toast } from 'react-toastify';
 import Swal from 'sweetalert2';
 import { db } from '../../firebase';
 import PremiumDonutChart from '../Shared/PremiumDonutChart';
+import CariDetailModal from '../Shared/CariDetailModal';
 import { EmptyState, PremiumCard, SectionHeader, StatusBadge } from '../Shared/PremiumUI';
+import { buildCariSummaries } from '../../utils/cari';
 import {
     DEFINITION_STATUS,
     formatDefinitionDate,
@@ -25,11 +27,17 @@ const tabs = [
     { id: 'subscriptions', label: 'Sabit Giderler' },
     { id: 'bills', label: 'Faturalar' },
     { id: 'installments', label: 'Taksitler' },
+    { id: 'receivables', label: 'Alacak / Verecek' },
 ];
 
 const getAccountName = (accounts, id) => (
     (accounts || []).find((account) => account.id === id)?.hesapAdi || 'Hesap yok'
 );
+
+const formatMonthlyDay = (day) => {
+    const value = parseInt(day);
+    return Number.isFinite(value) && value > 0 ? `${value}. gün` : '-';
+};
 
 const confirmDefinitionDelete = async ({ collectionName, id, title }) => {
     const result = await Swal.fire({
@@ -212,15 +220,26 @@ const Overview = ({ data, gizliMod }) => {
 
 const SubscriptionList = ({ data, navigateTo, modalAc }) => (
     <PremiumCard className="definitions-panel">
-        <SectionHeader title="Sabit Giderler" description={`${(data.abonelikler || []).length} tanım`} />
+        <SectionHeader
+            title="Sabit Giderler"
+            description={`${(data.abonelikler || []).length} tanım`}
+            action={(
+                <button type="button" className="qw-action-button" onClick={() => modalAc('abonelik_ekle')}>
+                    <Plus size={16} /> Sabit Gider
+                </button>
+            )}
+        />
         <div className="definitions-list">
             {(data.abonelikler || []).map((item) => (
                 <RowShell key={item.id} onClick={() => navigateTo(`/tanimlamalar/sabit-giderler/${item.id}`)}>
                     <Repeat2 size={18} />
-                    <span><strong>{item.ad || 'Sabit gider'}</strong><small>{item.kategori || 'Kategori yok'} · Her ayın {item.gun || '-'} günü</small></span>
+                    <span><strong>{item.ad || 'Sabit gider'}</strong><small>{item.kategori || 'Kategori yok'} · {formatMonthlyDay(item.gun)}</small></span>
                     <b>{formatDefinitionMoney(item.tutar)}</b>
                     <StatusBadge tone={item.aktif === false ? 'neutral' : 'info'}>{item.aktif === false ? 'Pasif' : 'Aktif'}</StatusBadge>
-                    <button type="button" className="definitions-row-menu" onClick={(event) => { event.stopPropagation(); modalAc('duzenle_abonelik', item); }}><Ellipsis size={16} /></button>
+                    <div className="definitions-row-actions">
+                        <button type="button" aria-label="Düzenle" onClick={(event) => { event.stopPropagation(); modalAc('duzenle_abonelik', item); }}><Edit3 size={15} /></button>
+                        <button type="button" className="is-danger" aria-label="Sil" onClick={(event) => { event.stopPropagation(); confirmDefinitionDelete({ collectionName: 'abonelikler', id: item.id, title: item.ad }); }}><Trash2 size={15} /></button>
+                    </div>
                 </RowShell>
             ))}
             {(data.abonelikler || []).length === 0 && <EmptyState title="Sabit gider yok" icon={Repeat2} />}
@@ -228,7 +247,7 @@ const SubscriptionList = ({ data, navigateTo, modalAc }) => (
     </PremiumCard>
 );
 
-const BillList = ({ data, navigateTo }) => {
+const BillList = ({ data, navigateTo, modalAc }) => {
     const rows = (data.tanimliFaturalar || []).map((definition) => getBillDefinitionStatus(definition, {
         pendingBills: data.bekleyenFaturalar,
         transactions: data.islemler,
@@ -237,7 +256,15 @@ const BillList = ({ data, navigateTo }) => {
 
     return (
         <PremiumCard className="definitions-panel">
-            <SectionHeader title="Faturalar" description={`${rows.length} tanım`} />
+            <SectionHeader
+                title="Faturalar"
+                description={`${rows.length} tanım`}
+                action={(
+                    <button type="button" className="qw-action-button" onClick={() => modalAc('fatura_tanim_ekle')}>
+                        <Plus size={16} /> Fatura Tanımı
+                    </button>
+                )}
+            />
             <div className="definitions-list">
                 {rows.map(({ definition, current, lastPayment }) => (
                     <RowShell key={definition.id} onClick={() => navigateTo(`/tanimlamalar/faturalar/${definition.id}`)}>
@@ -245,6 +272,10 @@ const BillList = ({ data, navigateTo }) => {
                         <span><strong>{definition.baslik || definition.kurum || 'Fatura'}</strong><small>{formatDefinitionDate(current?.dueDate, { withYear: false })} · Son ödeme {lastPayment ? formatDefinitionDate(lastPayment.tarih) : 'yok'}</small></span>
                         <b>{current?.expectedAmount ? formatDefinitionMoney(current.expectedAmount) : '-'}</b>
                         <StatusBadge tone={statusTones[current?.status]}>{statusLabels[current?.status]}</StatusBadge>
+                        <div className="definitions-row-actions">
+                            <button type="button" aria-label="Düzenle" onClick={(event) => { event.stopPropagation(); modalAc('duzenle_fatura_tanim', definition); }}><Edit3 size={15} /></button>
+                            <button type="button" className="is-danger" aria-label="Sil" onClick={(event) => { event.stopPropagation(); confirmDefinitionDelete({ collectionName: 'fatura_tanimlari', id: definition.id, title: definition.baslik || definition.kurum }); }}><Trash2 size={15} /></button>
+                        </div>
                     </RowShell>
                 ))}
                 {rows.length === 0 && <EmptyState title="Fatura tanımı yok" icon={ReceiptText} />}
@@ -253,7 +284,7 @@ const BillList = ({ data, navigateTo }) => {
     );
 };
 
-const InstallmentList = ({ data, navigateTo }) => {
+const InstallmentList = ({ data, navigateTo, modalAc }) => {
     const [filter, setFilter] = useState('active');
     const rows = getAllInstallmentStatuses(data.taksitler, data.islemler);
     const filteredRows = rows.filter((row) => {
@@ -264,7 +295,15 @@ const InstallmentList = ({ data, navigateTo }) => {
 
     return (
         <PremiumCard className="definitions-panel">
-            <SectionHeader title="Taksitler" description={`${filteredRows.length} plan`} />
+            <SectionHeader
+                title="Taksitler"
+                description={`${filteredRows.length} plan`}
+                action={(
+                    <button type="button" className="qw-action-button" onClick={() => modalAc('taksit_ekle')}>
+                        <Plus size={16} /> Taksit
+                    </button>
+                )}
+            />
             <div className="definitions-tabs definitions-tabs--small">
                 <button type="button" className={filter === 'active' ? 'is-active' : ''} onClick={() => setFilter('active')}>Aktif</button>
                 <button type="button" className={filter === 'completed' ? 'is-active' : ''} onClick={() => setFilter('completed')}>Tamamlananlar</button>
@@ -276,15 +315,59 @@ const InstallmentList = ({ data, navigateTo }) => {
                         <CalendarClock size={18} />
                         <span>
                             <strong>{row.installment.baslik || 'Taksit'}</strong>
-                            <small>{row.paidCount} / {row.count} ödendi · Kalan {formatDefinitionMoney(row.remainingAmount)}{row.installment.reconstructed ? ' · geçmişten' : ''}</small>
+                            <small>
+                                {getAccountName(data.hesaplar, row.installment.hesapId)} · {row.paidCount} / {row.count} ödendi · Kalan {formatDefinitionMoney(row.remainingAmount)}{row.installment.reconstructed ? ' · geçmişten' : ''}
+                            </small>
                             <i style={{ '--progress': `${row.progress}%` }} />
                         </span>
                         <b>{row.nextPayment ? formatDefinitionMoney(row.nextPayment.plannedAmount) : formatDefinitionMoney(0)}</b>
                         <StatusBadge tone={statusTones[row.status]}>{statusLabels[row.status]}</StatusBadge>
+                        {!row.installment.reconstructed && (
+                            <div className="definitions-row-actions">
+                                <button type="button" aria-label="Düzenle" onClick={(event) => { event.stopPropagation(); modalAc('duzenle_taksit', row.installment); }}><Edit3 size={15} /></button>
+                                <button type="button" className="is-danger" aria-label="Sil" onClick={(event) => { event.stopPropagation(); confirmDefinitionDelete({ collectionName: 'taksitler', id: row.installment.id, title: row.installment.baslik }); }}><Trash2 size={15} /></button>
+                            </div>
+                        )}
                     </RowShell>
                 ))}
                 {filteredRows.length === 0 && <EmptyState title="Taksit planı yok" icon={CalendarClock} />}
             </div>
+        </PremiumCard>
+    );
+};
+
+const ReceivablePayableList = ({ data, modalAc, gizliMod }) => {
+    const [selectedCari, setSelectedCari] = useState(null);
+    const summaries = useMemo(() => buildCariSummaries(data.borclar, data.cariler), [data.borclar, data.cariler]);
+    const activeSummaries = summaries.filter((summary) => summary.activeCount > 0 || summary.completedCount > 0);
+
+    return (
+        <PremiumCard className="definitions-panel">
+            <SectionHeader title="Alacak / Verecek" description={`${activeSummaries.length} cari`} />
+            <div className="definitions-list">
+                {activeSummaries.map((summary) => {
+                    const isReceivable = summary.netBalance >= 0;
+                    return (
+                        <RowShell key={summary.key} onClick={() => setSelectedCari(summary)}>
+                            {isReceivable ? <ArrowDownRight size={18} /> : <CreditCard size={18} />}
+                            <span>
+                                <strong>{summary.name}</strong>
+                                <small>{formatDefinitionMoney(summary.activeReceivable, gizliMod)} alacak · {formatDefinitionMoney(summary.activePayable, gizliMod)} verecek · {summary.activeCount} açık işlem</small>
+                            </span>
+                            <b className={isReceivable ? 'is-success' : 'is-danger'}>{formatDefinitionMoney(Math.abs(summary.netBalance), gizliMod)}</b>
+                            <StatusBadge tone={isReceivable ? 'success' : 'danger'}>{isReceivable ? 'Alacak' : 'Verecek'}</StatusBadge>
+                        </RowShell>
+                    );
+                })}
+                {activeSummaries.length === 0 && <EmptyState title="Cari kayıt yok" icon={CreditCard} />}
+            </div>
+            <CariDetailModal
+                isOpen={Boolean(selectedCari)}
+                summary={selectedCari}
+                onClose={() => setSelectedCari(null)}
+                gizliMod={gizliMod}
+                modalAc={modalAc}
+            />
         </PremiumCard>
     );
 };
@@ -425,7 +508,7 @@ const SubscriptionDetail = ({ subscription, data, navigateTo, modalAc }) => {
                 <div>
                     <span>Sabit Gider</span>
                     <h2>{subscription.ad || 'Sabit gider'}</h2>
-                    <p>{subscription.kategori || 'Kategori yok'} · {getAccountName(data.hesaplar, subscription.hesapId)} · Her ayın {subscription.gun || '-'} günü</p>
+                    <p>{subscription.kategori || 'Kategori yok'} · {getAccountName(data.hesaplar, subscription.hesapId)} · {formatMonthlyDay(subscription.gun)}</p>
                 </div>
                 <strong>{formatDefinitionMoney(subscription.tutar)}</strong>
             </PremiumCard>
@@ -464,6 +547,7 @@ const DefinitionsDashboard = ({ data, gizliMod, routePath, navigateTo, modalAc }
     const activeTab = routePath.startsWith('/tanimlamalar/faturalar') ? 'bills'
         : routePath.startsWith('/tanimlamalar/taksitler') ? 'installments'
             : routePath.startsWith('/tanimlamalar/sabit-giderler') ? 'subscriptions'
+                : routePath.startsWith('/tanimlamalar/alacak-verecek') ? 'receivables'
                 : 'overview';
     const bill = (data.tanimliFaturalar || []).find((item) => item.id === billId);
     const installment = getAllInstallmentStatuses(data.taksitler, data.islemler).find((item) => item.installment.id === installmentId)?.installment;
@@ -477,15 +561,16 @@ const DefinitionsDashboard = ({ data, gizliMod, routePath, navigateTo, modalAc }
         <div className="definitions-page">
             <div className="definitions-tabs">
                 {tabs.map((tab) => (
-                    <button key={tab.id} type="button" className={activeTab === tab.id ? 'is-active' : ''} onClick={() => navigateTo(tab.id === 'overview' ? '/tanimlamalar' : `/tanimlamalar/${tab.id === 'subscriptions' ? 'sabit-giderler' : tab.id === 'bills' ? 'faturalar' : 'taksitler'}`)}>
+                    <button key={tab.id} type="button" className={activeTab === tab.id ? 'is-active' : ''} onClick={() => navigateTo(tab.id === 'overview' ? '/tanimlamalar' : `/tanimlamalar/${tab.id === 'subscriptions' ? 'sabit-giderler' : tab.id === 'bills' ? 'faturalar' : tab.id === 'receivables' ? 'alacak-verecek' : 'taksitler'}`)}>
                         {tab.label}
                     </button>
                 ))}
             </div>
             {activeTab === 'overview' && <Overview data={data} gizliMod={gizliMod} />}
             {activeTab === 'subscriptions' && <SubscriptionList data={data} navigateTo={navigateTo} modalAc={modalAc} />}
-            {activeTab === 'bills' && <BillList data={data} navigateTo={navigateTo} />}
-            {activeTab === 'installments' && <InstallmentList data={data} navigateTo={navigateTo} />}
+            {activeTab === 'bills' && <BillList data={data} navigateTo={navigateTo} modalAc={modalAc} />}
+            {activeTab === 'installments' && <InstallmentList data={data} navigateTo={navigateTo} modalAc={modalAc} />}
+            {activeTab === 'receivables' && <ReceivablePayableList data={data} modalAc={modalAc} gizliMod={gizliMod} />}
         </div>
     );
 };

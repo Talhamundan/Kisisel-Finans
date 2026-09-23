@@ -104,6 +104,7 @@ const QuickTransactionForm = ({
     const [errors, setErrors] = useState({});
     const [showMore, setShowMore] = useState(false);
     const [useFullTransferBalance, setUseFullTransferBalance] = useState(false);
+    const [autoTransferSourceId, setAutoTransferSourceId] = useState('');
     const activeTab = formTab || 'islem';
     const siraliKategoriListesi = useMemo(() => sortTurkishText(kategoriListesi || []), [kategoriListesi]);
     const siraliHesaplar = useMemo(() => [...(hesaplar || [])].sort((a, b) =>
@@ -123,6 +124,16 @@ const QuickTransactionForm = ({
     const transferSources = isTransferToCreditCard
         ? siraliHesaplar.filter(isCreditCardPaymentSourceAccount)
         : siraliHesaplar;
+    const latestTransferSourceId = useMemo(() => {
+        const sourceIds = new Set(transferSources.map((account) => account.id));
+        return [...(tumIslemler || [])]
+            .filter((transaction) => transaction?.islemTipi === 'transfer' && sourceIds.has(transaction.kaynakId))
+            .sort((a, b) => {
+                const aSeconds = a.tarih?.seconds || (a.tarih ? new Date(a.tarih).getTime() / 1000 : 0);
+                const bSeconds = b.tarih?.seconds || (b.tarih ? new Date(b.tarih).getTime() / 1000 : 0);
+                return bSeconds - aSeconds;
+            })[0]?.kaynakId || '';
+    }, [transferSources, tumIslemler]);
     const creditCardTransferAmounts = isTransferToCreditCard
         ? getCreditCardPaymentAmountOptions(selectedTransferTarget)
         : null;
@@ -169,7 +180,6 @@ const QuickTransactionForm = ({
         if (!defaultPaymentAccountId || !accountIds.has(defaultPaymentAccountId)) return;
         if (!secilenHesapId) setSecilenHesapId?.(defaultPaymentAccountId);
         if (!taksitHesapId) setTaksitHesapId?.(defaultPaymentAccountId);
-        if (!transferKaynakId) setTransferKaynakId?.(defaultPaymentAccountId);
     }, [
         accountIds,
         defaultPaymentAccountId,
@@ -179,6 +189,23 @@ const QuickTransactionForm = ({
         setTransferKaynakId,
         taksitHesapId,
         transferKaynakId,
+    ]);
+
+    useEffect(() => {
+        const fallbackSourceId = latestTransferSourceId || defaultPaymentAccountId;
+        const validTransferSourceIds = new Set(transferSources.map((account) => account.id));
+        if (!fallbackSourceId || !validTransferSourceIds.has(fallbackSourceId)) return;
+        if (transferKaynakId && transferKaynakId !== autoTransferSourceId) return;
+        if (transferKaynakId === fallbackSourceId) return;
+        setAutoTransferSourceId(fallbackSourceId);
+        setTransferKaynakId?.(fallbackSourceId);
+    }, [
+        autoTransferSourceId,
+        defaultPaymentAccountId,
+        latestTransferSourceId,
+        setTransferKaynakId,
+        transferKaynakId,
+        transferSources,
     ]);
 
     useEffect(() => {
@@ -326,7 +353,7 @@ const QuickTransactionForm = ({
                 >
                     <div className="qw-form-row">
                         <div>
-                            <select value={transferKaynakId} onChange={e => setTransferKaynakId(e.target.value)} style={inputStyle}>
+                            <select value={transferKaynakId} onChange={e => { setAutoTransferSourceId(''); setTransferKaynakId(e.target.value); }} style={inputStyle}>
                                 <option value="">Nereden?</option>
                                 {transferSources.map(h => <option key={h.id} value={h.id}>{h.hesapAdi} ({formatCurrencyPlain(parseFloat(h.guncelBakiye) || 0)})</option>)}
                             </select>

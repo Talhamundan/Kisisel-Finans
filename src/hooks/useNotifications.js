@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { formatCurrencyPlain, toDateSafe } from '../utils/helpers';
-import { getCreditCardPaymentPlan, isCreditCardStatementPaymentTransaction } from '../utils/creditCardPayments';
+import { getCreditCardStatementPaymentSummary } from '../utils/creditCardPayments';
 import { buildSubscriptionOccurrences } from '../utils/recurringPayments';
+import { buildDueNotificationMessage } from '../utils/notifications';
 
 const NOTIFICATION_WINDOW_DAYS = 3;
 const CREDIT_CARD_LIMIT_THRESHOLDS = [50, 20, 10];
@@ -91,12 +92,6 @@ export const useNotifications = ({
         const installmentPaymentCounts = new Map();
         const acknowledgedCreditCardLimitAlerts = getAcknowledgedCreditCardLimitAlerts();
 
-        const dueMessage = ({ name, daysLeft, overdueText }) => {
-            if (daysLeft < 0) return `🔥 ${name} ${overdueText || 'GECİKTİ'}! (${Math.abs(daysLeft)} gün)`;
-            if (daysLeft === 0) return `⚠️ ${name} için bugün son gün!`;
-            return `⚠️ ${name} için son ${daysLeft} gün!`;
-        };
-
         const addInstallmentPayment = (installmentId, paymentKey) => {
             if (!installmentId) return;
             if (!installmentPaymentCounts.has(installmentId)) installmentPaymentCounts.set(installmentId, new Set());
@@ -150,16 +145,9 @@ export const useNotifications = ({
                 const kesimGunuInt = parseInt(h.kesimGunu);
                 if (mevcutGun >= kesimGunuInt && mevcutGun < kesimGunuInt + 10) {
                     if (h.guncelBakiye < 0) {
-                        const paymentPlan = getCreditCardPaymentPlan(h, periodKey);
-                        const paidThisPeriod = islemler.reduce((sum, islem) => {
-                            if (!isCreditCardStatementPaymentTransaction(islem, h.id)) return sum;
-                            const t = toDateSafe(islem.tarih);
-                            if (!t || t.getMonth() !== mevcutAy || t.getFullYear() !== mevcutYil) return sum;
-                            return sum + (parseFloat(islem.tutar) || 0);
-                        }, 0);
-                        const minimumRemaining = Math.max(0, paymentPlan.minimumPayment - paidThisPeriod);
-                        if (paymentPlan.plannedPayment > 0 && minimumRemaining > 0.5) {
-                            tempBildirimler.push({ id: h.id + '_kk', tip: 'kk_hatirlatma', mesaj: `💳 ${h.hesapAdi} ekstresi kesildi!`, tutar: paymentPlan.plannedPayment, data: h, renk: 'orange' });
+                        const paymentPlan = getCreditCardStatementPaymentSummary(h, islemler, periodKey);
+                        if (paymentPlan.remainingMinimumPayment > 0.5) {
+                            tempBildirimler.push({ id: h.id + '_kk', tip: 'kk_hatirlatma', mesaj: `💳 ${h.hesapAdi} ekstresi kesildi!`, tutar: paymentPlan.remainingMinimumPayment, data: h, renk: 'orange' });
                         }
                     }
                 }
@@ -183,7 +171,7 @@ export const useNotifications = ({
                 tempBildirimler.push({
                     id: 'bes-gecikme',
                     tip: 'bes_odeme',
-                    mesaj: dueMessage({ name: 'BES Ödemesi', daysLeft: kalanGun, overdueText: 'Gecikti' }),
+                    mesaj: buildDueNotificationMessage({ name: 'BES Ödemesi', daysLeft: kalanGun, overdueText: 'Gecikti' }),
                     tutar: parseFloat(besVerisi.aylikTutar) || 0,
                     data: besVerisi,
                     renk: kalanGun < 0 ? 'red' : 'orange'
@@ -228,7 +216,7 @@ export const useNotifications = ({
             tempBildirimler.push({
                 id: abo.id,
                 tip: 'abonelik',
-                mesaj: dueMessage({ name: abo.ad, daysLeft: kalanGun, overdueText: 'ödenmedi' }),
+                mesaj: buildDueNotificationMessage({ name: abo.ad, daysLeft: kalanGun, overdueText: 'ödenmedi' }),
                 tutar: abo.tutar,
                 data: abo,
                 renk: kalanGun < 0 ? 'red' : 'orange'
@@ -261,7 +249,7 @@ export const useNotifications = ({
             tempBildirimler.push({
                 id: `${taksit.id}_taksit_${siradakiTaksit}`,
                 tip: 'taksit',
-                mesaj: dueMessage({ name: `${taksit.baslik} ${taksitEtiketi}`, daysLeft: kalanGun, overdueText: 'ödenmedi' }),
+                mesaj: buildDueNotificationMessage({ name: `${taksit.baslik} ${taksitEtiketi}`, daysLeft: kalanGun, overdueText: 'ödenmedi' }),
                 tutar: parseFloat(taksit.aylikTutar) || 0,
                 data: { ...taksit, odenmisTaksit, nextInstallmentNumber: siradakiTaksit, installmentCount: taksitSayisi },
                 renk: kalanGun < 0 ? 'red' : 'orange'
@@ -281,7 +269,7 @@ export const useNotifications = ({
                     tempBildirimler.push({
                         id: f.id,
                         tip: 'fatura',
-                        mesaj: dueMessage({ name: ad, daysLeft: kalanGun, overdueText: 'GECİKTİ' }),
+                        mesaj: buildDueNotificationMessage({ name: ad, daysLeft: kalanGun, overdueText: 'GECİKTİ' }),
                         tutar: f.tutar,
                         data: f,
                         renk: kalanGun < 0 ? 'red' : 'orange'
@@ -292,7 +280,10 @@ export const useNotifications = ({
 
         if (borclar && borclar.length > 0) {
             borclar.forEach(b => {
-                if (b.kalanTutar > 0 && b.sonOdemeTarihi) {
+                const debtType = b.type === 'ALACAK' ? 'ALACAK' : 'VERECEK';
+                const isCompleted = b.durum === 'completed' || b.status === 'completed';
+                const remaining = parseFloat(b.kalanTutar ?? b.tutar ?? b.toplamTutar) || 0;
+                if (!isCompleted && remaining > 0 && b.sonOdemeTarihi) {
                     const sonOdeme = toDateSafe(b.sonOdemeTarihi);
                     if (!sonOdeme) return;
                     const sO = startOfDay(sonOdeme);
@@ -301,11 +292,11 @@ export const useNotifications = ({
                     if (kalanGun <= NOTIFICATION_WINDOW_DAYS) {
                         tempBildirimler.push({
                             id: b.id + '_borc',
-                            tip: 'borc_hatirlatma',
-                            mesaj: dueMessage({ name: `${b.ad} Borcu`, daysLeft: kalanGun, overdueText: 'GECİKTİ' }),
-                            tutar: b.kalanTutar,
+                            tip: debtType === 'ALACAK' ? 'alacak_hatirlatma' : 'borc_hatirlatma',
+                            mesaj: buildDueNotificationMessage({ name: `${b.ad} ${debtType === 'ALACAK' ? 'Alacağı' : 'Vereceği'}`, daysLeft: kalanGun, overdueText: 'GECİKTİ' }),
+                            tutar: remaining,
                             data: b,
-                            renk: kalanGun < 0 ? 'red' : 'orange'
+                            renk: debtType === 'ALACAK' ? 'green' : (kalanGun < 0 ? 'red' : 'orange')
                         });
                     }
                 }

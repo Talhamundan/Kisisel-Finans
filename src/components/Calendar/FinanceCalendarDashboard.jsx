@@ -16,7 +16,7 @@ const readInitialCalendarMonth = () => {
     return new Date();
 };
 
-const FinanceCalendarDashboard = ({ user, alanKodu, gizliMod, sourceData = {} }) => {
+const FinanceCalendarDashboard = ({ user, alanKodu, gizliMod, sourceData = {}, onDebtAction }) => {
     const [viewDate, setViewDate] = useState(readInitialCalendarMonth);
     const viewYear = viewDate.getFullYear();
     const viewMonth = viewDate.getMonth();
@@ -80,6 +80,11 @@ const FinanceCalendarDashboard = ({ user, alanKodu, gizliMod, sourceData = {} })
                             events={selectedEvents}
                             gizliMod={gizliMod}
                             onClose={() => setSelectedDateKey(null)}
+                            onEventAction={(event) => {
+                                if (event?.source !== 'loan') return;
+                                const debt = (sourceData.debts || []).find((item) => item.id === event.sourceId);
+                                if (debt) onDebtAction?.(debt);
+                            }}
                         />
                     )}
                 </div>

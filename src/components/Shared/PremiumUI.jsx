@@ -40,7 +40,7 @@ export const IconTile = ({ icon: Icon, tone = 'neutral', className = '' }) => (
 
 export const StatusBadge = ({ children, tone = 'neutral', className = '' }) => (
     <Badge className={`qw-badge qw-badge--${tone} ${className}`.trim()}>
-        {children}
+        {typeof children === 'string' ? titleCaseTr(children) : children}
     </Badge>
 );
 

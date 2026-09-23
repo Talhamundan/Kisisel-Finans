@@ -3,6 +3,8 @@ import { getFinancingMetrics } from './financing.js';
 
 const parseAmount = (value) => parseFloat(value) || 0;
 const idOf = (value) => String(value || '').trim();
+const getDebtType = (debt) => debt?.type === 'ALACAK' ? 'ALACAK' : 'VERECEK';
+const isDebtCompleted = (debt) => debt?.durum === 'completed' || debt?.status === 'completed' || parseAmount(debt?.kalanTutar ?? debt?.tutar ?? debt?.toplamTutar) <= 0;
 
 export const DEFINITION_STATUS = {
     WAITING: 'waiting',
@@ -312,7 +314,7 @@ export const getBillPeriodRows = (definition, { pendingBills = [], transactions 
         const monthIndex = month - 1;
         const pending = getPendingBillForDefinition(definition, pendingBills, year, monthIndex);
         const paidTransaction = payments.find((transaction) => monthKeyFromDate(transaction.tarih) === periodKey);
-        const dueDate = toDateSafe(pending?.sonOdemeTarihi) || getMonthlyDueDate(definition, year, monthIndex);
+        const dueDate = toDateSafe(pending?.sonOdemeTarihi || pending?.tarih || pending?.vadeTarihi) || getMonthlyDueDate(definition, year, monthIndex);
         const amount = parseAmount(pending?.tutar || paidTransaction?.tutar || definition?.tutar || definition?.ortalamaTutar);
         const isOverdue = !paidTransaction && dueDate && dueDate < startOfToday();
         const status = paidTransaction
@@ -550,7 +552,8 @@ export const summarizeDefinitionsOverview = ({
     const installmentDebt = (installments || [])
         .filter((installment) => !financingInstallmentIds.has(installment.id))
         .reduce((sum, installment) => sum + getInstallmentStatus(installment, transactions).remainingAmount, 0);
-    const manualDebt = (debts || []).reduce((sum, debt) => sum + parseAmount(debt.kalanTutar ?? debt.tutar), 0);
+    const activePayables = (debts || []).filter((debt) => getDebtType(debt) === 'VERECEK' && !isDebtCompleted(debt));
+    const manualDebt = activePayables.reduce((sum, debt) => sum + parseAmount(debt.kalanTutar ?? debt.tutar ?? debt.toplamTutar), 0);
     const assetItems = [
         ...(accounts || [])
             .filter((account) => account.hesapTipi !== 'krediKarti')
@@ -596,12 +599,12 @@ export const summarizeDefinitionsOverview = ({
                 value: metrics.remainingPlannedPayment,
             };
         }).filter((item) => item.value > 0),
-        ...(debts || []).map((debt) => ({
+        ...activePayables.map((debt) => ({
             id: `manual-debt-${debt.id}`,
             group: 'Manuel Borçlar',
             label: debt.baslik || debt.ad || debt.aciklama || 'Borç',
-            meta: debt.kisi || debt.kurum || 'Manuel borç',
-            value: parseAmount(debt.kalanTutar ?? debt.tutar),
+            meta: debt.kisi || debt.kurum || 'Verecek',
+            value: parseAmount(debt.kalanTutar ?? debt.tutar ?? debt.toplamTutar),
         })).filter((item) => item.value > 0),
         ...(installments || [])
             .filter((installment) => !financingInstallmentIds.has(installment.id))

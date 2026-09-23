@@ -43,6 +43,21 @@ export const isCreditCardStatementPaymentTransaction = (transaction, accountId) 
     transaction?.araOdeme !== true
 );
 
+const toDateSafe = (value) => {
+    if (!value) return null;
+    if (value instanceof Date) return value;
+    if (typeof value === 'object' && typeof value.toDate === 'function') return value.toDate();
+    if (typeof value === 'object' && typeof value.seconds === 'number') return new Date(value.seconds * 1000);
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const monthKeyFromDate = (value) => {
+    const date = toDateSafe(value);
+    if (!date) return '';
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+};
+
 const clampPayment = (amount, debt) => {
     if (debt <= 0) return 0;
     return Math.max(0, Math.min(parseAmount(amount), debt));
@@ -93,6 +108,50 @@ export const getCreditCardPaymentPlan = (account, periodKey = '') => {
         minimumPayment,
         plannedPayment,
         carryoverDebt: Math.max(0, statementDebt - plannedPayment),
+    };
+};
+
+export const getCreditCardStatementPaymentSummary = (account, transactions = [], periodKey = '') => {
+    const paymentPlan = getCreditCardPaymentPlan(account, periodKey);
+    const statementPayments = (transactions || []).filter((transaction) => (
+        isCreditCardStatementPaymentTransaction(transaction, account?.id) &&
+        (!periodKey || monthKeyFromDate(transaction.tarih) === periodKey)
+    ));
+    const paidAmount = statementPayments.reduce((sum, transaction) => (
+        sum + parseAmount(transaction.appliedToStatement ?? transaction.tutar)
+    ), 0);
+    const statementDebt = Math.max(
+        paymentPlan.statementDebt,
+        ...statementPayments.map((transaction) => parseAmount(transaction.statementDebtBeforePayment)),
+        paymentPlan.statementDebt + paidAmount
+    );
+    const minimumPayment = Math.min(
+        statementDebt,
+        Math.max(
+            paymentPlan.minimumPayment,
+            ...statementPayments.map((transaction) => parseAmount(transaction.minimumPayment))
+        )
+    );
+    const remainingMinimumPayment = Math.max(0, minimumPayment - paidAmount);
+    const remainingStatementDebt = Math.max(0, statementDebt - paidAmount);
+    const status = paidAmount <= 0
+        ? 'unpaid'
+        : remainingStatementDebt <= 0
+            ? 'statement_paid'
+            : remainingMinimumPayment <= 0
+                ? 'minimum_paid'
+                : 'minimum_partial';
+
+    return {
+        ...paymentPlan,
+        statementDebt,
+        minimumPayment,
+        paidAmount,
+        remainingMinimumPayment,
+        remainingStatementDebt,
+        status,
+        minimumPaid: remainingMinimumPayment <= 0,
+        statementPaid: remainingStatementDebt <= 0 && statementDebt > 0,
     };
 };
 
@@ -160,17 +219,24 @@ export const buildCreditCardPaymentMetadata = ({ cardAccount, amount, paymentTyp
     const appliedToStatementCents = isStatementPayment ? Math.min(amountCents, statementDebtCents) : 0;
     const appliedToCurrentDebtCents = isStatementPayment ? Math.max(0, amountCents - appliedToStatementCents) : amountCents;
     const statementRemainingCents = Math.max(0, statementDebtCents - appliedToStatementCents);
+    const minimumPaymentCents = Math.min(statementDebtCents, toMoneyCents(paymentPlan.minimumPayment));
+    const minimumRemainingCents = Math.max(0, minimumPaymentCents - appliedToStatementCents);
+    const statementPaid = statementDebtCents > 0 && statementRemainingCents === 0;
+    const minimumPaid = minimumPaymentCents > 0 && minimumRemainingCents === 0;
 
     return {
         creditCardPaymentType: paymentType,
         araOdeme: paymentType === CREDIT_CARD_PAYMENT_TYPES.INTERIM,
         statementDebtBeforePayment: fromMoneyCents(statementDebtCents),
         currentDebtBeforePayment: fromMoneyCents(currentDebtCents),
-        minimumPayment: fromMoneyCents(Math.min(statementDebtCents, toMoneyCents(paymentPlan.minimumPayment))),
+        minimumPayment: fromMoneyCents(minimumPaymentCents),
         appliedToStatement: fromMoneyCents(appliedToStatementCents),
         appliedToCurrentDebt: fromMoneyCents(appliedToCurrentDebtCents),
         statementRemainingAfterPayment: fromMoneyCents(statementRemainingCents),
-        statementPaid: statementDebtCents > 0 && statementRemainingCents === 0,
+        minimumRemainingAfterPayment: fromMoneyCents(minimumRemainingCents),
+        minimumPaid,
+        statementPaid,
+        statementPaymentStatus: statementPaid ? 'statement_paid' : minimumPaid ? 'minimum_paid' : appliedToStatementCents > 0 ? 'minimum_partial' : 'unpaid',
     };
 };
 

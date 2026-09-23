@@ -108,7 +108,10 @@ export const useCalculations = (
         return aylarListesi;
     }, [islemler, aktifAy]);
     // Totals
-    const bugunGider = filtrelenmisIslemler.filter(i => {
+    const isStatsTransaction = (transaction) => !transaction?.excludeFromBudgetStats && !transaction?.debtId && !transaction?.borcId;
+    const istatistikIslemleri = filtrelenmisIslemler.filter(isStatsTransaction);
+
+    const bugunGider = istatistikIslemleri.filter(i => {
         const d = toDateSafe(i.tarih);
         if (!d) return false;
         return i.islemTipi === 'gider' &&
@@ -117,16 +120,16 @@ export const useCalculations = (
             d.getFullYear() === new Date().getFullYear();
     }).reduce((acc, i) => acc + i.tutar, 0);
 
-    const toplamGelir = filtrelenmisIslemler.filter(i => i.islemTipi === 'gelir').reduce((acc, i) => acc + i.tutar, 0);
-    const toplamGider = filtrelenmisIslemler.filter(i => i.islemTipi === 'gider').reduce((acc, i) => acc + i.tutar, 0);
-    const harcananLimit = filtrelenmisIslemler.filter(i => i.islemTipi === 'gider' && i.kategori !== 'Transfer' && i.kategori !== 'Kira' && i.kategori !== 'Kira/Aidat' && i.kategori !== 'Yatırım' && i.kategori !== 'Şirket').reduce((acc, i) => acc + i.tutar, 0);
+    const toplamGelir = istatistikIslemleri.filter(i => i.islemTipi === 'gelir').reduce((acc, i) => acc + i.tutar, 0);
+    const toplamGider = istatistikIslemleri.filter(i => i.islemTipi === 'gider').reduce((acc, i) => acc + i.tutar, 0);
+    const harcananLimit = istatistikIslemleri.filter(i => i.islemTipi === 'gider' && i.kategori !== 'Transfer' && i.kategori !== 'Kira' && i.kategori !== 'Kira/Aidat' && i.kategori !== 'Yatırım' && i.kategori !== 'Şirket').reduce((acc, i) => acc + i.tutar, 0);
     const safeLimit = Math.max(0, parseFloat(aylikLimit) || 0);
     const limitYuzdesi = safeLimit > 0 ? Math.min((harcananLimit / safeLimit) * 100, 100) : 0;
     const limitRenk = limitYuzdesi > 90 ? '#e53e3e' : limitYuzdesi > 75 ? '#dd6b20' : '#48bb78';
 
     // Charts
-    const kategoriVerisi = filtrelenmisIslemler.filter(i => i.islemTipi === 'gider' && i.kategori !== 'Transfer').reduce((acc, curr) => { const mevcut = acc.find(item => item.name === curr.kategori); if (mevcut) { mevcut.value += curr.tutar; } else { acc.push({ name: curr.kategori, value: curr.tutar }); } return acc; }, []);
-    const expenseChartTransactions = filtrelenmisIslemler.filter((transaction) => (
+    const kategoriVerisi = istatistikIslemleri.filter(i => i.islemTipi === 'gider' && i.kategori !== 'Transfer').reduce((acc, curr) => { const mevcut = acc.find(item => item.name === curr.kategori); if (mevcut) { mevcut.value += curr.tutar; } else { acc.push({ name: curr.kategori, value: curr.tutar }); } return acc; }, []);
+    const expenseChartTransactions = istatistikIslemleri.filter((transaction) => (
         transaction.islemTipi === 'gider' &&
         transaction.kategori !== 'Transfer' &&
         transaction.kategori !== 'Yatırım' &&
@@ -204,6 +207,8 @@ export const useCalculations = (
     const portfoyVerisi = portfoy.reduce((acc, curr) => { const guncelTutar = curr.adet * (curr.guncelFiyat || curr.alisFiyati); const mevcut = acc.find(item => item.name === curr.sembol); if (mevcut) { mevcut.value += guncelTutar; } else { acc.push({ name: curr.sembol, value: guncelTutar }); } return acc; }, []);
 
     const toplamKalanBorc = borclar ? borclar
+        .filter((b) => (b.type || 'VERECEK') !== 'ALACAK')
+        .filter((b) => b.durum !== 'completed' && b.status !== 'completed')
         .filter((b) => b.sonOdemeTarihi ? isDateInPeriod(b.sonOdemeTarihi, selectedPeriod) : true)
         .reduce((sum, b) => sum + (b.kalanTutar || 0), 0) : 0;
     const taksitOdemeSayilari = useMemo(() => {
