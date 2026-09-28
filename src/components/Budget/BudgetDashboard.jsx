@@ -122,13 +122,15 @@ const getAccountTone = (account) => {
 };
 
 const formatDayMonth = (date) => {
-    if (!date) return 'Tarih yok';
-    return date.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' });
+    const safeDate = toDateSafe(date);
+    if (!safeDate) return 'Tarih yok';
+    return safeDate.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' });
 };
 
 const formatDayMonthWeekday = (date) => {
-    if (!date) return 'Tarih yok';
-    return date.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', weekday: 'long' });
+    const safeDate = toDateSafe(date);
+    if (!safeDate) return 'Tarih yok';
+    return safeDate.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', weekday: 'long' });
 };
 
 const getFinancialTone = (value) => {
@@ -167,11 +169,16 @@ const addMonthsClamped = (date, monthOffset) => {
 };
 
 const startOfDay = (date) => {
-    if (!date) return null;
-    const result = new Date(date);
+    const safeDate = toDateSafe(date);
+    if (!safeDate) return null;
+    const result = new Date(safeDate);
     result.setHours(0, 0, 0, 0);
     return result;
 };
+
+const getDateTime = (date, fallback = Number.MAX_SAFE_INTEGER) => (
+    toDateSafe(date)?.getTime() ?? fallback
+);
 
 const getValidBillingDate = (year, month, billingDay) => {
     const day = parseInt(billingDay) || 0;
@@ -204,11 +211,14 @@ const getStatementPeriod = (account, selectedPeriod) => {
     return start && end ? { start, end, statementYear, statementMonth, billingDay } : null;
 };
 
-const formatPeriodDate = (date) => date?.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' }) || '';
+const formatPeriodDate = (date) => (
+    toDateSafe(date)?.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' }) || ''
+);
 
 const formatStatementRange = (period) => {
     if (!period?.start || !period?.end) return '';
-    const inclusiveEnd = new Date(period.end);
+    const inclusiveEnd = toDateSafe(period.end);
+    if (!inclusiveEnd) return '';
     inclusiveEnd.setDate(inclusiveEnd.getDate() - 1);
     return `${formatPeriodDate(period.start)} - ${inclusiveEnd.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}`;
 };
@@ -982,7 +992,7 @@ const BudgetDashboard = ({
             })
             .sort((a, b) => {
                 if (a.isOverdue !== b.isOverdue) return a.isOverdue ? -1 : 1;
-                return (a.date?.getTime() || Number.MAX_SAFE_INTEGER) - (b.date?.getTime() || Number.MAX_SAFE_INTEGER);
+                return getDateTime(a.date) - getDateTime(b.date);
             });
     }, [abonelikler, abonelikOde, bekleyenFaturalar, borclar, getInstallmentPaidCount, hesaplar, modalAc, selectedPeriod, taksitOde, taksitler, tanimliFaturalar, tumIslemler]);
 
@@ -1024,7 +1034,8 @@ const BudgetDashboard = ({
         .filter((summary) => Math.abs(summary.netBalance) < 0.01)
         .slice(0, 4);
 
-    const allInstallmentRows = getAllInstallmentStatuses(taksitler, tumIslemler)
+    const allInstallmentStatuses = getAllInstallmentStatuses(taksitler, tumIslemler);
+    const allInstallmentRows = allInstallmentStatuses
         .map((status) => {
             const item = status.installment;
             return {
@@ -1040,7 +1051,7 @@ const BudgetDashboard = ({
             };
         })
         .filter((item) => !(item.installmentCount > 0 && item.paidCount >= item.installmentCount))
-        .sort((a, b) => (a.nextDueDate?.getTime() || Number.MAX_SAFE_INTEGER) - (b.nextDueDate?.getTime() || Number.MAX_SAFE_INTEGER));
+        .sort((a, b) => getDateTime(a.nextDueDate) - getDateTime(b.nextDueDate));
     const periodInstallmentRows = selectedPeriod?.month === 'all'
         ? allInstallmentRows
         : allInstallmentRows.filter((item) => isDateInPeriod(item.nextDueDate, selectedPeriod));
@@ -1049,9 +1060,35 @@ const BudgetDashboard = ({
     const monthlyInstallmentLoad = periodInstallmentRows.reduce((sum, item) => (
         sum + Math.min(item.monthly, item.remainingDebt)
     ), 0);
-    const installmentSectionDescription = selectedPeriod?.month === 'all'
+    const installmentDisplayRows = allInstallmentStatuses
+        .map((status) => {
+            const periodRow = selectedPeriod?.month === 'all'
+                ? status.nextPayment
+                : status.rows.find((row) => (
+                    isDateInPeriod(row.dueDate, selectedPeriod) ||
+                    (row.status === DEFINITION_STATUS.PAID && isDateInPeriod(row.paidDate, selectedPeriod))
+                ));
+            if (!periodRow) return null;
+            const isPaid = periodRow.status === DEFINITION_STATUS.PAID;
+            const isCompleted = status.count > 0 && status.paidCount >= status.count;
+            return {
+                ...status.installment,
+                status,
+                periodRow,
+                displayDate: isPaid ? periodRow.paidDate || periodRow.dueDate : periodRow.dueDate,
+                displayAmount: isPaid ? parseAmount(periodRow.paidAmount || periodRow.plannedAmount) : parseAmount(periodRow.plannedAmount),
+                badge: {
+                    label: statusLabels[periodRow.status] || (isCompleted ? 'Tamamlandı' : 'Bekliyor'),
+                    tone: statusTones[periodRow.status] || (isCompleted ? 'success' : 'neutral'),
+                },
+            };
+        })
+        .filter(Boolean)
+        .sort((a, b) => getDateTime(a.displayDate) - getDateTime(b.displayDate))
+        .slice(0, 8);
+    const installmentDisplayCountLabel = selectedPeriod?.month === 'all'
         ? `${allInstallmentRows.length} aktif taksit`
-        : `${periodInstallmentRows.length} taksit`;
+        : `${installmentDisplayRows.length} taksit`;
 
     const selectedPeriodNet = toplamGelir - toplamGider;
     const todayNet = todayStats.income - todayStats.expense;
@@ -1105,7 +1142,7 @@ const BudgetDashboard = ({
                 mode: current?.pendingBill ? 'pending' : 'definition',
             };
         })
-        .sort((a, b) => (a.date?.getTime() || Number.MAX_SAFE_INTEGER) - (b.date?.getTime() || Number.MAX_SAFE_INTEGER))
+        .sort((a, b) => getDateTime(a.date) - getDateTime(b.date))
         .slice(0, 8);
     const billGeneralTotal = (tanimliFaturalar || []).reduce((sum, definition) => (
         sum + parseAmount(definition.tutar || definition.ortalamaTutar)
@@ -1146,6 +1183,13 @@ const BudgetDashboard = ({
             }, 0);
         }, 0);
     }, [finansmanlar, financingContext, financingSummary.monthlyDue, selectedPeriod]);
+    const getFinancingPeriodDue = useCallback((metrics) => {
+        if (selectedPeriod?.month === 'all') return parseAmount(metrics.nextPayment?.amount);
+        return metrics.paymentRows.reduce((sum, row) => {
+            if (row.isPaid || !isDateInPeriod(row.dueDate, selectedPeriod)) return sum;
+            return sum + parseAmount(row.plannedAmount);
+        }, 0);
+    }, [selectedPeriod]);
     const financingRows = useMemo(() => (finansmanlar || [])
         .map((financing) => ({ financing, metrics: getFinancingMetrics(financing, financingContext) }))
         .filter(({ metrics }) => metrics.effectiveStatus !== FINANCING_STATUS.CLOSED)
@@ -1745,7 +1789,7 @@ const BudgetDashboard = ({
                     title="Taksitler"
                     footer={(
                         <WidgetFooterSummary
-                            countLabel={installmentSectionDescription}
+                            countLabel={installmentDisplayCountLabel}
                             items={[
                                 { label: 'Genel toplam', value: formatPara(installmentGeneralTotal) },
                                 { label: 'Bu ay kalan', value: formatPara(monthlyInstallmentLoad) },
@@ -1754,27 +1798,27 @@ const BudgetDashboard = ({
                     )}
                 >
                     <div className="qw-module-list">
-                        {installmentRows.map((installment) => {
-                            const paid = installment.paidCount;
-                            const count = installment.installmentCount;
-                            const dueDate = installment.nextDueDate;
-                            const nextInstallmentNumber = installment.nextInstallmentNumber;
-                            const dueText = dueDate ? `${formatDayMonth(dueDate)} · ` : '';
-                            const installmentForPayment = { ...installment, odenmisTaksit: paid };
+                        {installmentDisplayRows.map((installment) => {
+                            const row = installment.periodRow;
+                            const status = installment.status;
+                            const isPaid = row.status === DEFINITION_STATUS.PAID;
+                            const dueText = installment.displayDate ? `${formatDayMonth(installment.displayDate)} · ` : '';
+                            const installmentForPayment = { ...installment, odenmisTaksit: Math.max(0, row.installmentNumber - 1) };
                             return (
                                 <ModuleRow
-                                    key={installment.id}
+                                    key={`${installment.id}-${row.installmentNumber}`}
                                     icon={CalendarClock}
-                                    tone="purple"
+                                    tone={row.status === DEFINITION_STATUS.OVERDUE ? 'danger' : isPaid ? 'neutral' : 'purple'}
                                     title={installment.baslik || 'Taksit'}
-                                    meta={`${dueText}${formatPara(installment.remainingDebt)} · ${nextInstallmentNumber}/${count || '-'} taksit`}
-                                    amount={formatPara(installment.monthly)}
-                                    amountTone="purple"
-                                    onClick={() => taksitOde(installmentForPayment)}
+                                    meta={`${dueText}${row.installmentNumber}/${status.count || '-'} taksit · Kalan ${formatPara(status.remainingAmount)}`}
+                                    amount={formatPara(installment.displayAmount)}
+                                    amountTone={row.status === DEFINITION_STATUS.OVERDUE ? 'danger' : isPaid ? 'neutral' : 'purple'}
+                                    badge={installment.badge}
+                                    onClick={isPaid ? undefined : () => taksitOde(installmentForPayment)}
                                 />
                             );
                         })}
-                        {installmentRows.length === 0 && <EmptyState title="Aktif taksit yok" description="Taksit planlarınız burada görünür." icon={CalendarClock} />}
+                        {installmentDisplayRows.length === 0 && <EmptyState title="Taksit yok" description="Seçili dönemde taksit planı görünmüyor." icon={CalendarClock} />}
                     </div>
                 </DashboardWidget>
             </div>
@@ -1854,6 +1898,7 @@ const BudgetDashboard = ({
                     <div className="qw-module-list qw-module-list--debt">
                         {financingRows.map(({ financing, metrics }) => {
                             const isClosed = metrics.effectiveStatus === FINANCING_STATUS.CLOSED;
+                            const periodDue = getFinancingPeriodDue(metrics);
                             const nextMeta = metrics.nextPayment
                                 ? `Sonraki: ${formatShortDate(metrics.nextPayment.date)}`
                                 : 'Sonraki ödeme yok';
@@ -1866,8 +1911,8 @@ const BudgetDashboard = ({
                                     meta={isClosed
                                         ? `${metrics.paidInstallments}/${metrics.installmentCount || '-'} · ${financing.closureType === 'EARLY' ? 'Erken kapatıldı' : 'Kapandı'}`
                                         : `${metrics.paidInstallments}/${metrics.installmentCount || '-'} ödendi · ${nextMeta}`}
-                                    amount={isClosed ? 'Kapandı' : formatFinancingMoney(metrics.remainingPlannedPayment, gizliMod)}
-                                    amountTone={isClosed ? 'neutral' : 'danger'}
+                                    amount={isClosed ? 'Kapandı' : formatFinancingMoney(periodDue, gizliMod)}
+                                    amountTone={isClosed || periodDue <= 0 ? 'neutral' : 'danger'}
                                     onClick={() => navigateTo?.(`/finansmanlar/${financing.id}`)}
                                 />
                             );

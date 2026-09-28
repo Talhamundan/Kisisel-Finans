@@ -1,0 +1,69 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function areaMeta(code) {
+      return get(/databases/$(database)/documents/area_access_codes/$(code)).data;
+    }
+
+    function activeAreaCode(code) {
+      return exists(/databases/$(database)/documents/area_access_codes/$(code))
+        && areaMeta(code).disabled != true;
+    }
+
+    function canReadArea(code) {
+      return signedIn()
+        && (
+          !exists(/databases/$(database)/documents/area_access_codes/$(code))
+          || areaMeta(code).ownerUid == request.auth.uid
+          || areaMeta(code).ownerUid == null
+        );
+    }
+
+    function validAreaWrite() {
+      return signedIn()
+        && request.resource.data.alanKodu is string
+        && canReadArea(request.resource.data.alanKodu);
+    }
+
+    match /area_access_codes/{code} {
+      allow read: if signedIn() && (
+        !exists(/databases/$(database)/documents/area_access_codes/$(code))
+        || resource.data.ownerUid == request.auth.uid
+        || resource.data.ownerUid == null
+      );
+
+      allow create: if signedIn()
+        && request.resource.data.accessCode == code
+        && (request.resource.data.ownerUid == request.auth.uid || request.resource.data.ownerUid == null)
+        && (
+          request.resource.data.passwordConfigured == false
+          || request.resource.data.passwordHash is string
+        )
+        && !('password' in request.resource.data);
+
+      allow update: if signedIn()
+        && (resource.data.ownerUid == request.auth.uid || resource.data.ownerUid == null)
+        && (request.resource.data.ownerUid == request.auth.uid || request.resource.data.ownerUid == null)
+        && !('password' in request.resource.data);
+    }
+
+    match /ayarlar/{areaCode} {
+      allow read: if canReadArea(areaCode);
+      allow create, update: if signedIn() && canReadArea(areaCode);
+    }
+
+    match /{collectionName}/{documentId} {
+      allow read: if resource.data.alanKodu is string && canReadArea(resource.data.alanKodu);
+      allow create: if validAreaWrite();
+      allow update: if validAreaWrite();
+      allow delete: if signedIn()
+        && resource.data.alanKodu is string
+        && canReadArea(resource.data.alanKodu);
+    }
+  }
+}

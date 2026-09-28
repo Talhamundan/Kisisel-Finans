@@ -39,9 +39,11 @@ export const getSalaryPeriod = (account, selectedPeriod) => {
 
 export const formatSalaryPeriodRange = (period) => {
     if (!period?.start || !period?.end) return '';
-    const inclusiveEnd = new Date(period.end);
+    const start = toDateSafe(period.start);
+    const inclusiveEnd = toDateSafe(period.end);
+    if (!start || !inclusiveEnd) return '';
     inclusiveEnd.setDate(inclusiveEnd.getDate() - 1);
-    const startText = period.start.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' });
+    const startText = start.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' });
     const endText = inclusiveEnd.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
     return `${startText} - ${endText}`;
 };

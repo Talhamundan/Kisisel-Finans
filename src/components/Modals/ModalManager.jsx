@@ -305,9 +305,6 @@ const ModalManager = ({
     tanimHesapId, setTanimHesapId,
     faturaTanimDuzenle,
     alanKodu,
-    verileriTasi,
-    yeniKodInput, setYeniKodInput,
-    tasimaIslemiSuruyor,
     satisYap,
     secilenHesapId, setSecilenHesapId,
     defaultPaymentAccountId,
@@ -1255,16 +1252,12 @@ const ModalManager = ({
                     <button type="submit" style={{ padding: '0 16px', borderRadius: '8px', border: 'none', background: '#3182ce', color: 'white', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>Ekle</button>
                 </form>
 
-                {/* 3. VERİ TAŞIMA */}
-                <div style={{ padding: '12px', background: '#fffaf0', border: '1px solid #fbd38d', borderRadius: '10px' }}>
-                    <h4 style={{ margin: '0 0 8px 0', color: '#c05621', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '5px' }}>🚚 Verileri Başka Koda Taşı</h4>
-                    <div style={{ fontSize: '11px', marginBottom: '8px', color: '#744210' }}>
-                        Mevcut Kodunuz: <b>{alanKodu}</b>. Taşımak için yeni kodu girin.
+                {/* 3. ALAN KODU */}
+                <div style={{ padding: '12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px' }}>
+                    <h4 style={{ margin: '0 0 8px 0', color: '#334155', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '5px' }}>🔐 Alan Kodu Güvenliği</h4>
+                    <div style={{ fontSize: '11px', marginBottom: '8px', color: '#475569' }}>
+                        Aktif alan kodunuz: <b>{alanKodu}</b>. Alan kodunu değiştirmek ve alan şifresini yönetmek için Ayarlar sayfasındaki Güvenlik bölümünü kullanın.
                     </div>
-                    <form onSubmit={verileriTasi} style={{ display: 'flex', gap: '8px' }}>
-                        <input value={yeniKodInput} onChange={e => setYeniKodInput(e.target.value.toUpperCase())} placeholder="YENİ KOD" style={{ ...inputStyle, flex: 1, border: '1px solid #fbd38d', background: 'white', fontSize: '12px', padding: '8px' }} />
-                        <button type="submit" disabled={tasimaIslemiSuruyor} style={{ background: '#c05621', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '11px' }}>{tasimaIslemiSuruyor ? '...' : 'TAŞI'}</button>
-                    </form>
                 </div>
             </div>
         );

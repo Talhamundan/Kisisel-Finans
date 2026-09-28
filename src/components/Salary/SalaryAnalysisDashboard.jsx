@@ -14,8 +14,6 @@ import {
 } from 'recharts';
 import {
     ArrowDownRight,
-    ArrowLeft,
-    ArrowRight,
     Banknote,
     CreditCard,
     Edit3,
@@ -49,6 +47,7 @@ import {
 
 const parseAmount = (value) => parseFloat(value) || 0;
 const formatPara = (value) => formatCurrencyPlain(parseAmount(value));
+const hiddenMoney = '****';
 const normalizeText = (value) => String(value || '').toLocaleLowerCase('tr-TR').trim();
 const moneyTone = (value) => (parseAmount(value) > 0 ? 'success' : parseAmount(value) < 0 ? 'danger' : 'neutral');
 const toLocalDateKey = (value) => {
@@ -82,9 +81,13 @@ const clampDate = (year, month, day) => {
     return new Date(year, month, Math.min(parsed, lastDay), 0, 0, 0, 0);
 };
 
-const formatDayMonth = (date) => date
-    ? date.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' })
-    : 'Tarih yok';
+const formatDayMonth = (date) => (
+    toDateSafe(date)?.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' }) || 'Tarih yok'
+);
+
+const formatFullDate = (date) => (
+    toDateSafe(date)?.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' }) || 'Tarih yok'
+);
 
 const getAccountMovementAmount = (transaction, accountId) => {
     const amount = parseAmount(transaction.tutar);
@@ -445,22 +448,22 @@ const buildIncomeRows = ({ salaries, incomeTransactions, period, accounts = [], 
     });
 };
 
-const SalaryTooltip = ({ active, payload, hasInvestmentAccount = true }) => {
+const SalaryTooltip = ({ active, payload, hasInvestmentAccount = true, formatMoney = formatPara }) => {
     if (!active || !payload?.length) return null;
     const item = payload[0].payload;
     return (
         <div className="salary-chart-tooltip">
-            <strong>{item.date.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}</strong>
-            <span><em>Gün başı bakiye</em><b>{formatPara(item.start)}</b></span>
-            <span><em>Gelir</em><b className="is-success">{formatPara(item.income)}</b></span>
-            <span><em>Harcama</em><b className="is-danger">{formatPara(item.realExpense)}</b></span>
-            <span><em>Borç</em><b className="is-warning">{formatPara(item.debtPayment)}</b></span>
+            <strong>{formatFullDate(item.date)}</strong>
+            <span><em>Gün başı bakiye</em><b>{formatMoney(item.start)}</b></span>
+            <span><em>Gelir</em><b className="is-success">{formatMoney(item.income)}</b></span>
+            <span><em>Harcama</em><b className="is-danger">{formatMoney(item.realExpense)}</b></span>
+            <span><em>Borç</em><b className="is-warning">{formatMoney(item.debtPayment)}</b></span>
             {hasInvestmentAccount && (
-                <span><em>Yatırım</em><b className="is-info">{formatPara(item.investment)}</b></span>
+                <span><em>Yatırım</em><b className="is-info">{formatMoney(item.investment)}</b></span>
             )}
-            <span><em>Transfer girişi</em><b className="is-success">{formatPara(item.transferIn)}</b></span>
-            <span><em>Transfer</em><b className="is-purple">{formatPara(item.transfer)}</b></span>
-            <span><em>Gün sonu kalan</em><b className={moneyTone(item.remaining) === 'danger' ? 'is-danger' : 'is-success'}>{formatPara(item.remaining)}</b></span>
+            <span><em>Transfer girişi</em><b className="is-success">{formatMoney(item.transferIn)}</b></span>
+            <span><em>Transfer</em><b className="is-purple">{formatMoney(item.transfer)}</b></span>
+            <span><em>Gün sonu kalan</em><b className={moneyTone(item.remaining) === 'danger' ? 'is-danger' : 'is-success'}>{formatMoney(item.remaining)}</b></span>
         </div>
     );
 };
@@ -475,17 +478,21 @@ const SalaryAnalysisDashboard = ({
     islemSil,
     normalSil,
     hasInvestmentAccount = true,
+    gizliMod = false,
 }) => {
+    const formatMoney = (value) => gizliMod ? hiddenMoney : formatPara(value);
     const salaryAccounts = useMemo(() => (hesaplar || []).filter(isSalaryAccount), [hesaplar]);
     const defaultAccount = salaryAccounts.find((account) => account.anaMaasHesabi) || salaryAccounts[0] || null;
     const [selectedAccountId, setSelectedAccountId] = useState(defaultAccount?.id || '');
-    const [analysisPeriod, setAnalysisPeriod] = useState({
-        year: selectedPeriod?.year || new Date().getFullYear(),
-        month: selectedPeriod?.month === 'all' ? new Date().getMonth() + 1 : selectedPeriod?.month || new Date().getMonth() + 1,
-    });
     const [expandedAllocation, setExpandedAllocation] = useState('');
 
     const selectedAccount = salaryAccounts.find((account) => account.id === selectedAccountId) || defaultAccount;
+    const analysisPeriod = useMemo(() => ({
+        year: Number(selectedPeriod?.year) || new Date().getFullYear(),
+        month: selectedPeriod?.month === 'all'
+            ? new Date().getMonth() + 1
+            : Number(selectedPeriod?.month) || new Date().getMonth() + 1,
+    }), [selectedPeriod]);
     const period = selectedAccount ? getSalaryPeriod(selectedAccount, analysisPeriod) : null;
     const previousPeriod = addMonths(analysisPeriod, -1);
     const previousSalaryPeriod = selectedAccount ? getSalaryPeriod(selectedAccount, previousPeriod) : null;
@@ -602,7 +609,7 @@ const SalaryAnalysisDashboard = ({
         if (!usable) return 'Aşılmadı';
         const target = usable * (1 - ratio);
         const found = dailyRemaining.find((day) => day.remaining <= target);
-        return found ? found.date.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' }) : 'Aşılmadı';
+        return found ? formatDayMonth(found.date) : 'Aşılmadı';
     };
 
     const last6Periods = Array.from({ length: 6 }, (_, index) => addMonths(analysisPeriod, index - 5)).map((periodItem) => {
@@ -650,33 +657,22 @@ const SalaryAnalysisDashboard = ({
                     <select value={selectedAccount?.id || ''} onChange={(event) => setSelectedAccountId(event.target.value)}>
                         {salaryAccounts.map((account) => <option key={account.id} value={account.id}>{account.hesapAdi}</option>)}
                     </select>
-                    <div>
+                    <div className="salary-period-info">
                         <StatusBadge tone="purple">{periodTitle}</StatusBadge>
                         <span>{periodRange}</span>
                     </div>
                 </div>
-                <div className="salary-page-controls">
-                    <select value={analysisPeriod.month} onChange={(event) => setAnalysisPeriod((prev) => ({ ...prev, month: Number(event.target.value) }))}>
-                        {MONTH_NAMES.map((name, index) => <option key={name} value={index + 1}>{name}</option>)}
-                    </select>
-                    <select value={analysisPeriod.year} onChange={(event) => setAnalysisPeriod((prev) => ({ ...prev, year: Number(event.target.value) }))}>
-                        {Array.from({ length: 7 }, (_, index) => new Date().getFullYear() - 3 + index).map((year) => <option key={year} value={year}>{year}</option>)}
-                    </select>
-                    <button type="button" onClick={() => setAnalysisPeriod(addMonths(analysisPeriod, -1))}><ArrowLeft size={16} /> Önceki</button>
-                    <button type="button" onClick={() => setAnalysisPeriod(addMonths(analysisPeriod, 1))}>Sonraki <ArrowRight size={16} /></button>
-                    <button type="button" onClick={() => setAnalysisPeriod({ year: new Date().getFullYear(), month: new Date().getMonth() + 1 })}>Bugün</button>
-                </div>
             </PremiumCard>
 
             <div className="salary-summary-grid">
-                <StatCard title="Beklenen Gelir" value={formatPara(expectedIncomeTotal)} description={`${definedIncomeRows.length} düzenli gelir tanımı`} icon={ReceiptText} tone="info" />
-                <StatCard title="Gerçekleşen Gelir" value={formatPara(receivedIncomeTotal)} description={`${incomeRows.filter((row) => row.actualAmount > 0).length} gelir hareketi`} icon={ArrowDownRight} tone="success" />
-                <StatCard title="Gerçek Harcama" value={formatPara(summary.realExpense)} description={`${periodIncome > 0 ? Math.round((summary.realExpense / periodIncome) * 100) : 0}% maaşa oran`} icon={TrendingDown} tone="danger" />
-                <StatCard title="Kredi ve Kart Ödemeleri" value={formatPara(summary.debtPayment)} description={`${debtRatio}% maaşa oran`} icon={CreditCard} tone="warning" />
+                <StatCard title="Beklenen Gelir" value={formatMoney(expectedIncomeTotal)} description={`${definedIncomeRows.length} düzenli gelir tanımı`} icon={ReceiptText} tone="info" />
+                <StatCard title="Gerçekleşen Gelir" value={formatMoney(receivedIncomeTotal)} description={`${incomeRows.filter((row) => row.actualAmount > 0).length} gelir hareketi`} icon={ArrowDownRight} tone="success" />
+                <StatCard title="Gerçek Harcama" value={formatMoney(summary.realExpense)} description={`${periodIncome > 0 ? Math.round((summary.realExpense / periodIncome) * 100) : 0}% maaşa oran`} icon={TrendingDown} tone="danger" />
+                <StatCard title="Kredi ve Kart Ödemeleri" value={formatMoney(summary.debtPayment)} description={`${debtRatio}% maaşa oran`} icon={CreditCard} tone="warning" />
                 {hasInvestmentAccount && (
-                    <StatCard title="Yatırıma Aktarılan" value={formatPara(summary.investment)} description={`${investmentRatio}% maaşa oran`} icon={PiggyBank} tone="info" />
+                    <StatCard title="Yatırıma Aktarılan" value={formatMoney(summary.investment)} description={`${investmentRatio}% maaşa oran`} icon={PiggyBank} tone="info" />
                 )}
-                <StatCard title="Dönem Sonu Kalan" value={formatPara(periodNet)} description="Dönem içi net kalan" icon={Wallet} tone={moneyTone(periodNet)} />
+                <StatCard title="Dönem Sonu Kalan" value={formatMoney(periodNet)} description="Dönem içi net kalan" icon={Wallet} tone={moneyTone(periodNet)} />
             </div>
 
             <PremiumCard className="salary-income-card salary-income-card--merged">
@@ -686,11 +682,11 @@ const SalaryAnalysisDashboard = ({
                     action={<button type="button" className="qw-inline-action" onClick={() => modalAc?.('maas_ekle')}><Plus size={17} /> Gelir Ekle</button>}
                 />
                 <div className="salary-income-summary salary-income-summary--compact">
-                    <SummaryTile label="Beklenen" value={formatPara(expectedIncomeTotal)} />
-                    <SummaryTile label="Gerçekleşen" value={formatPara(receivedIncomeTotal)} tone="success" />
-                    <SummaryTile label="Kalan" value={formatPara(Math.max(0, expectedIncomeTotal - receivedIncomeTotal))} tone={expectedIncomeTotal - receivedIncomeTotal > 0 ? 'warning' : 'success'} />
-                    <SummaryTile label="Bankaya Geçen" value={formatPara(bankIncomeTotal)} tone="purple" />
-                    <SummaryTile label="Nakit Bekleyen" value={formatPara(cashWaitingTotal)} tone={cashWaitingTotal > 0 ? 'warning' : 'neutral'} />
+                    <SummaryTile label="Beklenen" value={formatMoney(expectedIncomeTotal)} />
+                    <SummaryTile label="Gerçekleşen" value={formatMoney(receivedIncomeTotal)} tone="success" />
+                    <SummaryTile label="Kalan" value={formatMoney(Math.max(0, expectedIncomeTotal - receivedIncomeTotal))} tone={expectedIncomeTotal - receivedIncomeTotal > 0 ? 'warning' : 'success'} />
+                    <SummaryTile label="Bankaya Geçen" value={formatMoney(bankIncomeTotal)} tone="purple" />
+                    <SummaryTile label="Nakit Bekleyen" value={formatMoney(cashWaitingTotal)} tone={cashWaitingTotal > 0 ? 'warning' : 'neutral'} />
                 </div>
                 <div className="salary-income-list">
                     {incomeRows.map((row) => (
@@ -707,17 +703,17 @@ const SalaryAnalysisDashboard = ({
                             </div>
                             <div>
                                 <small>Beklenen</small>
-                                <b>{row.expectedAmount ? formatPara(row.expectedAmount) : row.salary ? 'Değişken tutar' : '-'}</b>
+                                <b>{row.expectedAmount ? formatMoney(row.expectedAmount) : row.salary ? 'Değişken tutar' : '-'}</b>
                             </div>
                             <div>
                                 <small>Gerçekleşen</small>
-                                <b>{row.actualAmount ? formatPara(row.actualAmount) : '-'}</b>
+                                <b>{row.actualAmount ? formatMoney(row.actualAmount) : '-'}</b>
                                 {row.actualAmount > 0 && row.expectedAccountId && row.realizedAccountId && row.expectedAccountId !== row.realizedAccountId && (
                                     <em>
                                         {row.transferredToExpected
                                             ? 'Beklenen hesaba aktarıldı'
                                             : row.transferredAmount > 0
-                                                ? `${formatPara(row.transferredAmount)} aktarıldı`
+                                                ? `${formatMoney(row.transferredAmount)} aktarıldı`
                                                 : 'Beklenen hesaba aktarılmadı'}
                                     </em>
                                 )}
@@ -745,13 +741,13 @@ const SalaryAnalysisDashboard = ({
                                         row.partTotals?.[partKey] ? (
                                             <span key={partKey}>
                                                 <small>{salaryPartLabels[partKey]}</small>
-                                                <b>{formatPara(row.partTotals[partKey])}</b>
+                                                <b>{formatMoney(row.partTotals[partKey])}</b>
                                             </span>
                                         ) : null
                                     ))}
                                     <span>
                                         <small>Kalan</small>
-                                        <b className={row.remainingAmount > 0 ? 'is-danger' : 'is-success'}>{formatPara(row.remainingAmount)}</b>
+                                        <b className={row.remainingAmount > 0 ? 'is-danger' : 'is-success'}>{formatMoney(row.remainingAmount)}</b>
                                     </span>
                                 </div>
                             )}
@@ -779,7 +775,7 @@ const SalaryAnalysisDashboard = ({
                                             <div className="salary-progress"><i style={{ width: `${Math.min(percent, 100)}%`, background: meta.color }} /></div>
                                         </div>
                                         <b>%{percent}</b>
-                                        <em>{formatPara(row.value)}</em>
+                                        <em>{formatMoney(row.value)}</em>
                                     </button>
                                     {isExpanded && (
                                         <AllocationDetails
@@ -788,6 +784,7 @@ const SalaryAnalysisDashboard = ({
                                             debtDetailGroups={debtDetailGroups}
                                             investmentByTarget={investmentByTarget}
                                             summary={summary}
+                                            formatMoney={formatMoney}
                                         />
                                     )}
                                 </div>
@@ -815,7 +812,7 @@ const SalaryAnalysisDashboard = ({
                             <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
                             <YAxis tickFormatter={(value) => `${Math.round(value / 1000)} B`} tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
                             <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="4 4" />
-                            <Tooltip content={<SalaryTooltip hasInvestmentAccount={hasInvestmentAccount} />} cursor={{ stroke: '#cbd5e1', strokeWidth: 1 }} />
+                            <Tooltip content={<SalaryTooltip hasInvestmentAccount={hasInvestmentAccount} formatMoney={formatMoney} />} cursor={{ stroke: '#cbd5e1', strokeWidth: 1 }} />
                             <Area type="monotone" dataKey="remaining" name="Gün sonu kalan" stroke={periodNet < 0 ? '#ef4444' : '#6d5dfc'} fill="url(#salaryRemainingFill)" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
                         </AreaChart>
                     </ResponsiveContainer>
@@ -826,10 +823,10 @@ const SalaryAnalysisDashboard = ({
                 <PremiumCard className="salary-card salary-card--compact">
                     <SectionHeader title="Maaş Tükenme Hızı" description="İlk değerler toplam nakit çıkışına, günlük ortalama yalnız gerçek harcamaya göre hesaplanır." />
                     <div className="salary-speed-grid">
-                        <SummaryTile label="İlk 3 gün çıkış" value={formatPara(first3Outflow)} />
-                        <SummaryTile label="İlk 7 gün çıkış" value={formatPara(first7Outflow)} />
-                        <SummaryTile label="Günlük ort. gerçek harcama" value={formatPara(avgDailyExpense)} />
-                        <SummaryTile label="Dönemin yarısında kalan" value={formatPara(halfRemaining)} tone={moneyTone(halfRemaining)} />
+                        <SummaryTile label="İlk 3 gün çıkış" value={formatMoney(first3Outflow)} />
+                        <SummaryTile label="İlk 7 gün çıkış" value={formatMoney(first7Outflow)} />
+                        <SummaryTile label="Günlük ort. gerçek harcama" value={formatMoney(avgDailyExpense)} />
+                        <SummaryTile label="Dönemin yarısında kalan" value={formatMoney(halfRemaining)} tone={moneyTone(halfRemaining)} />
                         <SummaryTile label="%50 tükenme" value={findThresholdDay(0.5)} />
                         <SummaryTile label="%80 tükenme" value={findThresholdDay(0.8)} />
                     </div>
@@ -838,13 +835,13 @@ const SalaryAnalysisDashboard = ({
                 <PremiumCard className="salary-card salary-card--compact">
                     <SectionHeader title="Bu dönem vs önceki maaş dönemi" description={previousTransactions.length ? `${MONTH_NAMES[previousPeriod.month - 1]} dönemiyle karşılaştırma` : 'Önceki dönem verisi yok.'} />
                     <div className="salary-comparison-list">
-                        <ComparisonRow label="Gelir" current={periodIncome} previous={(previousSummary?.income || 0) + (previousSummary?.refund || 0)} positiveHigher />
-                        <ComparisonRow label="Gerçek Harcama" current={summary.realExpense} previous={previousSummary?.realExpense || 0} positiveLower />
-                        <ComparisonRow label="Borç" current={summary.debtPayment} previous={previousSummary?.debtPayment || 0} positiveLower />
+                        <ComparisonRow label="Gelir" current={periodIncome} previous={(previousSummary?.income || 0) + (previousSummary?.refund || 0)} positiveHigher formatMoney={formatMoney} />
+                        <ComparisonRow label="Gerçek Harcama" current={summary.realExpense} previous={previousSummary?.realExpense || 0} positiveLower formatMoney={formatMoney} />
+                        <ComparisonRow label="Borç" current={summary.debtPayment} previous={previousSummary?.debtPayment || 0} positiveLower formatMoney={formatMoney} />
                         {hasInvestmentAccount && (
-                            <ComparisonRow label="Yatırım" current={summary.investment} previous={previousSummary?.investment || 0} positiveHigher />
+                            <ComparisonRow label="Yatırım" current={summary.investment} previous={previousSummary?.investment || 0} positiveHigher formatMoney={formatMoney} />
                         )}
-                        <ComparisonRow label="Kalan" current={summary.remaining} previous={previousSummary?.remaining || 0} positiveHigher />
+                        <ComparisonRow label="Kalan" current={summary.remaining} previous={previousSummary?.remaining || 0} positiveHigher formatMoney={formatMoney} />
                     </div>
                 </PremiumCard>
             </div>
@@ -856,7 +853,7 @@ const SalaryAnalysisDashboard = ({
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(148, 163, 184, 0.18)" />
                         <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
                         <YAxis tickFormatter={(value) => `${Math.round(value / 1000)} B`} tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
-                        <Tooltip formatter={(value) => formatPara(value)} cursor={{ fill: 'rgba(109, 93, 252, 0.06)' }} />
+                        <Tooltip formatter={(value) => formatMoney(value)} cursor={{ fill: 'rgba(109, 93, 252, 0.06)' }} />
                         <Legend verticalAlign="top" height={34} />
                         <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="4 4" />
                         <Bar name="Gelir" dataKey="gelir" fill="#10b981" radius={[8, 8, 0, 0]} />
@@ -887,7 +884,7 @@ const SalaryAnalysisDashboard = ({
                                         <b>{transaction.aciklama || transaction.kategori || 'İşlem'}</b>
                                         <small>{meta.label} · {tarihFormatla(transaction.tarih)}</small>
                                     </span>
-                                    <em className={`is-${moneyTone(amount)}`}>{amount > 0 ? '+' : amount < 0 ? '-' : ''}{formatPara(Math.abs(amount))}</em>
+                                    <em className={`is-${moneyTone(amount)}`}>{amount > 0 ? '+' : amount < 0 ? '-' : ''}{formatMoney(Math.abs(amount))}</em>
                                 </div>
                             );
                         })}
@@ -905,7 +902,7 @@ const SummaryTile = ({ label, value, tone }) => (
     </div>
 );
 
-const AllocationDetails = ({ type, expenseByCategory, debtDetailGroups, investmentByTarget, summary }) => {
+const AllocationDetails = ({ type, expenseByCategory, debtDetailGroups, investmentByTarget, summary, formatMoney = formatPara }) => {
     let rows = [];
     if (type === 'realExpense') {
         rows = expenseByCategory.slice(0, 5).map((item) => ({ label: item.name, value: item.value }));
@@ -928,7 +925,7 @@ const AllocationDetails = ({ type, expenseByCategory, debtDetailGroups, investme
             {visibleRows.map((row) => (
                 <span key={row.label}>
                     <small>{row.label}</small>
-                    <b>{formatPara(row.value)}</b>
+                    <b>{formatMoney(row.value)}</b>
                 </span>
             ))}
             {visibleRows.length === 0 && <em>Bu başlıkta detay yok.</em>}
@@ -936,16 +933,16 @@ const AllocationDetails = ({ type, expenseByCategory, debtDetailGroups, investme
     );
 };
 
-const ComparisonRow = ({ label, current, previous, positiveHigher, positiveLower }) => {
+const ComparisonRow = ({ label, current, previous, positiveHigher, positiveLower, formatMoney = formatPara }) => {
     const diff = parseAmount(current) - parseAmount(previous);
     const good = positiveHigher ? diff >= 0 : positiveLower ? diff <= 0 : diff >= 0;
     const direction = diff > 0 ? 'arttı' : diff < 0 ? 'azaldı' : 'değişmedi';
-    const diffText = diff === 0 ? 'Değişmedi' : `${formatPara(Math.abs(diff))} ${direction}`;
+    const diffText = diff === 0 ? 'Değişmedi' : `${formatMoney(Math.abs(diff))} ${direction}`;
     return (
         <div className="salary-comparison-row">
             <strong>{label}</strong>
-            <span><em>Bu dönem</em><b>{formatPara(current)}</b></span>
-            <span><em>Önceki dönem</em><b>{formatPara(previous)}</b></span>
+            <span><em>Bu dönem</em><b>{formatMoney(current)}</b></span>
+            <span><em>Önceki dönem</em><b>{formatMoney(previous)}</b></span>
             <span><em>Değişim</em><b className={diff === 0 ? '' : good ? 'is-success' : 'is-danger'}>{diffText}</b></span>
         </div>
     );

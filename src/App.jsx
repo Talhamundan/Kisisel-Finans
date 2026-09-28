@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { auth, db } from './firebase'
-import { doc, setDoc, writeBatch } from 'firebase/firestore'
+import { doc, getDoc, setDoc, writeBatch } from 'firebase/firestore'
 import { sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -22,6 +22,15 @@ import MobileNav from './components/Layout/MobileNav';
 import AppLogo from './components/Shared/AppLogo';
 import SettingsDashboard from './components/Settings/SettingsDashboard';
 import { useDefaultPaymentAccount } from './utils/defaultPaymentAccount';
+import {
+    changeAreaAccessCode,
+    createPasswordRecord,
+    ensureAreaAccessRecord,
+    normalizeAreaCode,
+    resolveAreaLogin,
+    validateAreaPassword,
+    verifyAreaPassword,
+} from './utils/areaSecurity';
 
 // Hooks
 import { useAuth } from './hooks/useAuth';
@@ -111,7 +120,16 @@ function App() {
 
     // Login / Code Login
     const [alanKodu, setAlanKodu] = useState(localStorage.getItem("alan_kodu") || "");
+    const [veriAlanKodu, setVeriAlanKodu] = useState(localStorage.getItem("veri_alan_kodu") || localStorage.getItem("alan_kodu") || "");
+    const [areaRecord, setAreaRecord] = useState(null);
     const [girilenKod, setGirilenKod] = useState("");
+    const [alanSifresi, setAlanSifresi] = useState("");
+    const [alanSifresiTekrar, setAlanSifresiTekrar] = useState("");
+    const [areaLoginStep, setAreaLoginStep] = useState("code");
+    const [areaLoginSubmitting, setAreaLoginSubmitting] = useState(false);
+    const [areaPasswordVisible, setAreaPasswordVisible] = useState(false);
+    const [showPasswordSetupPrompt, setShowPasswordSetupPrompt] = useState(false);
+    const [passwordSetupForm, setPasswordSetupForm] = useState({ password: "", confirm: "" });
     const [loginEmail, setLoginEmail] = useState("");
     const [loginPassword, setLoginPassword] = useState("");
     const [loginRemember, setLoginRemember] = useState(false);
@@ -120,10 +138,10 @@ function App() {
     const [passwordResetSubmitting, setPasswordResetSubmitting] = useState(false);
 
     // 3. HOOKS initialization
-    const data = useDataListeners(user, alanKodu);
+    const data = useDataListeners(user, veriAlanKodu);
     const calculations = useCalculations(data, gizliMod, data.aylikLimit, selectedPeriod);
-    const budgetActions = useBudgetActions(user, alanKodu, data.hesaplar, data.kategoriListesi, data.tanimliFaturalar, data.etiketler, data.transactionTags, data.cariler);
-    const investmentActions = useInvestmentActions(user, alanKodu);
+    const budgetActions = useBudgetActions(user, veriAlanKodu, data.hesaplar, data.kategoriListesi, data.tanimliFaturalar, data.etiketler, data.transactionTags, data.cariler);
+    const investmentActions = useInvestmentActions(user, veriAlanKodu);
     const defaultPaymentAccount = useDefaultPaymentAccount(data.hesaplar);
     const defaultPaymentAccountId = defaultPaymentAccount?.id || "";
     const selectedFinancingId = routePath.match(/^\/finansmanlar\/([^/]+)/)?.[1] || null;
@@ -305,15 +323,146 @@ function App() {
     const cikisYap = async () => {
         await authLogout();
         setAlanKodu("");
+        setVeriAlanKodu("");
+        setAreaRecord(null);
         localStorage.removeItem("alan_kodu");
+        localStorage.removeItem("veri_alan_kodu");
+        sessionStorage.clear();
     }
 
-    const kodIleGiris = (e) => {
+    const completeAreaLogin = async ({ accessCode, dataCode, record }) => {
+        localStorage.setItem("alan_kodu", accessCode);
+        localStorage.setItem("veri_alan_kodu", dataCode);
+        sessionStorage.setItem(`area_authenticated:${accessCode}`, "1");
+        setAlanKodu(accessCode);
+        setVeriAlanKodu(dataCode);
+        setAreaRecord(record);
+        setGirilenKod("");
+        setAlanSifresi("");
+        setAlanSifresiTekrar("");
+        setAreaLoginStep("code");
+
+        const promptKey = `area_password_prompt_seen:${accessCode}`;
+        if (!record?.passwordConfigured && sessionStorage.getItem(promptKey) !== "1") {
+            sessionStorage.setItem(promptKey, "1");
+            setShowPasswordSetupPrompt(true);
+        }
+    };
+
+    useEffect(() => {
+        if (!user || !alanKodu) return;
+        let cancelled = false;
+
+        const syncStoredArea = async () => {
+            try {
+                const loginContext = await resolveAreaLogin(alanKodu);
+                if (cancelled) return;
+                if (
+                    loginContext.areaRecord?.passwordConfigured
+                    && sessionStorage.getItem(`area_authenticated:${loginContext.accessCode}`) !== "1"
+                ) {
+                    localStorage.removeItem("alan_kodu");
+                    localStorage.removeItem("veri_alan_kodu");
+                    setAlanKodu("");
+                    setVeriAlanKodu("");
+                    setAreaRecord(null);
+                    setGirilenKod(loginContext.accessCode);
+                    setAreaLoginStep("password");
+                    return;
+                }
+                setAreaRecord(loginContext.areaRecord);
+                setVeriAlanKodu(loginContext.dataCode);
+                localStorage.setItem("veri_alan_kodu", loginContext.dataCode);
+            } catch (error) {
+                console.error("Kayıtlı alan kodu doğrulanamadı:", error);
+                localStorage.removeItem("alan_kodu");
+                localStorage.removeItem("veri_alan_kodu");
+                setAlanKodu("");
+                setVeriAlanKodu("");
+                setAreaRecord(null);
+            }
+        };
+
+        syncStoredArea();
+        return () => {
+            cancelled = true;
+        };
+    }, [user, alanKodu]);
+
+    const kodIleGiris = async (e) => {
         e.preventDefault();
-        if (!girilenKod) return;
-        localStorage.setItem("alan_kodu", girilenKod);
-        setAlanKodu(girilenKod);
-        window.location.reload();
+        if (areaLoginSubmitting) return;
+
+        setAreaLoginSubmitting(true);
+        try {
+            if (areaLoginStep === "code") {
+                const loginContext = await resolveAreaLogin(girilenKod);
+                if (loginContext.areaRecord?.passwordConfigured) {
+                    setAreaRecord(loginContext.areaRecord);
+                    setGirilenKod(loginContext.accessCode);
+                    setVeriAlanKodu("");
+                    setAreaLoginStep("password");
+                    return;
+                }
+
+                if (loginContext.isLegacy) {
+                    const settingsSnap = await getDoc(doc(db, "ayarlar", loginContext.dataCode));
+                    if (!settingsSnap.exists()) {
+                        setAreaRecord(loginContext.areaRecord);
+                        setGirilenKod(loginContext.accessCode);
+                        setVeriAlanKodu(loginContext.dataCode);
+                        setAreaLoginStep("create-password");
+                        return;
+                    }
+                }
+
+                await completeAreaLogin({
+                    accessCode: loginContext.accessCode,
+                    dataCode: loginContext.dataCode,
+                    record: loginContext.areaRecord,
+                });
+                return;
+            }
+
+            if (areaLoginStep === "create-password") {
+                if (alanSifresi !== alanSifresiTekrar) {
+                    toast.warning("Şifreler uyuşmuyor.");
+                    return;
+                }
+                const passwordRecord = await createPasswordRecord(alanSifresi);
+                const loginContext = await resolveAreaLogin(girilenKod);
+                await ensureAreaAccessRecord({
+                    accessCode: loginContext.accessCode,
+                    dataCode: loginContext.dataCode,
+                    uid: user?.uid,
+                    passwordRecord,
+                });
+                await completeAreaLogin({
+                    accessCode: loginContext.accessCode,
+                    dataCode: loginContext.dataCode,
+                    record: { ...loginContext.areaRecord, ...passwordRecord, passwordConfigured: true },
+                });
+                toast.success("Yeni alan şifresi oluşturuldu.");
+                return;
+            }
+
+            const loginContext = await resolveAreaLogin(girilenKod);
+            const verified = await verifyAreaPassword(alanSifresi, loginContext.areaRecord);
+            if (!verified) {
+                toast.error("Alan şifresi hatalı.");
+                return;
+            }
+            await completeAreaLogin({
+                accessCode: loginContext.accessCode,
+                dataCode: loginContext.dataCode,
+                record: loginContext.areaRecord,
+            });
+        } catch (error) {
+            console.error("Alan girişi başarısız:", error);
+            toast.error(error?.message || "Alan girişi yapılamadı.");
+        } finally {
+            setAreaLoginSubmitting(false);
+        }
     }
 
     const premiumLoginSubmit = async (e) => {
@@ -376,9 +525,130 @@ function App() {
 
     const handleConfirmLogout = () => {
         localStorage.removeItem("alan_kodu");
+        localStorage.removeItem("veri_alan_kodu");
+        sessionStorage.removeItem(`area_authenticated:${alanKodu}`);
         setAlanKodu("");
-        window.location.reload();
+        setVeriAlanKodu("");
+        setAreaRecord(null);
+        setAreaLoginStep("code");
     }
+
+    const refreshAreaRecord = async () => {
+        if (!alanKodu) return null;
+        const loginContext = await resolveAreaLogin(alanKodu);
+        setAreaRecord(loginContext.areaRecord);
+        setVeriAlanKodu(loginContext.dataCode);
+        localStorage.setItem("veri_alan_kodu", loginContext.dataCode);
+        return loginContext.areaRecord;
+    };
+
+    const handleCreateAreaPassword = async ({ password, confirm } = passwordSetupForm) => {
+        if (!alanKodu || !veriAlanKodu) return false;
+        if (password !== confirm) {
+            toast.warning("Şifreler uyuşmuyor.");
+            return false;
+        }
+        const validation = validateAreaPassword(password);
+        if (validation) {
+            toast.warning(validation);
+            return false;
+        }
+
+        try {
+            const passwordRecord = await createPasswordRecord(password);
+            await ensureAreaAccessRecord({
+                accessCode: alanKodu,
+                dataCode: veriAlanKodu,
+                uid: user?.uid,
+                passwordRecord,
+            });
+            await refreshAreaRecord();
+            setShowPasswordSetupPrompt(false);
+            setPasswordSetupForm({ password: "", confirm: "" });
+            toast.success("Alan şifresi oluşturuldu.");
+            return true;
+        } catch (error) {
+            console.error("Alan şifresi oluşturulamadı:", error);
+            toast.error(error?.message || "Alan şifresi oluşturulamadı.");
+            return false;
+        }
+    };
+
+    const handleChangeAreaPassword = async ({ currentPassword, nextPassword, confirmPassword }) => {
+        if (!alanKodu || !veriAlanKodu) return false;
+        if (nextPassword !== confirmPassword) {
+            toast.warning("Yeni şifreler uyuşmuyor.");
+            return false;
+        }
+        const validation = validateAreaPassword(nextPassword);
+        if (validation) {
+            toast.warning(validation);
+            return false;
+        }
+
+        try {
+            const currentRecord = await refreshAreaRecord();
+            if (currentRecord?.passwordConfigured) {
+                const verified = await verifyAreaPassword(currentPassword, currentRecord);
+                if (!verified) {
+                    toast.error("Mevcut şifre hatalı.");
+                    return false;
+                }
+            }
+            const passwordRecord = await createPasswordRecord(nextPassword);
+            await ensureAreaAccessRecord({
+                accessCode: alanKodu,
+                dataCode: veriAlanKodu,
+                uid: user?.uid,
+                passwordRecord,
+            });
+            await refreshAreaRecord();
+            toast.success(currentRecord?.passwordConfigured ? "Alan şifresi değiştirildi." : "Alan şifresi oluşturuldu.");
+            return true;
+        } catch (error) {
+            console.error("Alan şifresi güncellenemedi:", error);
+            toast.error(error?.message || "Alan şifresi güncellenemedi.");
+            return false;
+        }
+    };
+
+    const handleChangeAreaCode = async ({ nextCode, confirmCode, currentPassword }) => {
+        const normalizedNextCode = normalizeAreaCode(nextCode);
+        if (normalizedNextCode !== normalizeAreaCode(confirmCode)) {
+            toast.warning("Yeni alan kodları uyuşmuyor.");
+            return false;
+        }
+
+        try {
+            const currentRecord = await refreshAreaRecord();
+            if (currentRecord?.passwordConfigured) {
+                const verified = await verifyAreaPassword(currentPassword, currentRecord);
+                if (!verified) {
+                    toast.error("Alan şifresi hatalı.");
+                    return false;
+                }
+            }
+            await changeAreaAccessCode({
+                currentAccessCode: alanKodu,
+                currentDataCode: veriAlanKodu,
+                nextAccessCode: normalizedNextCode,
+                uid: user?.uid,
+            });
+            localStorage.setItem("alan_kodu", normalizedNextCode);
+            localStorage.setItem("veri_alan_kodu", veriAlanKodu);
+            sessionStorage.setItem(`area_authenticated:${normalizedNextCode}`, "1");
+            sessionStorage.removeItem(`area_authenticated:${alanKodu}`);
+            setAlanKodu(normalizedNextCode);
+            const loginContext = await resolveAreaLogin(normalizedNextCode);
+            setAreaRecord(loginContext.areaRecord);
+            toast.success("Alan kodu değiştirildi.");
+            return true;
+        } catch (error) {
+            console.error("Alan kodu değiştirilemedi:", error);
+            toast.error(error?.message || "Alan kodu değiştirilemedi.");
+            return false;
+        }
+    };
 
     // Modal Control Wrapper
     const modalAc = (tip, veri) => {
@@ -417,7 +687,7 @@ function App() {
     // Settings Updaters
     const onLimitChange = (limit) => {
         data.setAylikLimit(limit);
-        setDoc(doc(db, "ayarlar", alanKodu), { limit: limit }, { merge: true });
+        setDoc(doc(db, "ayarlar", veriAlanKodu), { limit: limit }, { merge: true });
     }
     const commitCategoryReferenceUpdates = async (updates) => {
         for (let i = 0; i < updates.length; i += 450) {
@@ -432,7 +702,7 @@ function App() {
     const onKategoriUpdate = async (y) => {
         const nextCategories = mergeCategoryList(y);
         data.setKategoriListesi(nextCategories);
-        await setDoc(doc(db, "ayarlar", alanKodu), { kategoriler: nextCategories }, { merge: true });
+        await setDoc(doc(db, "ayarlar", veriAlanKodu), { kategoriler: nextCategories }, { merge: true });
     }
 
     const onKategoriRename = async (oldName, newName) => {
@@ -463,7 +733,7 @@ function App() {
             normalizeCategoryKey(category) === normalizeCategoryKey(from) ? to : category
         )).concat(to));
 
-        await setDoc(doc(db, "ayarlar", alanKodu), { kategoriler: nextCategories }, { merge: true });
+        await setDoc(doc(db, "ayarlar", veriAlanKodu), { kategoriler: nextCategories }, { merge: true });
         data.setKategoriListesi(nextCategories);
         await commitCategoryReferenceUpdates(updates);
         toast.success(`${updates.length} kayıt "${to}" kategorisine güncellendi.`);
@@ -505,7 +775,7 @@ function App() {
         }
 
         const nextCategories = mergeCategoryList([...(data.kategoriListesi || []), to]);
-        await setDoc(doc(db, "ayarlar", alanKodu), { kategoriler: nextCategories }, { merge: true });
+        await setDoc(doc(db, "ayarlar", veriAlanKodu), { kategoriler: nextCategories }, { merge: true });
         data.setKategoriListesi(nextCategories);
         await commitCategoryReferenceUpdates(updates);
         toast.success(`${updates.length} işlem "${to}" kategorisine taşındı.`);
@@ -514,7 +784,7 @@ function App() {
     const onYatirimTuruUpdate = async (y) => {
         const nextTypes = mergeCategoryList(y);
         data.setYatirimTurleri(nextTypes);
-        await setDoc(doc(db, "ayarlar", alanKodu), { yatirimTurleri: nextTypes }, { merge: true });
+        await setDoc(doc(db, "ayarlar", veriAlanKodu), { yatirimTurleri: nextTypes }, { merge: true });
     }
 
     const onYatirimTuruRename = async (oldName, newName) => {
@@ -541,7 +811,7 @@ function App() {
         const nextTypes = mergeCategoryList((data.yatirimTurleri || []).map((type) => (
             normalizeCategoryKey(type) === normalizeCategoryKey(from) ? to : type
         )).concat(to));
-        await setDoc(doc(db, "ayarlar", alanKodu), { yatirimTurleri: nextTypes }, { merge: true });
+        await setDoc(doc(db, "ayarlar", veriAlanKodu), { yatirimTurleri: nextTypes }, { merge: true });
         data.setYatirimTurleri(nextTypes);
 
         for (let i = 0; i < updates.length; i += 450) {
@@ -751,15 +1021,18 @@ function App() {
 
     if (!alanKodu) return (
         <div style={{
-            height: '100vh',
-            width: '100vw',
+            position: 'fixed',
+            inset: 0,
+            width: 'calc(100vw / var(--app-zoom, 1))',
+            height: 'calc(100dvh / var(--app-zoom, 1))',
+            minHeight: 'calc(100dvh / var(--app-zoom, 1))',
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
             background: 'linear-gradient(135deg, #1f2937 0%, #111827 100%)',
             fontFamily: 'Segoe UI',
-            position: 'relative',
-            overflow: 'hidden'
+            overflow: 'hidden',
+            zIndex: 0
         }}>
             {/* Background Logo Effect */}
             <div style={{
@@ -805,14 +1078,27 @@ function App() {
                 </div>
 
                 <h2 style={{ color: '#1f2937', marginBottom: '8px', fontSize: '24px', fontWeight: 'bold' }}>Kişisel Alan Girişi</h2>
-                <p style={{ fontSize: '15px', color: '#6b7280', marginBottom: '30px' }}>Verilerinize erişmek için güvenlik kodunuzu girin.</p>
+                <p style={{ fontSize: '15px', color: '#6b7280', marginBottom: '30px' }}>
+                    {areaLoginStep === 'password'
+                        ? 'Bu alan şifreyle korunuyor. Devam etmek için alan şifresini girin.'
+                        : areaLoginStep === 'create-password'
+                            ? 'Yeni alan için bir şifre oluşturun.'
+                            : 'Verilerinize erişmek için alan kodunuzu girin.'}
+                </p>
 
                 <form onSubmit={kodIleGiris}>
                     <div style={{ marginBottom: '20px' }}>
                         <input
-                            placeholder="Kodunuz (Örn: TALHA_EV)"
+                            placeholder="Alan kodu (Örn: AİLE_EV)"
                             value={girilenKod}
-                            onChange={e => setGirilenKod(e.target.value.toUpperCase())}
+                            onChange={e => {
+                                setGirilenKod(normalizeAreaCode(e.target.value));
+                                if (areaLoginStep !== 'code') {
+                                    setAreaLoginStep('code');
+                                    setAlanSifresi('');
+                                    setAreaRecord(null);
+                                }
+                            }}
                             style={{
                                 ...inputStyle,
                                 width: '100%',
@@ -826,11 +1112,78 @@ function App() {
                             }}
                             onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
                             onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+                            disabled={areaLoginStep !== 'code'}
                             required
                         />
                     </div>
+                    {(areaLoginStep === 'password' || areaLoginStep === 'create-password') && (
+                        <div style={{ marginBottom: '20px', position: 'relative' }}>
+                            <input
+                                type={areaPasswordVisible ? 'text' : 'password'}
+                                placeholder={areaLoginStep === 'create-password' ? 'Yeni alan şifresi' : 'Alan şifresi'}
+                                value={alanSifresi}
+                                onChange={e => setAlanSifresi(e.target.value)}
+                                style={{
+                                    ...inputStyle,
+                                    width: '100%',
+                                    boxSizing: 'border-box',
+                                    padding: '14px 46px 14px 16px',
+                                    fontSize: '16px',
+                                    background: '#f9fafb',
+                                    border: '1px solid #e5e7eb',
+                                    borderRadius: '12px',
+                                }}
+                                autoFocus
+                                required
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setAreaPasswordVisible((value) => !value)}
+                                aria-label={areaPasswordVisible ? 'Şifreyi gizle' : 'Şifreyi göster'}
+                                style={{
+                                    position: 'absolute',
+                                    right: '10px',
+                                    top: '50%',
+                                    transform: 'translateY(-50%)',
+                                    border: 'none',
+                                    background: 'transparent',
+                                    color: '#6b7280',
+                                    cursor: 'pointer',
+                                    display: 'grid',
+                                    placeItems: 'center',
+                                }}
+                            >
+                                {areaPasswordVisible ? <EyeOff size={18} /> : <Eye size={18} />}
+                            </button>
+                        </div>
+                    )}
+                    {areaLoginStep === 'create-password' && (
+                        <div style={{ marginBottom: '20px' }}>
+                            <input
+                                type={areaPasswordVisible ? 'text' : 'password'}
+                                placeholder="Yeni alan şifresi tekrar"
+                                value={alanSifresiTekrar}
+                                onChange={e => setAlanSifresiTekrar(e.target.value)}
+                                style={{
+                                    ...inputStyle,
+                                    width: '100%',
+                                    boxSizing: 'border-box',
+                                    padding: '14px 16px',
+                                    fontSize: '16px',
+                                    background: '#f9fafb',
+                                    border: '1px solid #e5e7eb',
+                                    borderRadius: '12px',
+                                }}
+                                required
+                            />
+                            <div style={{ marginTop: '8px', color: '#6b7280', fontSize: '12px', textAlign: 'left' }}>
+                                En az 8 karakter, bir büyük harf, bir küçük harf ve bir rakam.
+                            </div>
+                        </div>
+                    )}
                     <button
                         type="submit"
+                        disabled={areaLoginSubmitting}
                         style={{
                             width: '100%',
                             padding: '14px',
@@ -847,8 +1200,32 @@ function App() {
                         onMouseDown={e => e.currentTarget.style.transform = 'scale(0.98)'}
                         onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
                     >
-                        GİRİŞ YAP
+                        {areaLoginSubmitting ? 'KONTROL EDİLİYOR...' : areaLoginStep === 'password' ? 'ŞİFREYLE GİRİŞ YAP' : areaLoginStep === 'create-password' ? 'ŞİFRE OLUŞTUR VE GİR' : 'DEVAM ET'}
                     </button>
+                    {areaLoginStep !== 'code' && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setAreaLoginStep('code');
+                                setAlanSifresi('');
+                                setAlanSifresiTekrar('');
+                                setAreaRecord(null);
+                            }}
+                            style={{
+                                width: '100%',
+                                marginTop: '10px',
+                                padding: '12px',
+                                background: '#f3f4f6',
+                                color: '#374151',
+                                border: 'none',
+                                borderRadius: '12px',
+                                fontWeight: '600',
+                                cursor: 'pointer',
+                            }}
+                        >
+                            Alan kodunu değiştir
+                        </button>
+                    )}
                 </form>
 
                 <div style={{ marginTop: '25px', paddingTop: '20px', borderTop: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -881,6 +1258,51 @@ function App() {
     return (
         <div className="app-shell">
             <ToastContainer position="top-right" autoClose={2000} theme={theme === 'dark' ? 'dark' : 'light'} />
+
+            {showPasswordSetupPrompt && (
+                <div className="area-security-dialog-layer" role="presentation">
+                    <button
+                        type="button"
+                        className="area-security-dialog-backdrop"
+                        aria-label="Kapat"
+                        onClick={() => setShowPasswordSetupPrompt(false)}
+                    />
+                    <div className="area-security-dialog" role="dialog" aria-modal="true">
+                        <h3>Alanınızı şifreyle koruyun</h3>
+                        <p>Bu alan için ek bir şifre oluşturarak finansal verilerinize erişimi daha güvenli hale getirebilirsiniz.</p>
+                        <form onSubmit={async (event) => {
+                            event.preventDefault();
+                            await handleCreateAreaPassword();
+                        }}>
+                            <label>
+                                Şifre
+                                <input
+                                    type="password"
+                                    value={passwordSetupForm.password}
+                                    onChange={(event) => setPasswordSetupForm((current) => ({ ...current, password: event.target.value }))}
+                                    style={inputStyle}
+                                    autoComplete="new-password"
+                                />
+                            </label>
+                            <label>
+                                Şifre Tekrar
+                                <input
+                                    type="password"
+                                    value={passwordSetupForm.confirm}
+                                    onChange={(event) => setPasswordSetupForm((current) => ({ ...current, confirm: event.target.value }))}
+                                    style={inputStyle}
+                                    autoComplete="new-password"
+                                />
+                            </label>
+                            <small>En az 8 karakter, bir büyük harf, bir küçük harf ve bir rakam.</small>
+                            <div>
+                                <button type="button" onClick={() => setShowPasswordSetupPrompt(false)}>Şimdi Değil</button>
+                                <button type="submit">Şifre Oluştur</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             <ModalManager
                 aktifModal={aktifModal} setAktifModal={setAktifModal}
@@ -958,9 +1380,6 @@ function App() {
                 tanimHesapId={budgetActions.tanimHesapId} setTanimHesapId={budgetActions.setTanimHesapId}
                 faturaTanimDuzenle={budgetActions.faturaTanimDuzenle}
                 alanKodu={alanKodu}
-                verileriTasi={budgetActions.verileriTasi}
-                yeniKodInput={budgetActions.yeniKodInput} setYeniKodInput={budgetActions.setYeniKodInput}
-                tasimaIslemiSuruyor={budgetActions.tasimaIslemiSuruyor}
                 satisYap={() => investmentActions.satisYap(seciliVeri, budgetActions.secilenHesapId, budgetActions.islemTutar)}
                 secilenHesapId={budgetActions.secilenHesapId} setSecilenHesapId={budgetActions.setSecilenHesapId}
                 defaultPaymentAccountId={defaultPaymentAccountId}
@@ -1020,7 +1439,7 @@ function App() {
                 selectedPeriod={selectedPeriod}
                 setSelectedPeriod={setSelectedPeriod}
                 availablePeriods={availablePeriods}
-                showPeriodFilter={!['hedefler', 'takvim', 'maasAnalizi', 'ayarlar', 'finansmanlar', 'tanimlamalar'].includes(anaSekme)}
+                showPeriodFilter={!['hedefler', 'takvim', 'ayarlar', 'finansmanlar', 'tanimlamalar'].includes(anaSekme)}
                 theme={theme}
                 onThemeToggle={() => setTheme((currentTheme) => currentTheme === 'dark' ? 'light' : 'dark')}
                 hasInvestmentAccount={showInvestmentFeature}
@@ -1162,7 +1581,7 @@ function App() {
             {anaSekme === "finansmanlar" && (
                 <FinancingDashboard
                     user={user}
-                    alanKodu={alanKodu}
+                    alanKodu={veriAlanKodu}
                     financings={data.finansmanlar}
                     hesaplar={data.hesaplar}
                     taksitler={data.taksitler}
@@ -1202,11 +1621,12 @@ function App() {
                     onYatirimTuruUpdate={onYatirimTuruUpdate}
                     onYatirimTuruRename={onYatirimTuruRename}
                     alanKodu={alanKodu}
+                    veriAlanKodu={veriAlanKodu}
+                    areaRecord={areaRecord}
                     koddanCikis={koddanCikis}
-                    verileriTasi={budgetActions.verileriTasi}
-                    yeniKodInput={budgetActions.yeniKodInput}
-                    setYeniKodInput={budgetActions.setYeniKodInput}
-                    tasimaIslemiSuruyor={budgetActions.tasimaIslemiSuruyor}
+                    onCreateAreaPassword={handleChangeAreaPassword}
+                    onChangeAreaPassword={handleChangeAreaPassword}
+                    onChangeAreaCode={handleChangeAreaCode}
                     gizliMod={gizliMod}
                 />
             )}
@@ -1223,6 +1643,7 @@ function App() {
                     islemSil={budgetActions.islemSil}
                     normalSil={budgetActions.normalSil}
                     hasInvestmentAccount={hasInvestmentAccount}
+                    gizliMod={gizliMod}
                 />
             )}
 
@@ -1289,7 +1710,7 @@ function App() {
             {anaSekme === "takvim" && (
                 <FinanceCalendarDashboard
                     user={user}
-                    alanKodu={alanKodu}
+                    alanKodu={veriAlanKodu}
                     gizliMod={gizliMod}
                     onDebtAction={(debt) => modalAc('borc_ode', debt)}
                     sourceData={{

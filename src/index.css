@@ -84,6 +84,23 @@
   --accent-2: #4338ca;
 }
 
+.salary-control-left .salary-period-info {
+  display: inline-flex !important;
+  align-items: center !important;
+  flex-wrap: wrap;
+  gap: 10px 14px !important;
+  min-width: 0;
+}
+
+.salary-control-left .salary-period-info > span:not(.qw-badge) {
+  display: inline-flex !important;
+  margin-top: 0 !important;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 720;
+  white-space: nowrap;
+}
+
 /* --- REDESIGN PASS: FINTECH SYSTEM V2 --- */
 :root {
   --control-height: 40px;
@@ -3320,7 +3337,8 @@ html[data-theme="dark"] .mobile-bottom-nav {
   font-size: 13px;
 }
 
-.settings-access-panel button {
+.settings-access-panel button,
+.settings-security-actions button {
   width: fit-content;
   min-height: 40px;
   display: inline-flex;
@@ -3333,6 +3351,42 @@ html[data-theme="dark"] .mobile-bottom-nav {
   color: var(--surface-solid);
   font-size: 13px;
   font-weight: 800;
+}
+
+.settings-security-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.settings-security-item,
+.settings-readonly-field {
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: var(--surface-solid);
+}
+
+.settings-security-item span,
+.settings-readonly-field span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.settings-security-item strong,
+.settings-readonly-field strong {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 850;
+}
+
+.settings-security-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .settings-list-grid {
@@ -3540,6 +3594,79 @@ html[data-theme="dark"] .mobile-bottom-nav {
   display: grid;
   place-items: center;
   padding: 20px;
+}
+
+.area-security-dialog-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 200001;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.area-security-dialog-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: rgba(15, 23, 42, 0.46);
+  backdrop-filter: blur(6px);
+}
+
+.area-security-dialog {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 440px);
+  display: grid;
+  gap: 12px;
+  padding: 22px;
+  border: 1px solid var(--border-soft);
+  border-radius: 16px;
+  background: var(--surface-solid);
+  box-shadow: var(--shadow-card-hover);
+}
+
+.area-security-dialog h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 20px;
+}
+
+.area-security-dialog p,
+.area-security-dialog small,
+.settings-dialog-form small {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.area-security-dialog form,
+.area-security-dialog label {
+  display: grid;
+  gap: 8px;
+}
+
+.area-security-dialog label {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.area-security-dialog form > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.area-security-dialog button,
+.settings-dialog-form button {
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 11px;
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .settings-dialog-backdrop {
@@ -5593,24 +5720,28 @@ html[data-theme="dark"] .global-quick-panel {
 }
 
 .qw-widget-footer-summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: baseline;
+  gap: 10px;
   min-width: 0;
 }
 
 .qw-widget-footer-summary > span {
-  flex: 0 0 auto;
+  grid-column: 1;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .qw-widget-footer-summary__metrics {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 5px 10px;
+  flex-wrap: nowrap;
+  grid-column: 2;
+  gap: 5px 8px;
   min-width: 0;
+  overflow: hidden;
   text-align: right;
 }
 
@@ -5618,6 +5749,7 @@ html[data-theme="dark"] .global-quick-panel {
   display: inline-flex;
   align-items: baseline;
   gap: 5px;
+  min-width: 0;
   white-space: nowrap;
 }
 
@@ -5630,12 +5762,20 @@ html[data-theme="dark"] .global-quick-panel {
 
 .qw-widget-footer-summary__metrics em {
   color: var(--text-tertiary);
+  flex: 1 1 auto;
   font-style: normal;
+  max-width: 92px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .qw-widget-footer-summary__metrics strong {
   color: var(--text-primary);
+  flex: 0 0 auto;
   font-weight: 780;
+  white-space: nowrap;
 }
 
 .qw-module-card .qw-module-list {
@@ -9869,6 +10009,21 @@ html[data-theme="dark"] ::placeholder {
 }
 
 @media (max-width: 560px) {
+  .qw-widget-footer-summary {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .qw-widget-footer-summary > span,
+  .qw-widget-footer-summary__metrics {
+    grid-column: 1;
+  }
+
+  .qw-widget-footer-summary__metrics {
+    justify-content: flex-start;
+    text-align: left;
+  }
+
   .financing-form-grid,
   .financing-transaction-row,
   .financing-quote-list div {

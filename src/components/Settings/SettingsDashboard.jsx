@@ -6,17 +6,17 @@ import {
     Ellipsis,
     FolderKanban,
     KeyRound,
+    LockKeyhole,
     Plus,
     Search,
-    Settings,
+    ShieldCheck,
     Tag,
-    Trash2,
-    Truck,
     WalletCards,
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import Swal from 'sweetalert2';
 import { formatCurrencyPlain, inputStyle, sortTurkishText, tarihSadeceGunAyYil } from '../../utils/helpers';
+import { normalizeAreaCode, validateAreaPassword } from '../../utils/areaSecurity';
 
 const normalizeText = (value) => String(value || '')
     .normalize('NFKC')
@@ -31,22 +31,20 @@ const cleanName = (value) => String(value || '')
 
 const sections = [
     { id: 'budget', label: 'Bütçe', icon: CircleDollarSign },
-    { id: 'access-code', label: 'Alan Kodu', icon: KeyRound },
+    { id: 'security', label: 'Güvenlik', icon: ShieldCheck },
     { id: 'categories', label: 'Kategoriler', icon: FolderKanban },
     { id: 'bulk-move', label: 'Toplu Taşıma', icon: CheckSquare },
     { id: 'tags', label: 'Etiketler', icon: Tag },
     { id: 'investment-types', label: 'Yatırım Türleri', icon: WalletCards },
-    { id: 'data-migration', label: 'Veri Taşıma', icon: Truck },
 ];
 
 const sectionMeta = {
     budget: ['Bütçe', 'Aylık harcama hedefini ve bütçe davranışını yönet.'],
-    'access-code': ['Alan Kodu', 'Aktif finans alanını ve alan kodu oturumunu yönet.'],
+    security: ['Güvenlik', 'Alan kodunu ve alan şifresini yönet.'],
     categories: ['Kategoriler', 'Harcamalarını gruplamak için kullandığın kategorileri yönet.'],
     'bulk-move': ['Toplu Taşıma', 'Geçmiş işlemleri filtreleyip seçerek farklı bir kategoriye taşı.'],
     tags: ['Etiketler', 'İşlemleri kategori dışında esnek biçimde gruplamak için kullandığın etiketleri yönet.'],
     'investment-types': ['Yatırım Türleri', 'Portföyünde kullandığın yatırım türlerini yönet.'],
-    'data-migration': ['Veri Taşıma', 'Finans kayıtlarını başka bir alan koduna taşı.'],
 };
 
 const Dialog = ({ title, children, onClose }) => (
@@ -105,11 +103,12 @@ const SettingsDashboard = ({
     onYatirimTuruUpdate,
     onYatirimTuruRename,
     alanKodu,
+    veriAlanKodu,
+    areaRecord,
     koddanCikis,
-    verileriTasi,
-    yeniKodInput,
-    setYeniKodInput,
-    tasimaIslemiSuruyor,
+    onCreateAreaPassword,
+    onChangeAreaPassword,
+    onChangeAreaCode,
     gizliMod,
 }) => {
     const categories = useMemo(() => sortTurkishText(kategoriListesi || []), [kategoriListesi]);
@@ -125,6 +124,8 @@ const SettingsDashboard = ({
     const [bulkTargetCategory, setBulkTargetCategory] = useState('');
     const [selectedTransactionIds, setSelectedTransactionIds] = useState([]);
     const [processing, setProcessing] = useState(false);
+    const [passwordForm, setPasswordForm] = useState({ currentPassword: '', nextPassword: '', confirmPassword: '' });
+    const [codeForm, setCodeForm] = useState({ nextCode: '', confirmCode: '', currentPassword: '' });
 
     const transactionCountByCategory = useMemo(() => {
         const counts = new Map();
@@ -173,6 +174,8 @@ const SettingsDashboard = ({
         setDialog(null);
         setDialogTarget(null);
         setDialogValue('');
+        setPasswordForm({ currentPassword: '', nextPassword: '', confirmPassword: '' });
+        setCodeForm({ nextCode: '', confirmCode: '', currentPassword: '' });
     };
 
     const handleDialogSubmit = async (event) => {
@@ -300,20 +303,40 @@ const SettingsDashboard = ({
             );
         }
 
-        if (activeSection === 'access-code') {
+        if (activeSection === 'security') {
+            const hasPassword = Boolean(areaRecord?.passwordConfigured);
             return (
                 <>
                     <SectionHeader activeSection={activeSection} />
                     <div className="settings-access-panel">
                         <div className="settings-access-code">
-                            <span>Aktif alan kodu</span>
+                            <span>Alan Kodu</span>
                             <strong>{alanKodu}</strong>
                         </div>
-                        <p>Bu kod, hangi finans alanındaki kayıtları gördüğünü belirler. Başka bir alan koduna geçmek için mevcut alandan çıkıp giriş ekranında yeni kodu kullanabilirsin.</p>
-                        <button type="button" onClick={koddanCikis}>
-                            <KeyRound size={16} />
-                            Alan Kodundan Çık
-                        </button>
+                        <div className="settings-security-grid">
+                            <div className="settings-security-item">
+                                <span>Alan Şifresi</span>
+                                <strong>{hasPassword ? '••••••••' : 'Henüz oluşturulmadı'}</strong>
+                            </div>
+                            <div className="settings-security-item">
+                                <span>Veri Bağlantısı</span>
+                                <strong>{veriAlanKodu === alanKodu ? 'Alan koduyla aynı' : 'Eski veri alanı korunuyor'}</strong>
+                            </div>
+                        </div>
+                        <p>Alan kodu erişim adresidir; finans kayıtları ayrı veri bağlantısı altında kalır. Kod değiştirildiğinde kayıtlar taşınmaz.</p>
+                        <div className="settings-security-actions">
+                            <button type="button" onClick={() => openDialog('change-code')}>
+                                <KeyRound size={16} />
+                                Alan Kodunu Değiştir
+                            </button>
+                            <button type="button" onClick={() => openDialog(hasPassword ? 'change-password' : 'create-password')}>
+                                <LockKeyhole size={16} />
+                                {hasPassword ? 'Şifreyi Değiştir' : 'Şifre Oluştur'}
+                            </button>
+                            <button type="button" className="settings-secondary-button" onClick={koddanCikis}>
+                                Alan Kodundan Çık
+                            </button>
+                        </div>
                     </div>
                 </>
             );
@@ -455,23 +478,7 @@ const SettingsDashboard = ({
             );
         }
 
-        return (
-            <>
-                <SectionHeader activeSection={activeSection} />
-                <form className="settings-migration-panel" onSubmit={verileriTasi}>
-                    <div className="settings-migration-code">
-                        <span>Mevcut alan kodu</span>
-                        <strong>{alanKodu}</strong>
-                    </div>
-                    <label>
-                        Yeni alan kodu
-                        <input value={yeniKodInput} onChange={(event) => setYeniKodInput?.(event.target.value.toUpperCase())} placeholder="YENİ ALAN KODU" style={inputStyle} />
-                    </label>
-                    <p>Tüm finans kayıtları yeni alan koduna aktarılır. İşleme başlamadan önce yeni alan kodunu doğrula.</p>
-                    <button type="submit" disabled={tasimaIslemiSuruyor}>{tasimaIslemiSuruyor ? 'Taşınıyor...' : 'Verileri Taşı'}</button>
-                </form>
-            </>
-        );
+        return null;
     };
 
     return (
@@ -511,20 +518,118 @@ const SettingsDashboard = ({
                     'rename-tag': 'Etiket adını değiştir',
                     'new-investment-type': 'Yeni Yatırım Türü',
                     'rename-investment-type': 'Yatırım türünü değiştir',
+                    'create-password': 'Alan Şifresi Oluştur',
+                    'change-password': 'Şifreyi Değiştir',
+                    'change-code': 'Alan Kodunu Değiştir',
                 }[dialog] || 'Düzenle'} onClose={closeDialog}>
-                    <form onSubmit={handleDialogSubmit} className="settings-dialog-form">
-                        <input
-                            autoFocus
-                            value={dialogValue}
-                            onChange={(event) => setDialogValue(event.target.value)}
-                            placeholder={dialog.includes('investment') ? 'Tür adı' : dialog.includes('tag') ? 'Etiket adı' : 'Kategori adı'}
-                            style={inputStyle}
-                        />
-                        <div>
-                            <button type="button" onClick={closeDialog}>İptal</button>
-                            <button type="submit" disabled={processing}>{processing ? 'Kaydediliyor...' : dialog.startsWith('new') ? 'Ekle' : 'Kaydet'}</button>
-                        </div>
-                    </form>
+                    {['create-password', 'change-password'].includes(dialog) ? (
+                        <form onSubmit={async (event) => {
+                            event.preventDefault();
+                            if (passwordForm.nextPassword !== passwordForm.confirmPassword) return toast.warning("Yeni şifreler uyuşmuyor.");
+                            const validation = validateAreaPassword(passwordForm.nextPassword);
+                            if (validation) return toast.warning(validation);
+                            setProcessing(true);
+                            try {
+                                const ok = dialog === 'create-password'
+                                    ? await onCreateAreaPassword?.(passwordForm)
+                                    : await onChangeAreaPassword?.(passwordForm);
+                                if (ok) closeDialog();
+                            } finally {
+                                setProcessing(false);
+                            }
+                        }} className="settings-dialog-form">
+                            {dialog === 'change-password' && (
+                                <input
+                                    autoFocus
+                                    type="password"
+                                    value={passwordForm.currentPassword}
+                                    onChange={(event) => setPasswordForm((current) => ({ ...current, currentPassword: event.target.value }))}
+                                    placeholder="Mevcut şifre"
+                                    style={inputStyle}
+                                    autoComplete="current-password"
+                                />
+                            )}
+                            <input
+                                autoFocus={dialog === 'create-password'}
+                                type="password"
+                                value={passwordForm.nextPassword}
+                                onChange={(event) => setPasswordForm((current) => ({ ...current, nextPassword: event.target.value }))}
+                                placeholder="Yeni şifre"
+                                style={inputStyle}
+                                autoComplete="new-password"
+                            />
+                            <input
+                                type="password"
+                                value={passwordForm.confirmPassword}
+                                onChange={(event) => setPasswordForm((current) => ({ ...current, confirmPassword: event.target.value }))}
+                                placeholder="Yeni şifre tekrar"
+                                style={inputStyle}
+                                autoComplete="new-password"
+                            />
+                            <small>En az 8 karakter, bir büyük harf, bir küçük harf ve bir rakam.</small>
+                            <div>
+                                <button type="button" onClick={closeDialog}>İptal</button>
+                                <button type="submit" disabled={processing}>{processing ? 'Kaydediliyor...' : 'Kaydet'}</button>
+                            </div>
+                        </form>
+                    ) : dialog === 'change-code' ? (
+                        <form onSubmit={async (event) => {
+                            event.preventDefault();
+                            setProcessing(true);
+                            try {
+                                const ok = await onChangeAreaCode?.(codeForm);
+                                if (ok) closeDialog();
+                            } finally {
+                                setProcessing(false);
+                            }
+                        }} className="settings-dialog-form">
+                            <div className="settings-readonly-field">
+                                <span>Mevcut Alan Kodu</span>
+                                <strong>{alanKodu}</strong>
+                            </div>
+                            <input
+                                autoFocus
+                                value={codeForm.nextCode}
+                                onChange={(event) => setCodeForm((current) => ({ ...current, nextCode: normalizeAreaCode(event.target.value) }))}
+                                placeholder="Yeni alan kodu"
+                                style={inputStyle}
+                            />
+                            <input
+                                value={codeForm.confirmCode}
+                                onChange={(event) => setCodeForm((current) => ({ ...current, confirmCode: normalizeAreaCode(event.target.value) }))}
+                                placeholder="Yeni alan kodu tekrar"
+                                style={inputStyle}
+                            />
+                            {areaRecord?.passwordConfigured && (
+                                <input
+                                    type="password"
+                                    value={codeForm.currentPassword}
+                                    onChange={(event) => setCodeForm((current) => ({ ...current, currentPassword: event.target.value }))}
+                                    placeholder="Mevcut alan şifresi"
+                                    style={inputStyle}
+                                    autoComplete="current-password"
+                                />
+                            )}
+                            <div>
+                                <button type="button" onClick={closeDialog}>İptal</button>
+                                <button type="submit" disabled={processing}>{processing ? 'Kaydediliyor...' : 'Alan Kodunu Değiştir'}</button>
+                            </div>
+                        </form>
+                    ) : (
+                        <form onSubmit={handleDialogSubmit} className="settings-dialog-form">
+                            <input
+                                autoFocus
+                                value={dialogValue}
+                                onChange={(event) => setDialogValue(event.target.value)}
+                                placeholder={dialog.includes('investment') ? 'Tür adı' : dialog.includes('tag') ? 'Etiket adı' : 'Kategori adı'}
+                                style={inputStyle}
+                            />
+                            <div>
+                                <button type="button" onClick={closeDialog}>İptal</button>
+                                <button type="submit" disabled={processing}>{processing ? 'Kaydediliyor...' : dialog.startsWith('new') ? 'Ekle' : 'Kaydet'}</button>
+                            </div>
+                        </form>
+                    )}
                 </Dialog>
             )}
         </main>

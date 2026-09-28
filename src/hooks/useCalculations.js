@@ -4,8 +4,9 @@ import { useNotifications } from './useNotifications';
 import { isDateInPeriod, MONTH_NAMES, periodLabel } from '../utils/period';
 
 const formatDayMonthWeekday = (date) => {
-    if (!date) return 'Tarih yok';
-    return date.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', weekday: 'long' });
+    const safeDate = toDateSafe(date);
+    if (!safeDate) return 'Tarih yok';
+    return safeDate.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', weekday: 'long' });
 };
 
 export const useCalculations = (
