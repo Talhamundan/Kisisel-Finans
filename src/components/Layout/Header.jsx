@@ -13,6 +13,7 @@ import {
     Settings,
     Sun,
     Target,
+    TrendingDown,
     UserRound,
     WalletCards,
 } from 'lucide-react';
@@ -42,6 +43,7 @@ import {
 const navItems = [
     { id: 'butcem', label: 'Dashboard', icon: Home },
     { id: 'maasAnalizi', label: 'Maaş Analizi', icon: Banknote },
+    { id: 'harcamaAnalizi', label: 'Harcama Analizi', icon: TrendingDown },
     { id: 'yatirimlar', label: 'Yatırımlar', icon: WalletCards },
     { id: 'finansmanlar', label: 'Finansmanlar', icon: Landmark },
     { id: 'tanimlamalar', label: 'Tanımlamalar', icon: ClipboardList },
@@ -51,6 +53,7 @@ const navItems = [
 
 const pageMeta = {
     butcem: ['Dashboard', 'Finansal durumuna genel bakış'],
+    harcamaAnalizi: ['Harcama Analizi', 'Harcama trendleri, karşılaştırmalar ve içgörüler'],
     maasAnalizi: ['Maaş Analizi', 'Maaş dönemindeki gelir, harcama ve kalan tutarı incele'],
     yatirimlar: ['Yatırımlar', 'Portföy ve varlık performansı'],
     hedefler: ['Varlıklar', 'Envanter ve birikim planları'],
@@ -83,6 +86,41 @@ const Header = ({
     const userName = user?.displayName?.split(' ')[0] || 'Profil';
     const initial = userName?.[0]?.toLocaleUpperCase('tr-TR') || 'P';
     const visibleNavItems = navItems.filter((item) => item.id !== 'yatirimlar' || hasInvestmentAccount);
+    const periodFilter = showPeriodFilter ? (
+        <div className="period-filter qw-period-filter" aria-label="Dönem filtresi">
+            <select
+                className="period-filter__select period-filter__select--year"
+                value={selectedPeriod.year}
+                onChange={(event) => {
+                    const year = Number(event.target.value);
+                    const months = availablePeriods?.monthsByYear?.[year] || [];
+                    setSelectedPeriod((prev) => ({
+                        year,
+                        month: prev.month === 'all' || months.includes(prev.month) ? prev.month : (months[0] || 'all'),
+                    }));
+                }}
+                aria-label="Yıl seç"
+            >
+                {years.map((year) => (
+                    <option key={year} value={year}>{year}</option>
+                ))}
+            </select>
+            <select
+                className="period-filter__select period-filter__select--month"
+                value={selectedPeriod.month}
+                onChange={(event) => {
+                    const value = event.target.value;
+                    setSelectedPeriod((prev) => ({ ...prev, month: value === 'all' ? 'all' : Number(value) }));
+                }}
+                aria-label="Ay seç"
+            >
+                <option value="all">Tümü</option>
+                {availableMonths.map((month) => (
+                    <option key={month} value={month}>{MONTH_NAMES[month - 1]}</option>
+                ))}
+            </select>
+        </div>
+    ) : null;
 
     return (
         <SidebarProvider>
@@ -129,43 +167,9 @@ const Header = ({
                     </div>
                 </div>
 
-                <div className="qw-topbar-actions">
-                    {showPeriodFilter && (
-                        <div className="period-filter qw-period-filter" aria-label="Dönem filtresi">
-                            <select
-                                className="period-filter__select period-filter__select--month"
-                                value={selectedPeriod.month}
-                                onChange={(event) => {
-                                    const value = event.target.value;
-                                    setSelectedPeriod((prev) => ({ ...prev, month: value === 'all' ? 'all' : Number(value) }));
-                                }}
-                                aria-label="Ay seç"
-                            >
-                                <option value="all">Tümü</option>
-                                {availableMonths.map((month) => (
-                                    <option key={month} value={month}>{MONTH_NAMES[month - 1]}</option>
-                                ))}
-                            </select>
-                            <select
-                                className="period-filter__select period-filter__select--year"
-                                value={selectedPeriod.year}
-                                onChange={(event) => {
-                                    const year = Number(event.target.value);
-                                    const months = availablePeriods?.monthsByYear?.[year] || [];
-                                    setSelectedPeriod((prev) => ({
-                                        year,
-                                        month: prev.month === 'all' || months.includes(prev.month) ? prev.month : (months[0] || 'all'),
-                                    }));
-                                }}
-                                aria-label="Yıl seç"
-                            >
-                                {years.map((year) => (
-                                    <option key={year} value={year}>{year}</option>
-                                ))}
-                            </select>
-                        </div>
-                    )}
+                {periodFilter && <div className="qw-topbar-period-slot">{periodFilter}</div>}
 
+                <div className="qw-topbar-actions">
                     <Button type="button" variant="outline" size="icon" className="qw-icon-button" aria-label="Bildirimler">
                         <Bell size={18} strokeWidth={2.25} />
                     </Button>

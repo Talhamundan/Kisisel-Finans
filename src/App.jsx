@@ -17,6 +17,7 @@ import GoalsInventory from './components/Budget/GoalsInventory';
 import DefinitionsDashboard from './components/Definitions/DefinitionsDashboard';
 import FinanceCalendarDashboard from './components/Calendar/FinanceCalendarDashboard';
 import SalaryAnalysisDashboard from './components/Salary/SalaryAnalysisDashboard';
+import SpendingAnalysisDashboard from './components/Spending/SpendingAnalysisDashboard';
 import ModalManager from './components/Modals/ModalManager';
 import MobileNav from './components/Layout/MobileNav';
 import AppLogo from './components/Shared/AppLogo';
@@ -93,13 +94,16 @@ const getInitialTab = () => (
             ? 'tanimlamalar'
             : typeof window !== 'undefined' && window.location.pathname.startsWith('/yatirimlar')
                 ? 'yatirimlar'
-                : 'butcem'
+                : typeof window !== 'undefined' && window.location.pathname.startsWith('/harcama-analizi')
+                    ? 'harcamaAnalizi'
+                    : 'butcem'
 );
 
 const getTabFromPath = (path) => {
     if (path.startsWith('/finansmanlar')) return 'finansmanlar';
     if (path.startsWith('/tanimlamalar')) return 'tanimlamalar';
     if (path.startsWith('/yatirimlar')) return 'yatirimlar';
+    if (path.startsWith('/harcama-analizi')) return 'harcamaAnalizi';
     return 'butcem';
 };
 
@@ -162,13 +166,15 @@ function App() {
             : tab;
 
         setAnaSekme(nextTab);
-        if (nextTab === 'finansmanlar' || nextTab === 'tanimlamalar' || nextTab === 'yatirimlar') {
+        if (nextTab === 'finansmanlar' || nextTab === 'tanimlamalar' || nextTab === 'yatirimlar' || nextTab === 'harcamaAnalizi') {
             const url = new URL(window.location.href);
             url.pathname = nextTab === 'finansmanlar'
                 ? '/finansmanlar'
                 : nextTab === 'tanimlamalar'
                     ? '/tanimlamalar'
-                    : '/yatirimlar';
+                    : nextTab === 'yatirimlar'
+                        ? '/yatirimlar'
+                        : '/harcama-analizi';
             window.history.pushState({}, '', `${url.pathname}${url.search}`);
             setRoutePath(url.pathname);
             return;
@@ -177,6 +183,7 @@ function App() {
             window.location.pathname.startsWith('/finansmanlar')
             || window.location.pathname.startsWith('/tanimlamalar')
             || window.location.pathname.startsWith('/yatirimlar')
+            || window.location.pathname.startsWith('/harcama-analizi')
         ) {
             const url = new URL(window.location.href);
             url.pathname = '/';
@@ -1439,7 +1446,7 @@ function App() {
                 selectedPeriod={selectedPeriod}
                 setSelectedPeriod={setSelectedPeriod}
                 availablePeriods={availablePeriods}
-                showPeriodFilter={!['hedefler', 'takvim', 'ayarlar', 'finansmanlar', 'tanimlamalar'].includes(anaSekme)}
+                showPeriodFilter={!['hedefler', 'takvim', 'ayarlar', 'finansmanlar', 'tanimlamalar', 'harcamaAnalizi'].includes(anaSekme)}
                 theme={theme}
                 onThemeToggle={() => setTheme((currentTheme) => currentTheme === 'dark' ? 'light' : 'dark')}
                 hasInvestmentAccount={showInvestmentFeature}
@@ -1643,6 +1650,15 @@ function App() {
                     islemSil={budgetActions.islemSil}
                     normalSil={budgetActions.normalSil}
                     hasInvestmentAccount={hasInvestmentAccount}
+                    gizliMod={gizliMod}
+                />
+            )}
+
+            {anaSekme === "harcamaAnalizi" && (
+                <SpendingAnalysisDashboard
+                    islemler={data.islemler}
+                    hesaplar={data.hesaplar}
+                    borclar={data.borclar}
                     gizliMod={gizliMod}
                 />
             )}

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Hourglass } from 'lucide-react';
 import { formatCurrencyPlain } from '../../utils/helpers';
+import { maskMoneyInNotificationMessage } from '../../utils/notifications';
 
 const CREDIT_CARD_LIMIT_ACK_KEY = 'kisisel_finans_kk_limit_ack_v1';
 
@@ -180,7 +181,7 @@ const Notifications = ({
                             }}
                         >
                             <span className="qw-notification-message">
-                                {b.mesaj}
+                                {maskMoneyInNotificationMessage(b.mesaj, gizliMod)}
                             </span>
 
                             <div className="qw-notification-actions">

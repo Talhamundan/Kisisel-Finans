@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Plus, X } from 'lucide-react';
 import QuickTransactionForm from './QuickTransactionForm';
+import { getQuickExpenseDefaultAccountId, getQuickTransferDefaultAccountIds } from '../../utils/quickTransaction';
 
 const toLocalDateTimeValue = (date = new Date()) => {
     const local = new Date(date.getTime() - (date.getTimezoneOffset() * 60000));
@@ -59,11 +60,21 @@ const GlobalQuickTransaction = ({ isOpen, onOpen, onClose, quickFormProps }) => 
 
         const props = quickFormPropsRef.current;
         const defaultAccountId = props?.defaultPaymentAccountId || '';
+        const expenseAccountId = getQuickExpenseDefaultAccountId({
+            accounts: props?.hesaplar || [],
+            transactions: props?.tumIslemler || [],
+            defaultPaymentAccountId: defaultAccountId,
+        });
+        const transferAccounts = getQuickTransferDefaultAccountIds({
+            accounts: props?.hesaplar || [],
+            transactions: props?.tumIslemler || [],
+            defaultPaymentAccountId: defaultAccountId,
+        });
         const nowDateTime = toLocalDateTimeValue();
         const today = toLocalDateValue();
 
         props?.setFormTab?.('islem');
-        props?.setSecilenHesapId?.(defaultAccountId);
+        props?.setSecilenHesapId?.(expenseAccountId);
         props?.setIslemTipi?.('gider');
         props?.setKategori?.('');
         props?.setIslemAciklama?.('');
@@ -74,8 +85,8 @@ const GlobalQuickTransaction = ({ isOpen, onOpen, onClose, quickFormProps }) => 
         props?.setIslemMaasDonemi?.('');
         props?.setSecilenEtiketIds?.([]);
 
-        props?.setTransferKaynakId?.(defaultAccountId);
-        props?.setTransferHedefId?.('');
+        props?.setTransferKaynakId?.(transferAccounts.sourceId);
+        props?.setTransferHedefId?.(transferAccounts.targetId);
         props?.setTransferTutar?.('');
         props?.setTransferUcreti?.('');
         props?.setTransferAciklama?.('');

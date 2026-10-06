@@ -101,6 +101,586 @@
   white-space: nowrap;
 }
 
+.spending-analysis-page {
+  display: grid;
+  gap: 16px;
+  padding-bottom: 34px;
+}
+
+.spending-control-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, auto);
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+}
+
+.spending-control-main {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.spending-control-main label,
+.spending-date-pair {
+  display: grid;
+  gap: 4px;
+}
+
+.spending-control-main label span {
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+  font-weight: 800;
+}
+
+.spending-control-main select,
+.spending-date-pair input {
+  min-height: 36px;
+  border: 1px solid var(--border-soft);
+  border-radius: 11px;
+  background: var(--surface-solid);
+  color: var(--text-primary);
+  padding: 0 12px;
+  font-size: 12.5px;
+  font-weight: 760;
+  outline: none;
+}
+
+.spending-date-pair {
+  grid-template-columns: repeat(2, minmax(118px, 1fr));
+}
+
+.spending-period-note {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 5px 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 720;
+  text-align: right;
+}
+
+.spending-period-note small {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+.spending-rules-popover {
+  position: relative;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.spending-rules-popover summary {
+  cursor: pointer;
+}
+
+.spending-rules-popover p {
+  position: absolute;
+  right: 0;
+  z-index: 20;
+  width: min(320px, 80vw);
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background: var(--surface-solid);
+  box-shadow: var(--shadow-card);
+  color: var(--text-secondary);
+  line-height: 1.4;
+  text-align: left;
+}
+
+.spending-overview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.58fr);
+  gap: 12px;
+}
+
+.spending-primary-stats {
+  display: grid;
+  grid-template-columns: 1.2fr repeat(2, minmax(0, 0.9fr));
+  gap: 12px;
+}
+
+.spending-primary-stats .qw-stat-card {
+  min-height: 118px;
+  padding: 14px;
+}
+
+.spending-primary-stats .qw-stat-card__top {
+  margin-bottom: 8px;
+}
+
+.spending-primary-stats .qw-stat-card__body strong {
+  font-size: 20px;
+}
+
+.spending-secondary-summary {
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  padding: 14px;
+}
+
+.spending-secondary-summary span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.spending-secondary-summary em {
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+  font-style: normal;
+  font-weight: 780;
+}
+
+.spending-secondary-summary b {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.spending-report-summary-card {
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  min-height: 118px;
+  padding: 14px;
+}
+
+.spending-report-summary-card > span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.spending-report-summary-card strong {
+  color: var(--text-primary);
+  font-size: 13.5px;
+  font-weight: 850;
+}
+
+.spending-report-summary-card small {
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 720;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.spending-report-summary-card ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 16px;
+}
+
+.spending-report-summary-card li {
+  color: var(--text-secondary);
+  font-size: 11.8px;
+  line-height: 1.24;
+}
+
+.spending-main-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  gap: 16px;
+}
+
+.spending-main-grid--top {
+  grid-template-columns: minmax(0, 1.1fr) minmax(300px, 0.7fr);
+}
+
+.spending-main-grid--narrow {
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr);
+}
+
+.spending-chart-card {
+  min-height: 318px;
+}
+
+.spending-chart-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  margin: -4px 0 6px;
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+  font-weight: 760;
+}
+
+.spending-chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.spending-chart-legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+}
+
+.spending-chart-legend .is-spending {
+  background: #ef4444;
+}
+
+.spending-chart-legend .is-cashout {
+  background: #8b5cf6;
+}
+
+.spending-category-list,
+.spending-insight-list,
+.spending-mini-list,
+.spending-comparison-table {
+  display: grid;
+  gap: 8px;
+}
+
+.spending-comparison-table {
+  --spending-comparison-columns: minmax(220px, 1.35fr) minmax(132px, 0.55fr) minmax(132px, 0.55fr) minmax(164px, 0.65fr);
+}
+
+.spending-category-list {
+  max-height: 408px;
+  min-height: 408px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text-tertiary) 34%, transparent) transparent;
+}
+
+.spending-category-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.spending-category-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-tertiary) 34%, transparent);
+}
+
+.spending-category-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.spending-category-list button,
+.spending-insight-list button,
+.spending-comparison-table button {
+  width: 100%;
+  border: 0;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--card) 86%, var(--muted));
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.spending-category-list button {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+}
+
+.spending-category-list i {
+  width: 5px;
+  height: 30px;
+  border-radius: 999px;
+}
+
+.spending-category-list span,
+.spending-mini-list span,
+.spending-insight-list span,
+.spending-comparison-table button > span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.spending-category-list strong,
+.spending-mini-list strong,
+.spending-insight-list strong,
+.spending-comparison-table strong {
+  color: var(--text-primary);
+  font-size: 12.8px;
+  font-weight: 820;
+}
+
+.spending-category-list small,
+.spending-mini-list small,
+.spending-insight-list small,
+.spending-comparison-table small,
+.spending-muted {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.spending-category-list em {
+  display: block;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-soft);
+}
+
+.spending-category-list em b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.spending-category-list > button > b,
+.spending-mini-list b {
+  color: var(--text-primary);
+  font-size: 12.8px;
+  font-weight: 830;
+  white-space: nowrap;
+}
+
+.spending-insight-list button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+}
+
+.spending-insight-list--compact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.spending-insight-list--compact button {
+  align-items: start;
+}
+
+.spending-insight-list--compact small {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.spending-detail-panel {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.spending-mini-list > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--card) 86%, var(--muted));
+}
+
+.spending-comparison-table button {
+  display: grid;
+  grid-template-columns: var(--spending-comparison-columns);
+  align-items: center;
+  column-gap: 16px;
+  padding: 9px 10px;
+}
+
+.spending-comparison-head {
+  display: grid;
+  grid-template-columns: var(--spending-comparison-columns);
+  column-gap: 16px;
+  padding: 0 10px 6px;
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.spending-comparison-head span {
+  display: block;
+  min-width: 0;
+}
+
+.spending-comparison-head span:not(:first-child) {
+  text-align: right;
+}
+
+.spending-comparison-table button > b,
+.spending-comparison-table button > em {
+  justify-self: stretch;
+  text-align: right;
+}
+
+.spending-comparison-table b,
+.spending-comparison-table em {
+  color: var(--text-primary);
+  font-size: 12.5px;
+  font-style: normal;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.spending-delta {
+  justify-self: end;
+  min-width: 126px;
+  border-radius: 999px;
+  padding: 5px 8px;
+  font-size: 11px;
+  font-weight: 850;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.spending-delta.is-danger {
+  background: color-mix(in srgb, var(--danger) 13%, transparent);
+  color: var(--danger);
+}
+
+.spending-delta.is-success {
+  background: color-mix(in srgb, var(--success) 13%, transparent);
+  color: var(--success);
+}
+
+.spending-delta.is-neutral {
+  background: var(--surface-soft);
+  color: var(--text-tertiary);
+}
+
+@media (max-width: 1180px) {
+  .spending-overview-grid,
+  .spending-primary-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .spending-main-grid,
+  .spending-control-card {
+    grid-template-columns: 1fr;
+  }
+
+  .spending-period-note {
+    justify-items: start;
+    text-align: left;
+  }
+}
+
+@media (max-width: 760px) {
+  .spending-analysis-page {
+    padding-bottom: 110px;
+  }
+
+  .spending-overview-grid,
+  .spending-primary-stats,
+  .spending-insight-list--compact {
+    grid-template-columns: 1fr;
+  }
+
+  .spending-control-card {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .spending-control-main {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .spending-control-main label,
+  .spending-control-main select,
+  .spending-date-pair,
+  .spending-date-pair input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .spending-period-note {
+    justify-content: flex-start;
+    width: 100%;
+    text-align: left;
+  }
+
+  .spending-report-summary-card > span,
+  .spending-secondary-summary span {
+    align-items: start;
+  }
+
+  .spending-report-summary-card small {
+    white-space: normal;
+  }
+
+  .spending-chart-card {
+    min-height: 300px;
+  }
+
+  .spending-chart-legend {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .spending-category-list {
+    min-height: 320px;
+    max-height: 320px;
+  }
+
+  .spending-date-pair,
+  .spending-comparison-table button,
+  .spending-comparison-head {
+    grid-template-columns: 1fr;
+  }
+
+  .spending-comparison-head {
+    display: none;
+  }
+
+  .spending-delta {
+    justify-self: start;
+  }
+}
+
+@media (max-width: 520px) {
+  .spending-primary-stats .qw-stat-card {
+    min-height: auto;
+  }
+
+  .spending-secondary-summary,
+  .spending-report-summary-card {
+    min-height: auto;
+  }
+
+  .spending-report-summary-card li {
+    font-size: 11.5px;
+  }
+
+  .spending-mini-list > div,
+  .spending-category-list button {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .spending-category-list i {
+    display: none;
+  }
+
+  .spending-category-list > button > b,
+  .spending-mini-list b {
+    justify-self: start;
+  }
+}
+
 /* --- REDESIGN PASS: FINTECH SYSTEM V2 --- */
 :root {
   --control-height: 40px;
@@ -5489,6 +6069,30 @@ html[data-theme="dark"] .global-quick-panel {
 .qw-transactions-card {
   display: flex;
   flex-direction: column;
+}
+
+.qw-transactions-card .qw-dashboard-toolbar {
+  display: grid;
+  grid-template-columns:
+    minmax(260px, 1.65fr)
+    minmax(132px, 0.64fr)
+    minmax(132px, 0.64fr)
+    minmax(148px, 0.72fr)
+    minmax(128px, 0.58fr);
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.qw-transactions-card .qw-search-field,
+.qw-transactions-card .qw-toolbar-filter-wrap,
+.qw-transactions-card .qw-dashboard-toolbar select {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+.qw-transactions-card .qw-search-field input {
+  min-width: 0;
 }
 
 .qw-transaction-list--scroll {
@@ -11792,6 +12396,41 @@ option,
   padding-bottom: 0 !important;
 }
 
+.qw-transactions-card .qw-dashboard-toolbar {
+  display: grid !important;
+  grid-template-columns:
+    minmax(260px, 1.65fr)
+    minmax(132px, 0.64fr)
+    minmax(132px, 0.64fr)
+    minmax(148px, 0.72fr)
+    minmax(128px, 0.58fr);
+  align-items: center;
+  gap: 8px !important;
+}
+
+.qw-transactions-card .qw-search-field,
+.qw-transactions-card .qw-toolbar-filter-wrap,
+.qw-transactions-card .qw-dashboard-toolbar select {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+@media (max-width: 900px) {
+  .qw-transactions-card .qw-dashboard-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .qw-transactions-card .qw-search-field {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 560px) {
+  .qw-transactions-card .qw-dashboard-toolbar {
+    grid-template-columns: 1fr;
+  }
+}
+
 .qw-toolbar-filter-wrap {
   position: relative;
   display: inline-flex;
@@ -12115,5 +12754,106 @@ html[data-theme="dark"] .qw-notification-card {
     font-size: 13px !important;
     padding-left: 14px !important;
     padding-right: 28px !important;
+  }
+}
+
+/* Compact transaction filters and mobile header repair */
+.qw-transactions-card .qw-dashboard-toolbar {
+  grid-template-columns:
+    minmax(200px, 0.9fr)
+    minmax(118px, 0.58fr)
+    minmax(118px, 0.58fr)
+    minmax(132px, 0.64fr)
+    minmax(116px, 0.52fr) !important;
+}
+
+.qw-transactions-card .qw-search-field {
+  max-width: 468px;
+}
+
+.qw-transactions-card .qw-search-field input::placeholder {
+  text-overflow: ellipsis;
+}
+
+.qw-topbar-period-slot {
+  display: flex;
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+@media (max-width: 900px) {
+  .qw-transactions-card .qw-dashboard-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .qw-transactions-card .qw-search-field {
+    grid-column: 1 / -1;
+    max-width: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .qw-transactions-card .qw-dashboard-toolbar {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .app-shell {
+    padding-top: calc(142px + env(safe-area-inset-top)) !important;
+  }
+
+  .qw-topbar.app-header {
+    min-height: calc(122px + env(safe-area-inset-top)) !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    grid-template-rows: 42px 42px !important;
+    align-items: center !important;
+    column-gap: 8px !important;
+    row-gap: 10px !important;
+  }
+
+  .qw-topbar-left {
+    grid-column: 1;
+    grid-row: 1;
+    flex: initial !important;
+    max-width: none !important;
+    min-width: 0 !important;
+  }
+
+  .qw-topbar-period-slot {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    margin-left: 0;
+    min-width: 0;
+  }
+
+  .qw-topbar-actions {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0 !important;
+    gap: 5px !important;
+  }
+
+  .qw-topbar .qw-icon-button,
+  .qw-topbar .qw-profile-pill {
+    min-width: 36px !important;
+    width: 36px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    flex-basis: 36px !important;
+  }
+
+  .qw-topbar .period-filter.qw-period-filter {
+    position: static !important;
+    width: 100% !important;
+    max-width: none !important;
+    gap: 8px !important;
+  }
+
+  .qw-topbar .period-filter__select {
+    height: 42px !important;
+    min-height: 42px !important;
   }
 }

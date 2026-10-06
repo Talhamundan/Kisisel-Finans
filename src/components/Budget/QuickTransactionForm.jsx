@@ -2,6 +2,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ReceiptText } from 'lucide-react';
 import { inputStyle, formatCurrencyPlain, sortTurkishText } from '../../utils/helpers';
 import { MONTH_NAMES } from '../../utils/period';
+import {
+    getQuickExpenseDefaultAccountId,
+    getQuickTransferDefaultAccountIds,
+    rememberLastQuickExpenseAccount,
+    rememberLastQuickTransferAccounts,
+} from '../../utils/quickTransaction';
 import { getCreditCardPaymentAmountOptions, isCreditCardPaymentSourceAccount } from '../../utils/creditCardPayments';
 import DescriptionInput from '../Shared/DescriptionInput';
 import TagSelector from '../Shared/TagSelector';
@@ -124,16 +130,6 @@ const QuickTransactionForm = ({
     const transferSources = isTransferToCreditCard
         ? siraliHesaplar.filter(isCreditCardPaymentSourceAccount)
         : siraliHesaplar;
-    const latestTransferSourceId = useMemo(() => {
-        const sourceIds = new Set(transferSources.map((account) => account.id));
-        return [...(tumIslemler || [])]
-            .filter((transaction) => transaction?.islemTipi === 'transfer' && sourceIds.has(transaction.kaynakId))
-            .sort((a, b) => {
-                const aSeconds = a.tarih?.seconds || (a.tarih ? new Date(a.tarih).getTime() / 1000 : 0);
-                const bSeconds = b.tarih?.seconds || (b.tarih ? new Date(b.tarih).getTime() / 1000 : 0);
-                return bSeconds - aSeconds;
-            })[0]?.kaynakId || '';
-    }, [transferSources, tumIslemler]);
     const creditCardTransferAmounts = isTransferToCreditCard
         ? getCreditCardPaymentAmountOptions(selectedTransferTarget)
         : null;
@@ -169,7 +165,8 @@ const QuickTransactionForm = ({
         if (secilenHesapId && !accountIds.has(secilenHesapId)) setSecilenHesapId?.('');
         if (taksitHesapId && !accountIds.has(taksitHesapId)) setTaksitHesapId?.('');
         if (transferKaynakId && !accountIds.has(transferKaynakId)) setTransferKaynakId?.('');
-    }, [accountIds, secilenHesapId, setSecilenHesapId, setTaksitHesapId, setTransferKaynakId, taksitHesapId, transferKaynakId]);
+        if (transferHedefId && !accountIds.has(transferHedefId)) setTransferHedefId?.('');
+    }, [accountIds, secilenHesapId, setSecilenHesapId, setTaksitHesapId, setTransferHedefId, setTransferKaynakId, taksitHesapId, transferHedefId, transferKaynakId]);
 
     useEffect(() => {
         if (!isTransferToCreditCard || !transferKaynakId) return;
@@ -177,33 +174,55 @@ const QuickTransactionForm = ({
     }, [isTransferToCreditCard, selectedTransferSource, setTransferKaynakId, transferKaynakId]);
 
     useEffect(() => {
+        const expenseAccountId = getQuickExpenseDefaultAccountId({
+            accounts: hesaplar,
+            transactions: tumIslemler,
+            defaultPaymentAccountId,
+        });
+        if (expenseAccountId && !secilenHesapId) setSecilenHesapId?.(expenseAccountId);
         if (!defaultPaymentAccountId || !accountIds.has(defaultPaymentAccountId)) return;
-        if (!secilenHesapId) setSecilenHesapId?.(defaultPaymentAccountId);
         if (!taksitHesapId) setTaksitHesapId?.(defaultPaymentAccountId);
     }, [
         accountIds,
         defaultPaymentAccountId,
+        hesaplar,
         secilenHesapId,
         setSecilenHesapId,
         setTaksitHesapId,
         setTransferKaynakId,
         taksitHesapId,
+        tumIslemler,
         transferKaynakId,
     ]);
 
     useEffect(() => {
-        const fallbackSourceId = latestTransferSourceId || defaultPaymentAccountId;
+        const transferAccounts = getQuickTransferDefaultAccountIds({
+            accounts: hesaplar,
+            transactions: tumIslemler,
+            defaultPaymentAccountId,
+        });
+        const fallbackSourceId = transferAccounts.sourceId;
+        const fallbackTargetId = transferAccounts.targetId;
         const validTransferSourceIds = new Set(transferSources.map((account) => account.id));
         if (!fallbackSourceId || !validTransferSourceIds.has(fallbackSourceId)) return;
-        if (transferKaynakId && transferKaynakId !== autoTransferSourceId) return;
-        if (transferKaynakId === fallbackSourceId) return;
-        setAutoTransferSourceId(fallbackSourceId);
-        setTransferKaynakId?.(fallbackSourceId);
+        if (!transferKaynakId || transferKaynakId === autoTransferSourceId) {
+            if (transferKaynakId !== fallbackSourceId) {
+                setAutoTransferSourceId(fallbackSourceId);
+                setTransferKaynakId?.(fallbackSourceId);
+            }
+        }
+        if (!transferHedefId && fallbackTargetId && fallbackTargetId !== fallbackSourceId && accountIds.has(fallbackTargetId)) {
+            setTransferHedefId?.(fallbackTargetId);
+        }
     }, [
+        accountIds,
         autoTransferSourceId,
         defaultPaymentAccountId,
-        latestTransferSourceId,
+        hesaplar,
+        setTransferHedefId,
         setTransferKaynakId,
+        tumIslemler,
+        transferHedefId,
         transferKaynakId,
         transferSources,
     ]);
@@ -253,7 +272,11 @@ const QuickTransactionForm = ({
 
             {activeTab === 'islem' && (
                 <form
-                    onSubmit={(event) => runSubmit(event, islemEkle, {
+                    onSubmit={(event) => runSubmit(event, async (submitEvent) => {
+                        const result = await islemEkle(submitEvent);
+                        if (result && islemTipi === 'gider') rememberLastQuickExpenseAccount(secilenHesapId);
+                        return result;
+                    }, {
                         ...(!secilenHesapId ? { secilenHesapId: 'Hesap seçin.' } : {}),
                         ...(!kategori ? { kategori: 'Kategori seçin.' } : {}),
                         ...(!islemTutar ? { islemTutar: 'Tutar girin.' } : {}),
@@ -344,7 +367,16 @@ const QuickTransactionForm = ({
 
             {activeTab === 'transfer' && (
                 <form
-                    onSubmit={(event) => runSubmit(event, transferYap, {
+                    onSubmit={(event) => runSubmit(event, async (submitEvent) => {
+                        const result = await transferYap(submitEvent);
+                        if (result) {
+                            rememberLastQuickTransferAccounts({
+                                sourceId: transferKaynakId,
+                                targetId: transferHedefId,
+                            });
+                        }
+                        return result;
+                    }, {
                         ...(!transferKaynakId ? { transferKaynakId: 'Kaynak hesap seçin.' } : {}),
                         ...(!transferHedefId ? { transferHedefId: 'Hedef hesap seçin.' } : {}),
                         ...(!transferTutar ? { transferTutar: 'Tutar girin.' } : {}),
