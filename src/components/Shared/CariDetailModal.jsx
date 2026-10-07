@@ -1,4 +1,4 @@
-import { ArrowDownRight, ArrowUpRight, CalendarClock, Edit3 } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, CalendarClock, Edit3, Plus, Trash2 } from 'lucide-react';
 import HighQualityModal from './HighQualityModal';
 import { IconTile, StatusBadge } from './PremiumUI';
 import { formatCurrencyPlain, toDateSafe } from '../../utils/helpers';
@@ -27,6 +27,9 @@ const ItemRow = ({ item, gizliMod, modalAc }) => {
                 </button>
                 <button type="button" className="is-ghost" aria-label="Düzenle" onClick={() => modalAc?.('duzenle_borc', item)}>
                     <Edit3 size={14} />
+                </button>
+                <button type="button" className="is-ghost is-danger" aria-label="Sil" onClick={() => modalAc?.('borc_sil', item)}>
+                    <Trash2 size={14} />
                 </button>
             </div>
         </div>
@@ -77,7 +80,17 @@ const CariDetailModal = ({ summary, isOpen, onClose, gizliMod = false, modalAc }
                 </div>
 
                 <div className="cari-detail-section">
-                    <h4>Aktif İşlemler</h4>
+                    <div className="cari-detail-section__header">
+                        <h4>Aktif İşlemler</h4>
+                        <button
+                            type="button"
+                            className="qw-action-button"
+                            onClick={() => modalAc?.('borc_tanimla', { cari: summary })}
+                        >
+                            <Plus size={15} strokeWidth={2.35} />
+                            İşlem Ekle
+                        </button>
+                    </div>
                     <div className="cari-detail-list">
                         {summary.activeItems.map((item) => <ItemRow key={item.id} item={item} gizliMod={gizliMod} modalAc={modalAc} />)}
                         {summary.activeItems.length === 0 && <p className="cari-detail-empty">Aktif işlem yok.</p>}

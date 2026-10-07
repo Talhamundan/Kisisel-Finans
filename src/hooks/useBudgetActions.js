@@ -88,6 +88,11 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
     const [borcTarih, setBorcTarih] = useState("");
     const [borcKategori, setBorcKategori] = useState(kategoriListesi && kategoriListesi[0] ? kategoriListesi[0] : "");
 
+    // Alacak / Verecek carileri
+    const [cariTanimAd, setCariTanimAd] = useState("");
+    const [cariTanimTuru, setCariTanimTuru] = useState("Kişi");
+    const [cariTanimNot, setCariTanimNot] = useState("");
+
     // Cari / şirket alacakları
     const [cariBaslik, setCariBaslik] = useState("");
     const [cariTutar, setCariTutar] = useState("");
@@ -107,6 +112,12 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
     const [faturaGirisTutar, setFaturaGirisTutar] = useState("");
     const [faturaGirisTarih, setFaturaGirisTarih] = useState("");
     const [faturaGirisAciklama, setFaturaGirisAciklama] = useState("");
+
+    // Tek seferlik hatırlatıcı
+    const [reminderTitle, setReminderTitle] = useState("");
+    const [reminderDueDate, setReminderDueDate] = useState("");
+    const [reminderAmount, setReminderAmount] = useState("");
+    const [reminderNote, setReminderNote] = useState("");
 
     // KK Ödeme
     const [kkOdemeKartId, setKkOdemeKartId] = useState("");
@@ -376,7 +387,8 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
             showCancelButton: true,
             confirmButtonColor: '#d33',
             confirmButtonText: 'Evet, Sil',
-            cancelButtonText: 'Vazgeç'
+            cancelButtonText: 'Vazgeç',
+            zIndex: 200000
         });
         if (!result.isConfirmed) return false;
 
@@ -484,7 +496,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
                 setIslemTutar(""); setIslemAciklama(""); setIslemTarihi(""); setIslemGelirTuru("Diğer Gelir"); setIslemBagliMaasId(""); setIslemMaasDonemi(""); setSecilenEtiketIds([]);
             }
             toast.success("İşlem kaydedildi!");
-            return true;
+            return { success: true, transactionId: islemRef.id, id: islemRef.id };
         } catch (error) {
             console.error("İşlem ekleme hatası:", error);
             toast.error("İşlem eklenirken hata oluştu.");
@@ -703,6 +715,154 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
             }
         });
     }
+
+    const resetReminderForm = () => {
+        setReminderTitle("");
+        setReminderDueDate("");
+        setReminderAmount("");
+        setReminderNote("");
+    };
+
+    const buildReminderPayload = () => {
+        const title = String(reminderTitle || '').trim();
+        const dueDate = reminderDueDate || "";
+        const amountValue = reminderAmount === "" ? null : parseFloat(reminderAmount);
+        const note = String(reminderNote || '').trim();
+
+        if (!title) {
+            toast.warning("Başlık giriniz.");
+            return null;
+        }
+        if (!dueDate) {
+            toast.warning("Son ödeme tarihi seçiniz.");
+            return null;
+        }
+        if (reminderAmount !== "" && !Number.isFinite(amountValue)) {
+            toast.warning("Geçerli bir tutar giriniz.");
+            return null;
+        }
+
+        return {
+            uid: user.uid,
+            alanKodu,
+            title,
+            dueDate,
+            amount: amountValue,
+            note,
+            reminderDaysBefore: 3,
+            updatedAt: new Date(),
+        };
+    };
+
+    const publishReminderLocalChange = (type, reminder) => {
+        if (typeof window === 'undefined' || !reminder?.id) return;
+        window.dispatchEvent(new CustomEvent('finance-reminder-local-change', {
+            detail: { type, reminder }
+        }));
+    };
+
+    const reminderEkle = async (e) => {
+        if (e) e.preventDefault();
+        const payload = buildReminderPayload();
+        if (!payload) return false;
+
+        try {
+            const docRef = await addDoc(collection(db, "reminders"), {
+                ...payload,
+                status: "ACTIVE",
+                createdAt: new Date(),
+                completedAt: null,
+                linkedTransactionId: "",
+            });
+            publishReminderLocalChange('upsert', {
+                id: docRef.id,
+                ...payload,
+                status: "ACTIVE",
+                createdAt: new Date(),
+                completedAt: null,
+                linkedTransactionId: "",
+            });
+            resetReminderForm();
+            toast.success("Hatırlatıcı eklendi.");
+            return true;
+        } catch (error) {
+            console.error("Hatırlatıcı ekleme hatası:", error);
+            toast.error("Hatırlatıcı eklenemedi.");
+            return false;
+        }
+    };
+
+    const reminderDuzenle = async (e, id) => {
+        if (e) e.preventDefault();
+        const payload = buildReminderPayload();
+        if (!payload || !id) return false;
+
+        try {
+            await updateDoc(doc(db, "reminders", id), payload);
+            publishReminderLocalChange('upsert', {
+                id,
+                ...payload,
+                status: "ACTIVE",
+            });
+            toast.success("Hatırlatıcı güncellendi.");
+            return true;
+        } catch (error) {
+            console.error("Hatırlatıcı güncelleme hatası:", error);
+            toast.error("Hatırlatıcı güncellenemedi.");
+            return false;
+        }
+    };
+
+    const reminderSil = async (reminder) => {
+        if (!reminder?.id) return false;
+        const result = await Swal.fire({
+            title: 'Bu hatırlatıcı silinsin mi?',
+            text: reminder.title || 'Hatırlatıcı silinecek.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            confirmButtonText: 'Evet, Sil',
+            cancelButtonText: 'Vazgeç',
+            zIndex: 250000
+        });
+        if (!result.isConfirmed) return false;
+
+        try {
+            await deleteDoc(doc(db, "reminders", reminder.id));
+            publishReminderLocalChange('delete', { ...reminder, alanKodu: reminder.alanKodu || alanKodu });
+            toast.info("Hatırlatıcı silindi.");
+            return true;
+        } catch (error) {
+            console.error("Hatırlatıcı silme hatası:", error);
+            toast.error("Hatırlatıcı silinemedi.");
+            return false;
+        }
+    };
+
+    const reminderTamamla = async (reminder, transactionId) => {
+        if (!reminder?.id || !transactionId) return false;
+        try {
+            await updateDoc(doc(db, "reminders", reminder.id), {
+                status: "COMPLETED",
+                completedAt: new Date(),
+                linkedTransactionId: transactionId,
+                updatedAt: new Date(),
+            });
+            publishReminderLocalChange('upsert', {
+                ...reminder,
+                status: "COMPLETED",
+                completedAt: new Date(),
+                linkedTransactionId: transactionId,
+                updatedAt: new Date(),
+            });
+            toast.success("Hatırlatıcı tamamlandı.");
+            return true;
+        } catch (error) {
+            console.error("Hatırlatıcı tamamlama hatası:", error);
+            toast.error("İşlem kaydedildi ancak hatırlatıcı tamamlanamadı.");
+            return false;
+        }
+    };
 
     const buildPaymentIdempotencyKey = ({ sourceId, cardId, amount, date, paymentType = CREDIT_CARD_PAYMENT_TYPES.STATEMENT }) => {
         const safe = (value) => String(value || '').replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -1058,10 +1218,10 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
     const maasDuzenle = async (e, id) => { e.preventDefault(); await updateDoc(doc(db, "maaslar", id), { ad: maasAd, tutar: parseFloat(maasTutar), gun: maasGun, hesapId: maasHesapId, beklenenHesapId: maasHesapId, tur: maasTur || "Maaş" }); toast.success("Gelir kalemi güncellendi."); return true; }
 
     // --- BORÇ ---
-    const borcEkle = async (e, close) => {
+    const borcEkle = async (e, close, selectedCari = null) => {
         if (e) e.preventDefault();
         try {
-            const cariAdi = normalizeCariName(borcAd);
+            const cariAdi = normalizeCariName(selectedCari?.ad || selectedCari?.name || borcAd);
             if (!cariAdi || !borcTutar) {
                 toast.error("Eksik bilgi");
                 return false;
@@ -1072,7 +1232,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
                 return false;
             }
             const kalan = borcKalanTutar ? parseFloat(borcKalanTutar) : tutar;
-            const cari = await ensureCari(cariAdi);
+            const cari = selectedCari?.id ? selectedCari : await ensureCari(cariAdi);
             const borcQuery = query(collection(db, "borclar"), where("alanKodu", "==", alanKodu));
             const borcSnap = await getDocs(borcQuery);
             const maxOrderIndex = borcSnap.docs.reduce((max, belge) => {
@@ -1107,6 +1267,73 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
             return false;
         }
     }
+
+    const resetCariTanimForm = () => {
+        setCariTanimAd("");
+        setCariTanimTuru("Kişi");
+        setCariTanimNot("");
+    };
+
+    const publishCariLocalChange = (type, cari) => {
+        if (typeof window === 'undefined' || !cari?.id) return;
+        window.dispatchEvent(new CustomEvent('finance-cari-local-change', {
+            detail: { type, cari }
+        }));
+    };
+
+    const cariTanimla = async (e) => {
+        if (e) e.preventDefault();
+        const ad = normalizeCariName(cariTanimAd);
+        const nameKey = getCariNameKey(ad);
+
+        if (!ad) {
+            toast.warning("Cari adı giriniz.");
+            return false;
+        }
+
+        try {
+            const cariRef = doc(collection(db, "cariler"));
+            const now = new Date();
+            const cari = {
+                id: cariRef.id,
+                uid: user.uid,
+                alanKodu,
+                ad,
+                name: ad,
+                nameKey,
+                tur: cariTanimTuru || "Kişi",
+                type: cariTanimTuru || "Kişi",
+                not: normalizeCariName(cariTanimNot),
+                note: normalizeCariName(cariTanimNot),
+                createdAt: now,
+                updatedAt: now,
+            };
+            await setDoc(cariRef, {
+                uid: cari.uid,
+                alanKodu: cari.alanKodu,
+                ad: cari.ad,
+                name: cari.name,
+                nameKey: cari.nameKey,
+                tur: cari.tur,
+                type: cari.type,
+                not: cari.not,
+                note: cari.note,
+                createdAt: cari.createdAt,
+                updatedAt: cari.updatedAt,
+            });
+            publishCariLocalChange('upsert', cari);
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('finance-open-cari-detail', { detail: { cari } }));
+            }
+            resetCariTanimForm();
+            toast.success("Cari oluşturuldu.");
+            return cari;
+        } catch (error) {
+            console.error("Cari oluşturma hatası:", error);
+            toast.error("Cari oluşturulamadı.");
+            return false;
+        }
+    };
 
     const borcDuzenle = async (e, id, close) => {
         if (e) e.preventDefault();
@@ -1244,13 +1471,24 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
 
     const borcSil = async (id) => {
         if (!id) return false;
+        const result = await Swal.fire({
+            title: 'Cari işlem silinsin mi?',
+            text: 'Bu işlem cari detayından kaldırılacak.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            confirmButtonText: 'Evet, Sil',
+            cancelButtonText: 'Vazgeç'
+        });
+        if (!result.isConfirmed) return false;
+
         try {
             await deleteDoc(doc(db, "borclar", id));
-            toast.success("Borç listeden kaldırıldı.");
+            toast.success("Cari işlem silindi.");
             return true;
         } catch (err) {
             console.error(err);
-            toast.error("Borç kaldırılamadı");
+            toast.error("Cari işlem silinemedi.");
             return false;
         }
     }
@@ -1793,6 +2031,26 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
     const resetBorcForm = () => { setBorcTipi("VERECEK"); setBorcAd(""); setBorcAciklama(""); setBorcTutar(""); setBorcKalanTutar(""); setBorcTarih(""); setBorcKategori(kategoriListesi && kategoriListesi[0] ? kategoriListesi[0] : ""); }
     const fillBillForm = (v) => { setFaturaGirisTutar(formatMoneyInputValue(v.tutar)); setFaturaGirisTarih(v.sonOdemeTarihi); setFaturaGirisAciklama(v.aciklama || ""); }
     const fillBillDefForm = (v) => { setTanimBaslik(v.baslik); setTanimKurum(v.kurum); setTanimAboneNo(v.aboneNo); setTanimHesapId(v.hesapId || ""); }
+    const fillReminderForm = (v = {}) => {
+        setReminderTitle(v.title || "");
+        setReminderDueDate(v.dueDate || "");
+        setReminderAmount(v.amount !== null && v.amount !== undefined ? formatMoneyInputValue(v.amount) : "");
+        setReminderNote(v.note || "");
+    }
+    const fillReminderPaymentForm = (v = {}) => {
+        const now = new Date();
+        const localDateTime = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
+        setIslemTipi("gider");
+        setIslemAciklama(v.title || "");
+        setIslemTutar(v.amount !== null && v.amount !== undefined ? formatMoneyInputValue(v.amount) : "");
+        setIslemTarihi(localDateTime);
+        setKategori(kategoriListesi?.includes("Diğer") ? "Diğer" : (kategoriListesi?.[0] || ""));
+        setSecilenHesapId("");
+        setSecilenEtiketIds([]);
+        setIslemGelirTuru("Diğer Gelir");
+        setIslemBagliMaasId("");
+        setIslemMaasDonemi("");
+    }
     const fillCCForm = (v) => {
         setKkOdemeKartId(v.id);
         const paymentPlan = getCreditCardPaymentPlan(v);
@@ -1819,9 +2077,11 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
         taksitBaslik, setTaksitBaslik, taksitToplamTutar, setTaksitToplamTutar, taksitSayisi, setTaksitSayisi, taksitHesapId, setTaksitHesapId, taksitKategori, setTaksitKategori, taksitAlisTarihi, setTaksitAlisTarihi,
         maasAd, setMaasAd, maasTutar, setMaasTutar, maasGun, setMaasGun, maasHesapId, setMaasHesapId, maasTur, setMaasTur,
         borcTipi, setBorcTipi, borcAd, setBorcAd, borcAciklama, setBorcAciklama, borcTutar, setBorcTutar, borcKalanTutar, setBorcKalanTutar, borcTarih, setBorcTarih, borcKategori, setBorcKategori,
+        cariTanimAd, setCariTanimAd, cariTanimTuru, setCariTanimTuru, cariTanimNot, setCariTanimNot,
         cariBaslik, setCariBaslik, cariTutar, setCariTutar, cariHesapId, setCariHesapId, cariKategori, setCariKategori, cariTarih, setCariTarih, cariNot, setCariNot,
         cariIadeTutar, setCariIadeTutar, cariIadeHesapId, setCariIadeHesapId,
         tanimBaslik, setTanimBaslik, tanimKurum, setTanimKurum, tanimAboneNo, setTanimAboneNo, tanimHesapId, setTanimHesapId, secilenTanimId, setSecilenTanimId, faturaGirisTutar, setFaturaGirisTutar, faturaGirisTarih, setFaturaGirisTarih, faturaGirisAciklama, setFaturaGirisAciklama,
+        reminderTitle, setReminderTitle, reminderDueDate, setReminderDueDate, reminderAmount, setReminderAmount, reminderNote, setReminderNote,
         kkOdemeKartId, setKkOdemeKartId, kkOdemeKaynakId, setKkOdemeKaynakId, kkOdemeTutar, setKkOdemeTutar, kkOdemeTarihi, setKkOdemeTarihi, kkOdemeAciklama, setKkOdemeAciklama, kkOdemeTipi, setKkOdemeTipi,
         tasimaIslemiSuruyor, setTasimaIslemiSuruyor, yeniKodInput, setYeniKodInput,
 
@@ -1833,12 +2093,13 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
         taksitEkle, taksitOde, taksitDuzenle,
         abonelikEkle, abonelikOde, abonelikDuzenle,
         maasEkle, maasYatir, maasDuzenle,
-        borcEkle, borcDuzenle, borcOrderGuncelle, borcOde, borcSil,
+        borcEkle, borcDuzenle, borcOrderGuncelle, borcOde, borcSil, cariTanimla, resetCariTanimForm,
         cariHarcamaEkle, cariHarcamaDuzenle, cariIadeAl, cariSil,
         faturaTanimEkle, faturaGir, faturaOde, bekleyenFaturaDuzenle, faturaTanimDuzenle,
+        reminderEkle, reminderDuzenle, reminderSil, reminderTamamla, resetReminderForm,
         excelIndir, excelYukle, verileriTasi,
 
         // Fillers
-        fillAccountForm, fillTransactionForm, fillSubscriptionForm, fillInstallmentForm, fillSalaryForm, fillBorcForm, resetBorcForm, fillCariForm, fillCariIadeForm, fillBillForm, fillBillDefForm, fillCCForm
+        fillAccountForm, fillTransactionForm, fillSubscriptionForm, fillInstallmentForm, fillSalaryForm, fillBorcForm, resetBorcForm, fillCariForm, fillCariIadeForm, fillBillForm, fillBillDefForm, fillReminderForm, fillReminderPaymentForm, fillCCForm
     };
 };

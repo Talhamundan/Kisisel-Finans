@@ -1639,6 +1639,18 @@ input[type="radio"] {
   font-weight: 800;
 }
 
+.cari-detail-section__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.cari-detail-section__header h4 {
+  margin: 0;
+}
+
 .cari-detail-list {
   display: flex;
   flex-direction: column;
@@ -1703,6 +1715,11 @@ input[type="radio"] {
   color: var(--foreground);
 }
 
+.cari-detail-row__side button.is-danger {
+  background: var(--danger-soft);
+  color: var(--destructive);
+}
+
 .cari-detail-empty {
   margin: 4px 0 0;
   font-size: 13px;
@@ -1717,6 +1734,10 @@ input[type="radio"] {
 .hq-modal-overlay,
 .swal2-container {
   backdrop-filter: blur(8px);
+}
+
+.swal2-container {
+  z-index: 250000 !important;
 }
 
 .hq-modal,

@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     ResponsiveContainer,
     AreaChart,
@@ -131,6 +131,23 @@ const formatDayMonthWeekday = (date) => {
     const safeDate = toDateSafe(date);
     if (!safeDate) return 'Tarih yok';
     return safeDate.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', weekday: 'long' });
+};
+
+const getDaysUntil = (date) => {
+    const safeDate = toDateSafe(date);
+    if (!safeDate) return null;
+    const today = startOfDay(new Date());
+    const dueDay = startOfDay(safeDate);
+    return Math.ceil((dueDay - today) / (1000 * 60 * 60 * 24));
+};
+
+const formatReminderDistance = (date) => {
+    const days = getDaysUntil(date);
+    if (days === null) return 'Tarih yok';
+    if (days < 0) return `${Math.abs(days)} gün gecikti`;
+    if (days === 0) return 'Bugün';
+    if (days === 1) return 'Yarın';
+    return `${days} gün kaldı`;
 };
 
 const getFinancialTone = (value) => {
@@ -488,6 +505,7 @@ const BudgetDashboard = ({
     netVarlik,
     tanimliFaturalar,
     bekleyenFaturalar,
+    reminders = [],
     taksitler,
     taksitOde,
     toplamKalanTaksitBorcu,
@@ -1023,7 +1041,40 @@ const BudgetDashboard = ({
         .slice(0, 8);
 
     const cariSummaries = useMemo(() => buildCariSummaries(borclar, cariler), [borclar, cariler]);
-    const activeCariSummaries = cariSummaries.filter((summary) => summary.activeCount > 0);
+    const activeCariSummaries = cariSummaries;
+    useEffect(() => {
+        if (typeof window === 'undefined') return undefined;
+
+        const handleOpenCariDetail = (event) => {
+            const cari = event.detail?.cari;
+            if (!cari?.id) return;
+            const existing = cariSummaries.find((summary) => summary.id === cari.id);
+            setSelectedCariSummary(existing || {
+                id: cari.id,
+                key: cari.id,
+                name: cari.ad || cari.name || 'İsimsiz cari',
+                nameKey: cari.nameKey || '',
+                activeReceivable: 0,
+                activePayable: 0,
+                completedReceivable: 0,
+                completedPayable: 0,
+                activeItems: [],
+                completedItems: [],
+                allItems: [],
+                netBalance: 0,
+                activeCount: 0,
+                completedCount: 0,
+            });
+        };
+
+        window.addEventListener('finance-open-cari-detail', handleOpenCariDetail);
+        return () => window.removeEventListener('finance-open-cari-detail', handleOpenCariDetail);
+    }, [cariSummaries]);
+    useEffect(() => {
+        if (!selectedCariSummary?.id) return;
+        const updated = cariSummaries.find((summary) => summary.id === selectedCariSummary.id);
+        if (updated && updated !== selectedCariSummary) setSelectedCariSummary(updated);
+    }, [cariSummaries, selectedCariSummary]);
     const receivableCariRows = activeCariSummaries
         .filter((summary) => summary.netBalance > 0)
         .slice(0, 8);
@@ -1122,7 +1173,7 @@ const BudgetDashboard = ({
             month: subscriptionStatusDate.getMonth(),
         }).map((occurrence) => [String(occurrence.subscriptionId), occurrence]))
         : new Map();
-    const billDisplayRows = (tanimliFaturalar || [])
+    const allBillRows = (tanimliFaturalar || [])
         .map((definition) => {
             const billStatus = getBillDefinitionStatus(definition, {
                 pendingBills: bekleyenFaturalar,
@@ -1142,11 +1193,9 @@ const BudgetDashboard = ({
                 mode: current?.pendingBill ? 'pending' : 'definition',
             };
         })
-        .sort((a, b) => getDateTime(a.date) - getDateTime(b.date))
-        .slice(0, 8);
-    const billGeneralTotal = (tanimliFaturalar || []).reduce((sum, definition) => (
-        sum + parseAmount(definition.tutar || definition.ortalamaTutar)
-    ), 0);
+        .sort((a, b) => getDateTime(a.date) - getDateTime(b.date));
+    const billDisplayRows = allBillRows.slice(0, 8);
+    const billGeneralTotal = allBillRows.reduce((sum, bill) => sum + parseAmount(bill.amount), 0);
     const billPeriodRemainingTotal = (tanimliFaturalar || []).reduce((sum, definition) => {
         const row = getBillPeriodRows(definition, {
             pendingBills: bekleyenFaturalar,
@@ -1156,6 +1205,20 @@ const BudgetDashboard = ({
         const expectedAmount = parseAmount(row?.expectedAmount || definition.tutar || definition.ortalamaTutar);
         return row?.status === DEFINITION_STATUS.PAID ? sum : sum + expectedAmount;
     }, 0);
+    const activeReminderRows = (reminders || [])
+        .filter((reminder) => (reminder.status || 'ACTIVE') === 'ACTIVE')
+        .map((reminder) => {
+            const daysLeft = getDaysUntil(reminder.dueDate);
+            return {
+                ...reminder,
+                daysLeft,
+                dueDateValue: toDateSafe(reminder.dueDate),
+                dueText: formatReminderDistance(reminder.dueDate),
+            };
+        })
+        .sort((a, b) => getDateTime(a.dueDateValue) - getDateTime(b.dueDateValue));
+    const reminderDisplayRows = activeReminderRows.slice(0, 8);
+    const reminderGeneralTotal = activeReminderRows.reduce((sum, reminder) => sum + parseAmount(reminder.amount), 0);
     const upcomingPaymentsTotal = upcomingPayments.reduce((sum, payment) => sum + parseAmount(payment.amount), 0);
     const debtTotal = activeCariSummaries.reduce((sum, item) => sum + item.activePayable, 0);
     const receivableTotal = activeCariSummaries.reduce((sum, item) => sum + item.activeReceivable, 0);
@@ -1826,7 +1889,7 @@ const BudgetDashboard = ({
             <div className="qw-debt-grid qw-debt-grid--single">
                 <DashboardWidget
                     title="Alacak / Verecek"
-                    action={<QuickActionButton icon={Plus} onClick={() => modalAc('borc_tanimla')}>Kayıt Ekle</QuickActionButton>}
+                    action={<QuickActionButton icon={Plus} onClick={() => modalAc('cari_tanimla')}>Cari Ekle</QuickActionButton>}
                     footer={(
                         <WidgetFooterSummary
                             countLabel={`${activeCariSummaries.length} cari`}
@@ -1918,6 +1981,40 @@ const BudgetDashboard = ({
                             );
                         })}
                         {financingRows.length === 0 && <EmptyState title="Finansman yok" description="Kredi ve nakit avans takipleri burada görünür." icon={Landmark} />}
+                    </div>
+                </DashboardWidget>
+
+                <DashboardWidget
+                    title="Hatırlatıcılar"
+                    action={<QuickActionButton icon={Plus} onClick={() => modalAc('hatirlatici_ekle')}>Hatırlatıcı Ekle</QuickActionButton>}
+                    footer={(
+                        <WidgetFooterSummary
+                            countLabel={`${activeReminderRows.length} aktif hatırlatıcı`}
+                            items={[
+                                { label: 'Genel toplam', value: formatPara(reminderGeneralTotal) },
+                            ]}
+                        />
+                    )}
+                >
+                    <div className="qw-module-list qw-module-list--debt">
+                        {reminderDisplayRows.map((reminder) => {
+                            const isOverdue = reminder.daysLeft !== null && reminder.daysLeft < 0;
+                            const isSoon = reminder.daysLeft !== null && reminder.daysLeft <= 3;
+                            return (
+                                <ModuleRow
+                                    key={reminder.id}
+                                    icon={Bell}
+                                    tone={isOverdue ? 'danger' : isSoon ? 'warning' : 'info'}
+                                    title={reminder.title || 'Hatırlatıcı'}
+                                    meta={`${formatDayMonth(reminder.dueDate)} · ${reminder.dueText}`}
+                                    amount={parseAmount(reminder.amount) > 0 ? formatPara(reminder.amount) : undefined}
+                                    amountTone={isOverdue ? 'danger' : undefined}
+                                    badge={isOverdue ? { label: 'Gecikti', tone: 'danger' } : isSoon ? { label: reminder.dueText, tone: 'warning' } : null}
+                                    onClick={() => modalAc('hatirlatici_detay', reminder)}
+                                />
+                            );
+                        })}
+                        {reminderDisplayRows.length === 0 && <EmptyState title="Yaklaşan hatırlatıcınız bulunmuyor" description="Tek seferlik ödemeleri hatırlatıcı olarak takip edebilirsiniz." icon={Bell} />}
                     </div>
                 </DashboardWidget>
             </div>

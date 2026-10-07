@@ -33,12 +33,12 @@ const getPeriodOptions = (dateValue = new Date()) => {
 };
 
 // Sub-component to handle Portföy Düzenleme with own state
-const IslemEkleMobilModal = ({ close, islemEkle, hesaplar, kategoriListesi, inputStyle, tumIslemler, maaslar = [], etiketler = [] }) => {
-    const [hesapId, setHesapId] = useState("");
-    const [islemTipi, setIslemTipi] = useState("gider");
-    const [kategori, setKategori] = useState(kategoriListesi && kategoriListesi[0] ? kategoriListesi[0] : "");
-    const [aciklama, setAciklama] = useState("");
-    const [tutar, setTutar] = useState("");
+const IslemEkleMobilModal = ({ close, islemEkle, hesaplar, kategoriListesi, inputStyle, tumIslemler, maaslar = [], etiketler = [], initialData = {}, onSuccess }) => {
+    const [hesapId, setHesapId] = useState(initialData.hesapId || "");
+    const [islemTipi, setIslemTipi] = useState(initialData.islemTipi || "gider");
+    const [kategori, setKategori] = useState(initialData.kategori || (kategoriListesi && kategoriListesi[0] ? kategoriListesi[0] : ""));
+    const [aciklama, setAciklama] = useState(initialData.aciklama || "");
+    const [tutar, setTutar] = useState(initialData.tutar || "");
     const [gelirTuru, setGelirTuru] = useState("Diğer Gelir");
     const [bagliMaasId, setBagliMaasId] = useState("");
     const [tagIds, setTagIds] = useState([]);
@@ -46,7 +46,7 @@ const IslemEkleMobilModal = ({ close, islemEkle, hesaplar, kategoriListesi, inpu
     // Default to current date and time
     const tzOffset = (new Date()).getTimezoneOffset() * 60000;
     const localISOTime = (new Date(Date.now() - tzOffset)).toISOString().slice(0, 16);
-    const [tarih, setTarih] = useState(localISOTime);
+    const [tarih, setTarih] = useState(initialData.tarih || localISOTime);
     const [maasDonemi, setMaasDonemi] = useState(getPeriodOptions(localISOTime)[1]?.value || getPeriodOptions(localISOTime)[0]?.value || "");
 
     const [isProcessing, setIsProcessing] = useState(false);
@@ -72,8 +72,12 @@ const IslemEkleMobilModal = ({ close, islemEkle, hesaplar, kategoriListesi, inpu
             salaryPeriod: needsSalaryLink ? maasDonemi : undefined,
             tagIds,
         });
+        if (success !== false) {
+            const transactionId = success?.transactionId || success?.id || "";
+            if (onSuccess) await onSuccess({ transactionId, result: success });
+            close();
+        }
         setIsProcessing(false);
-        if (success !== false) close();
     }
 
     return (
@@ -233,7 +237,7 @@ const PositionEditModal = ({ seciliVeri, pozisyonGuncelle, close, inputStyle }) 
 
 const ModalManager = ({
     aktifModal, setAktifModal,
-    seciliVeri,
+    seciliVeri, setSeciliVeri,
     hesaplar,
     cariler = [],
     tumIslemler,
@@ -299,6 +303,11 @@ const ModalManager = ({
     faturaGirisTarih, setFaturaGirisTarih,
     faturaGirisAciklama, setFaturaGirisAciklama,
     bekleyenFaturaDuzenle,
+    reminderTitle, setReminderTitle,
+    reminderDueDate, setReminderDueDate,
+    reminderAmount, setReminderAmount,
+    reminderNote, setReminderNote,
+    reminderEkle, reminderDuzenle, reminderSil, reminderTamamla,
     tanimBaslik, setTanimBaslik,
     tanimKurum, setTanimKurum,
     tanimAboneNo, setTanimAboneNo,
@@ -334,7 +343,7 @@ const ModalManager = ({
     onConfirmLogout,
 
     // ADDED: New props for add actions (Already passed, but ensuring they are destructured if not)
-    maasEkle, hesapEkle, faturaTanimEkle, abonelikEkle, taksitEkle, gecmisIslemEkle,
+    maasEkle, hesapEkle, faturaTanimEkle, abonelikEkle, taksitEkle, gecmisIslemEkle, islemEkle,
     // Fix: islemSil destructured here to fix undefined error
     islemSil,
 
@@ -347,6 +356,10 @@ const ModalManager = ({
     borcTarih, setBorcTarih,
     borcKategori, setBorcKategori,
     borcEkle, borcDuzenle, borcOde, borcSil,
+    cariTanimAd, setCariTanimAd,
+    cariTanimTuru, setCariTanimTuru,
+    cariTanimNot, setCariTanimNot,
+    cariTanimla,
 
 }) => {
 
@@ -404,6 +417,23 @@ const ModalManager = ({
 
     // Helper to close
     const close = () => setAktifModal(null);
+
+    if (aktifModal === 'islem_ekle_mobil') {
+        return (
+            <IslemEkleMobilModal
+                close={close}
+                islemEkle={islemEkle}
+                hesaplar={hesaplar}
+                kategoriListesi={kategoriListesi}
+                inputStyle={inputStyle}
+                tumIslemler={tumIslemler}
+                maaslar={maaslar}
+                etiketler={etiketler}
+                initialData={seciliVeri?.initialData || seciliVeri || {}}
+                onSuccess={seciliVeri?.onSuccess}
+            />
+        );
+    }
 
     // Render content based on activeModal
     let content = null;
@@ -626,6 +656,89 @@ const ModalManager = ({
                 <input placeholder="Açıklama (Opsiyonel)" value={faturaGirisAciklama} onChange={e => setFaturaGirisAciklama(e.target.value)} style={{ ...inputStyle, marginBottom: '20px' }} />
                 <button type="submit" style={{ width: '100%', background: '#c53030', color: 'white', padding: '14px', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold' }}>KAYDET</button>
             </form>
+        );
+    }
+
+    else if (aktifModal === 'hatirlatici_ekle' || aktifModal === 'hatirlatici_duzenle') {
+        const isEdit = aktifModal === 'hatirlatici_duzenle';
+        title = isEdit ? "Hatırlatıcı Düzenle" : "Hatırlatıcı Ekle";
+        icon = "🔔";
+        content = (
+            <form onSubmit={async (e) => {
+                setIsProcessing(true);
+                const success = isEdit ? await reminderDuzenle(e, seciliVeri.id) : await reminderEkle(e);
+                setIsProcessing(false);
+                if (success) close();
+            }}>
+                <input placeholder="Başlık" value={reminderTitle} onChange={e => setReminderTitle(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} required />
+                <input type="date" value={reminderDueDate} onChange={e => setReminderDueDate(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} required />
+                <input type="number" step="0.01" placeholder="Tutar (opsiyonel)" value={reminderAmount} onChange={e => setReminderAmount(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} />
+                <textarea placeholder="Not (opsiyonel)" value={reminderNote} onChange={e => setReminderNote(e.target.value)} style={{ ...inputStyle, minHeight: '92px', resize: 'vertical', marginBottom: '20px' }} />
+                <button type="submit" disabled={isProcessing} style={{ width: '100%', background: '#4f46e5', color: 'white', padding: '14px', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold', opacity: isProcessing ? 0.7 : 1 }}>
+                    {isProcessing ? 'KAYDEDİLİYOR...' : (isEdit ? 'GÜNCELLE' : 'KAYDET')}
+                </button>
+            </form>
+        );
+    }
+
+    else if (aktifModal === 'hatirlatici_detay') {
+        title = "Hatırlatıcı Detayı";
+        icon = "🔔";
+        const isCompleted = seciliVeri?.status === 'COMPLETED';
+        content = (
+            <div>
+                <div style={{ marginBottom: '20px', padding: '15px', background: '#f8fafc', borderRadius: '12px', color: '#334155' }}>
+                    <p style={{ margin: 0, fontWeight: 'bold', fontSize: '16px', color: '#0f172a' }}>{seciliVeri?.title || 'Hatırlatıcı'}</p>
+                    <p style={{ margin: '8px 0 0 0', fontSize: '13px' }}>
+                        Son ödeme: <b>{tarihSadeceGunAyYil(seciliVeri?.dueDate) || '-'}</b>
+                    </p>
+                    <p style={{ margin: '6px 0 0 0', fontSize: '13px' }}>
+                        Tutar: <b>{seciliVeri?.amount ? formatPara(seciliVeri.amount) : 'Tutar yok'}</b>
+                    </p>
+                    <p style={{ margin: '6px 0 0 0', fontSize: '13px' }}>
+                        Durum: <b>{isCompleted ? 'Tamamlandı' : 'Aktif'}</b>
+                    </p>
+                    {seciliVeri?.note && (
+                        <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #e2e8f0' }}>
+                            <p style={{ margin: 0, fontSize: '13px', lineHeight: 1.45 }}>{seciliVeri.note}</p>
+                        </div>
+                    )}
+                </div>
+                <div style={{ display: 'grid', gap: '10px' }}>
+                    <button
+                        type="button"
+                        disabled={isCompleted}
+                        onClick={() => {
+                            const now = new Date();
+                            const localDateTime = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
+                            setAktifModal('islem_ekle_mobil');
+                            setSeciliVeri({
+                                initialData: {
+                                    islemTipi: 'gider',
+                                    kategori: kategoriListesi?.includes('Diğer') ? 'Diğer' : (kategoriListesi?.[0] || ''),
+                                    aciklama: seciliVeri?.title || '',
+                                    tutar: seciliVeri?.amount ? String(seciliVeri.amount) : '',
+                                    tarih: localDateTime,
+                                },
+                                onSuccess: async ({ transactionId }) => {
+                                    await reminderTamamla(seciliVeri, transactionId);
+                                },
+                            });
+                        }}
+                        style={{ width: '100%', background: isCompleted ? '#cbd5e1' : '#805ad5', color: 'white', padding: '14px', borderRadius: '12px', border: 'none', fontWeight: 'bold', fontSize: '16px', cursor: isCompleted ? 'not-allowed' : 'pointer' }}
+                    >
+                        ÖDE
+                    </button>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                        <button type="button" onClick={() => { setAktifModal('hatirlatici_duzenle'); }} style={{ padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', background: 'white', color: '#334155', fontWeight: 'bold', cursor: 'pointer' }}>
+                            DÜZENLE
+                        </button>
+                        <button type="button" onClick={async () => { const success = await reminderSil(seciliVeri); if (success) close(); }} style={{ padding: '12px', borderRadius: '12px', border: '1px solid #fecaca', background: '#fff5f5', color: '#dc2626', fontWeight: 'bold', cursor: 'pointer' }}>
+                            SİL
+                        </button>
+                    </div>
+                </div>
+            </div>
         );
     }
 
@@ -946,16 +1059,25 @@ const ModalManager = ({
     else if (aktifModal === 'borc_tanimla') {
         title = "Alacak / Verecek Tanımla";
         icon = "💸";
+        const selectedCari = seciliVeri?.cari || null;
         content = (
-            <form onSubmit={(e) => borcEkle(e).then(res => res && close())}>
+            <form onSubmit={(e) => borcEkle(e, null, selectedCari).then(res => res && close())}>
                 <select value={borcTipi || 'VERECEK'} onChange={e => setBorcTipi(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }}>
                     <option value="VERECEK">Verecek - Ödeyeceğim para</option>
                     <option value="ALACAK">Alacak - Tahsil edeceğim para</option>
                 </select>
-                <input list="cari-listesi" placeholder="Cari (Kişi / kurum)" value={borcAd || ''} onChange={e => setBorcAd(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} required />
-                <datalist id="cari-listesi">
-                    {(cariler || []).map((cari) => <option key={cari.id} value={cari.ad || cari.name} />)}
-                </datalist>
+                {selectedCari ? (
+                    <div style={{ marginBottom: '15px', padding: '12px 14px', borderRadius: '12px', background: '#f8fafc', color: '#334155', fontSize: '14px' }}>
+                        Cari: <b>{selectedCari.name || selectedCari.ad}</b>
+                    </div>
+                ) : (
+                    <>
+                        <input list="cari-listesi" placeholder="Cari (Kişi / kurum)" value={borcAd || ''} onChange={e => setBorcAd(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} required />
+                        <datalist id="cari-listesi">
+                            {(cariler || []).map((cari) => <option key={cari.id} value={cari.ad || cari.name} />)}
+                        </datalist>
+                    </>
+                )}
                 <input placeholder="Açıklama (Örn: Sandisk SSD)" value={borcAciklama || ''} onChange={e => setBorcAciklama(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} />
                 <input type="number" placeholder="Tutar (₺)" value={borcTutar || ''} onChange={e => setBorcTutar(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} required />
                 <input type="number" placeholder="Kalan tutar (Boşsa tamamı olur)" value={borcKalanTutar || ''} onChange={e => setBorcKalanTutar(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} />
@@ -998,6 +1120,25 @@ const ModalManager = ({
                     <input type="date" value={borcTarih || ''} onChange={e => setBorcTarih(e.target.value)} style={inputStyle} />
                 </div>
                 <button type="submit" style={{ width: '100%', background: '#3182ce', color: 'white', padding: '14px', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer' }}>GÜNCELLE</button>
+            </form>
+        );
+    }
+
+    else if (aktifModal === 'cari_tanimla') {
+        title = "Cari Tanımla";
+        icon = "👤";
+        content = (
+            <form onSubmit={async (e) => {
+                const success = await cariTanimla(e);
+                if (success) close();
+            }}>
+                <input placeholder="Cari Adı" value={cariTanimAd || ''} onChange={e => setCariTanimAd(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} required />
+                <select value={cariTanimTuru || 'Kişi'} onChange={e => setCariTanimTuru(e.target.value)} style={{ ...inputStyle, marginBottom: '15px' }} required>
+                    <option value="Kişi">Kişi</option>
+                    <option value="Kurum">Kurum</option>
+                </select>
+                <textarea placeholder="Not (opsiyonel)" value={cariTanimNot || ''} onChange={e => setCariTanimNot(e.target.value)} style={{ ...inputStyle, minHeight: '92px', resize: 'vertical', marginBottom: '20px' }} />
+                <button type="submit" style={{ width: '100%', background: '#805ad5', color: 'white', padding: '14px', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer' }}>KAYDET</button>
             </form>
         );
     }

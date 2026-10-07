@@ -21,6 +21,7 @@ export const useDataListeners = (user, alanKodu) => {
     const [cariler, setCariler] = useState([]);
     const [finansmanlar, setFinansmanlar] = useState([]);
     const [cariIslemler, setCariIslemler] = useState([]);
+    const [reminders, setReminders] = useState([]);
     const [besVerisi, setBesVerisi] = useState(null);
     const [hedefler, setHedefler] = useState([]);
     const [envanter, setEnvanter] = useState([]);
@@ -41,7 +42,7 @@ export const useDataListeners = (user, alanKodu) => {
     useEffect(() => {
         if (!user || !alanKodu) {
             // Temizle
-            setHesaplar([]); setRawIslemler([]); setEtiketler([]); setTransactionTags([]); setAbonelikler([]); setTaksitler([]); setMaaslar([]); setPortfoy([]); setBekleyenFaturalar([]); setTanimliFaturalar([]); setBorclar([]); setCariler([]); setFinansmanlar([]); setCariIslemler([]);
+            setHesaplar([]); setRawIslemler([]); setEtiketler([]); setTransactionTags([]); setAbonelikler([]); setTaksitler([]); setMaaslar([]); setPortfoy([]); setBekleyenFaturalar([]); setTanimliFaturalar([]); setBorclar([]); setCariler([]); setFinansmanlar([]); setCariIslemler([]); setReminders([]);
             setHesaplarLoaded(false);
             return;
         }
@@ -62,6 +63,7 @@ export const useDataListeners = (user, alanKodu) => {
         const qCariler = query(collection(db, "cariler"), where("alanKodu", "==", alanKodu));
         const qFinansmanlar = query(collection(db, "finansmanlar"), where("alanKodu", "==", alanKodu));
         const qCariIslemler = query(collection(db, "cari_islemleri"), where("alanKodu", "==", alanKodu));
+        const qReminders = query(collection(db, "reminders"), where("alanKodu", "==", alanKodu));
 
         // TEK REFERANS: Kullanıcının kendi ayar dokümanı (hem limitler hem BES verisi burada)
         const ayarlarDocRef = doc(db, "ayarlar", alanKodu);
@@ -121,6 +123,9 @@ export const useDataListeners = (user, alanKodu) => {
                 setCariIslemler(v);
             }
         });
+        const uReminders = onSnapshot(qReminders, (s) => {
+            if (s && s.docs) setReminders(s.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
 
         // Consolidated Listener for Settings (Limit, Categories, BES Data all in one doc)
         const u10 = onSnapshot(ayarlarDocRef, (docSnap) => {
@@ -155,8 +160,44 @@ export const useDataListeners = (user, alanKodu) => {
             }
         });
 
-        return () => { u1(); u2(); uTags(); uTransactionTags(); u4(); u5(); u6(); u7(); u8(); u9(); u10(); uBorc(); uCariler(); uFinansman(); uCari(); }
+        return () => { u1(); u2(); uTags(); uTransactionTags(); u4(); u5(); u6(); u7(); u8(); u9(); u10(); uBorc(); uCariler(); uFinansman(); uCari(); uReminders(); }
     }, [user, alanKodu]);
+
+    useEffect(() => {
+        if (!alanKodu || typeof window === 'undefined') return undefined;
+
+        const handleReminderLocalChange = (event) => {
+            const { type, reminder } = event.detail || {};
+            if (!reminder?.id || reminder.alanKodu !== alanKodu) return;
+
+            setReminders((current) => {
+                if (type === 'delete') return current.filter((item) => item.id !== reminder.id);
+                const next = current.filter((item) => item.id !== reminder.id);
+                return [{ ...reminder }, ...next];
+            });
+        };
+
+        window.addEventListener('finance-reminder-local-change', handleReminderLocalChange);
+        return () => window.removeEventListener('finance-reminder-local-change', handleReminderLocalChange);
+    }, [alanKodu]);
+
+    useEffect(() => {
+        if (!alanKodu || typeof window === 'undefined') return undefined;
+
+        const handleCariLocalChange = (event) => {
+            const { type, cari } = event.detail || {};
+            if (!cari?.id || cari.alanKodu !== alanKodu) return;
+
+            setCariler((current) => {
+                if (type === 'delete') return current.filter((item) => item.id !== cari.id);
+                const next = current.filter((item) => item.id !== cari.id);
+                return [{ ...cari }, ...next];
+            });
+        };
+
+        window.addEventListener('finance-cari-local-change', handleCariLocalChange);
+        return () => window.removeEventListener('finance-cari-local-change', handleCariLocalChange);
+    }, [alanKodu]);
 
     const islemler = useMemo(() => {
         const tagById = new Map((etiketler || []).map((tag) => [tag.id, tag]));
@@ -182,7 +223,7 @@ export const useDataListeners = (user, alanKodu) => {
     }, [rawIslemler, etiketler, transactionTags]);
 
     return {
-        hesaplar, hesaplarLoaded, islemler, abonelikler, taksitler, maaslar, portfoy, bekleyenFaturalar, tanimliFaturalar, besVerisi, borclar, cariler, finansmanlar, cariIslemler,
+        hesaplar, hesaplarLoaded, islemler, abonelikler, taksitler, maaslar, portfoy, bekleyenFaturalar, tanimliFaturalar, besVerisi, borclar, cariler, finansmanlar, cariIslemler, reminders,
         etiketler, transactionTags,
         kategoriListesi, setKategoriListesi,
         yatirimTurleri, setYatirimTurleri,

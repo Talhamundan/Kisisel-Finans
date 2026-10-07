@@ -15,7 +15,7 @@ export const useCalculations = (
     aylikLimit,
     selectedPeriod
 ) => {
-    const { hesaplar, islemler, portfoy, abonelikler, taksitler, maaslar, bekleyenFaturalar, tanimliFaturalar, besVerisi, satislar, borclar } = data;
+    const { hesaplar, islemler, portfoy, abonelikler, taksitler, maaslar, bekleyenFaturalar, tanimliFaturalar, besVerisi, satislar, borclar, reminders } = data;
 
     // --- FILTER STATES ---
     const [aramaMetni, setAramaMetni] = useState("");
@@ -31,7 +31,7 @@ export const useCalculations = (
     const setAktifAy = () => {};
     const setAktifYatirimAy = () => {};
 
-    const bildirimler = useNotifications({ hesaplar, islemler, abonelikler, taksitler, maaslar, bekleyenFaturalar, tanimliFaturalar, besVerisi, satislar, borclar });
+    const bildirimler = useNotifications({ hesaplar, islemler, abonelikler, taksitler, maaslar, bekleyenFaturalar, tanimliFaturalar, besVerisi, satislar, borclar, reminders });
 
     // --- CALCULATIONS ---
     const formatPara = (tutar) => gizliMod ? "**** ₺" : (parseFloat(tutar) || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " ₺";

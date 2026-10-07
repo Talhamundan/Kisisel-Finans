@@ -56,6 +56,12 @@ const NOTIFICATION_TONES = {
         button: '#e11d48',
         background: '#fff1f2',
     },
+    hatirlatici: {
+        accent: '#4f46e5',
+        amount: '#4338ca',
+        button: '#4f46e5',
+        background: '#eef2ff',
+    },
     borc_hatirlatma: {
         accent: '#e11d48',
         amount: '#be123c',
@@ -116,6 +122,7 @@ const notificationTone = (notification) => {
 
 const buttonLabel = (tip) => {
     if (tip === 'kk_limit') return 'Tamam';
+    if (tip === 'hatirlatici') return 'Detay';
     if (tip === 'maas') return 'Yatır';
     if (tip === 'alacak' || tip === 'alacak_hatirlatma') return 'Tahsil Et';
     return 'Öde';
@@ -152,6 +159,7 @@ const Notifications = ({
         if (b.tip === 'taksit') taksitOde(b.data);
         if (b.tip === 'maas') maasYatir(b.data);
         if (b.tip === 'fatura') modalAc('fatura_ode', b.data);
+        if (b.tip === 'hatirlatici') modalAc('hatirlatici_detay', b.data);
         if (b.tip === 'borc_hatirlatma' || b.tip === 'alacak_hatirlatma') modalAc('borc_ode', b.data);
         if (b.tip === 'bes_odeme') besOdemeYap();
         if (b.tip === 'alacak') modalAc('tahsilat_ekle', b.data);

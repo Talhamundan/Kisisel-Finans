@@ -66,12 +66,13 @@ export const useNotifications = ({
     tanimliFaturalar = [],
     besVerisi,
     satislar = [],
-    borclar = []
+    borclar = [],
+    reminders = []
 }) => {
     const [bildirimler, setBildirimler] = useState([]);
 
     useEffect(() => {
-        if (islemler.length === 0 && abonelikler.length === 0 && taksitler.length === 0 && maaslar.length === 0 && hesaplar.length === 0 && bekleyenFaturalar.length === 0 && borclar.length === 0 && !besVerisi && satislar.length === 0) {
+        if (islemler.length === 0 && abonelikler.length === 0 && taksitler.length === 0 && maaslar.length === 0 && hesaplar.length === 0 && bekleyenFaturalar.length === 0 && borclar.length === 0 && reminders.length === 0 && !besVerisi && satislar.length === 0) {
             setBildirimler([]);
             return;
         }
@@ -278,6 +279,32 @@ export const useNotifications = ({
             }
         });
 
+        (reminders || [])
+            .filter((reminder) => (reminder.status || 'ACTIVE') === 'ACTIVE')
+            .forEach((reminder) => {
+                const dueDate = toDateSafe(reminder.dueDate);
+                if (!dueDate) return;
+                const dueDay = startOfDay(dueDate);
+                const kalanGun = Math.ceil((dueDay - today0) / (1000 * 60 * 60 * 24));
+                if (kalanGun > NOTIFICATION_WINDOW_DAYS) return;
+                const title = reminder.title || 'Hatırlatıcı';
+                const mesaj = kalanGun < 0
+                    ? `🔔 ${title} ${Math.abs(kalanGun)} gün gecikti.`
+                    : kalanGun === 0
+                        ? `🔔 ${title} bugün.`
+                        : kalanGun === 1
+                            ? `🔔 ${title} yarın.`
+                            : `🔔 ${title} için ${kalanGun} gün kaldı.`;
+                tempBildirimler.push({
+                    id: `${reminder.id}_reminder`,
+                    tip: 'hatirlatici',
+                    mesaj,
+                    tutar: parseFloat(reminder.amount) || 0,
+                    data: reminder,
+                    renk: kalanGun < 0 ? 'red' : 'orange'
+                });
+            });
+
         if (borclar && borclar.length > 0) {
             borclar.forEach(b => {
                 const debtType = b.type === 'ALACAK' ? 'ALACAK' : 'VERECEK';
@@ -320,7 +347,7 @@ export const useNotifications = ({
         }
 
         setBildirimler(tempBildirimler);
-    }, [islemler, abonelikler, taksitler, maaslar, hesaplar, bekleyenFaturalar, tanimliFaturalar, besVerisi, satislar, borclar]);
+    }, [islemler, abonelikler, taksitler, maaslar, hesaplar, bekleyenFaturalar, tanimliFaturalar, besVerisi, satislar, borclar, reminders]);
 
     return bildirimler;
 };

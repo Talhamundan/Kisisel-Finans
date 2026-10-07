@@ -671,6 +671,27 @@ function App() {
         if (tip === 'duzenle_maas') budgetActions.fillSalaryForm(veri);
         if (tip === 'duzenle_bekleyen_fatura') budgetActions.fillBillForm(veri);
         if (tip === 'duzenle_fatura_tanim' || tip === 'fatura_tanim_duzenle') budgetActions.fillBillDefForm(veri); // If exists
+        if (tip === 'hatirlatici_ekle') budgetActions.resetReminderForm();
+        if (tip === 'hatirlatici_detay' || tip === 'hatirlatici_duzenle') budgetActions.fillReminderForm(veri);
+        if (tip === 'hatirlatici_ode') {
+            budgetActions.fillReminderPaymentForm(veri);
+            const now = new Date();
+            const localDateTime = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
+            setAktifModal('islem_ekle_mobil');
+            setSeciliVeri({
+                initialData: {
+                    islemTipi: 'gider',
+                    kategori: data.kategoriListesi?.includes('Diğer') ? 'Diğer' : (data.kategoriListesi?.[0] || ''),
+                    aciklama: veri?.title || '',
+                    tutar: veri?.amount ? String(veri.amount) : '',
+                    tarih: localDateTime,
+                },
+                onSuccess: async ({ transactionId }) => {
+                    await budgetActions.reminderTamamla(veri, transactionId);
+                },
+            });
+            return;
+        }
         if (tip === 'fatura_ode') {
             const tanim = data.tanimliFaturalar.find(t => t.id === veri?.tanimId);
             budgetActions.setSecilenHesapId(tanim?.hesapId || defaultPaymentAccountId || "");
@@ -688,7 +709,12 @@ function App() {
         if (tip === 'duzenle_portfoy') investmentActions.fillPortfolioForm(veri);
         if (tip === 'tahsilat_ekle') investmentActions.setTahsilatTutar(formatMoneyInputValue(veri.satisFiyati - veri.tahsilEdilen));
         if (tip === 'duzenle_borc') budgetActions.fillBorcForm(veri);
+        if (tip === 'borc_sil') {
+            budgetActions.borcSil(veri?.id);
+            return;
+        }
         if (tip === 'borc_tanimla') budgetActions.resetBorcForm();
+        if (tip === 'cari_tanimla') budgetActions.resetCariTanimForm();
     }
 
     // Settings Updaters
@@ -1313,7 +1339,7 @@ function App() {
 
             <ModalManager
                 aktifModal={aktifModal} setAktifModal={setAktifModal}
-                seciliVeri={seciliVeri}
+                seciliVeri={seciliVeri} setSeciliVeri={setSeciliVeri}
                 hesaplar={data.hesaplar}
                 cariler={data.cariler}
                 tumIslemler={data.islemler}
@@ -1381,6 +1407,14 @@ function App() {
                 faturaGirisTarih={budgetActions.faturaGirisTarih} setFaturaGirisTarih={budgetActions.setFaturaGirisTarih}
                 faturaGirisAciklama={budgetActions.faturaGirisAciklama} setFaturaGirisAciklama={budgetActions.setFaturaGirisAciklama}
                 bekleyenFaturaDuzenle={budgetActions.bekleyenFaturaDuzenle}
+                reminderTitle={budgetActions.reminderTitle} setReminderTitle={budgetActions.setReminderTitle}
+                reminderDueDate={budgetActions.reminderDueDate} setReminderDueDate={budgetActions.setReminderDueDate}
+                reminderAmount={budgetActions.reminderAmount} setReminderAmount={budgetActions.setReminderAmount}
+                reminderNote={budgetActions.reminderNote} setReminderNote={budgetActions.setReminderNote}
+                reminderEkle={budgetActions.reminderEkle}
+                reminderDuzenle={budgetActions.reminderDuzenle}
+                reminderSil={budgetActions.reminderSil}
+                reminderTamamla={budgetActions.reminderTamamla}
                 tanimBaslik={budgetActions.tanimBaslik} setTanimBaslik={budgetActions.setTanimBaslik}
                 tanimKurum={budgetActions.tanimKurum} setTanimKurum={budgetActions.setTanimKurum}
                 tanimAboneNo={budgetActions.tanimAboneNo} setTanimAboneNo={budgetActions.setTanimAboneNo}
@@ -1432,6 +1466,10 @@ function App() {
                 borcDuzenle={budgetActions.borcDuzenle}
                 borcOde={budgetActions.borcOde}
                 borcSil={budgetActions.borcSil}
+                cariTanimAd={budgetActions.cariTanimAd} setCariTanimAd={budgetActions.setCariTanimAd}
+                cariTanimTuru={budgetActions.cariTanimTuru} setCariTanimTuru={budgetActions.setCariTanimTuru}
+                cariTanimNot={budgetActions.cariTanimNot} setCariTanimNot={budgetActions.setCariTanimNot}
+                cariTanimla={budgetActions.cariTanimla}
                 // NEW PROPS FOR MOBILE TRANSACTION ADD MODAL
                 islemEkle={budgetActions.islemEkle}
             />
@@ -1454,7 +1492,7 @@ function App() {
 
             <Notifications
                 bildirimler={calculations.bildirimler.filter(b => {
-                    if (anaSekme === 'butcem') return ['fatura', 'abonelik', 'maas', 'taksit', 'kk_hatirlatma', 'kk_limit', 'borc_hatirlatma', 'alacak_hatirlatma'].includes(b.tip);
+                    if (anaSekme === 'butcem') return ['fatura', 'abonelik', 'maas', 'taksit', 'hatirlatici', 'kk_hatirlatma', 'kk_limit', 'borc_hatirlatma', 'alacak_hatirlatma'].includes(b.tip);
                     if (anaSekme === 'yatirimlar') return ['bes_odeme'].includes(b.tip);
                     if (anaSekme === 'hedefler') return ['alacak'].includes(b.tip);
                     return false;
@@ -1491,6 +1529,7 @@ function App() {
                     netVarlik={calculations.netVarlik}
                     tanimliFaturalar={data.tanimliFaturalar}
                     bekleyenFaturalar={filteredPendingBills}
+                    reminders={data.reminders}
                     taksitler={data.taksitler}
                     toplamKalanTaksitBorcu={calculations.toplamKalanTaksitBorcu}
                     abonelikler={data.abonelikler}
