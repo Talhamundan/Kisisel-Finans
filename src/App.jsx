@@ -1481,6 +1481,7 @@ function App() {
                 setGizliMod={setGizliMod}
                 user={user}
                 cikisYap={cikisYap}
+                koddanCikis={koddanCikis}
                 selectedPeriod={selectedPeriod}
                 setSelectedPeriod={setSelectedPeriod}
                 availablePeriods={availablePeriods}
@@ -1669,7 +1670,6 @@ function App() {
                     alanKodu={alanKodu}
                     veriAlanKodu={veriAlanKodu}
                     areaRecord={areaRecord}
-                    koddanCikis={koddanCikis}
                     onCreateAreaPassword={handleChangeAreaPassword}
                     onChangeAreaPassword={handleChangeAreaPassword}
                     onChangeAreaCode={handleChangeAreaCode}

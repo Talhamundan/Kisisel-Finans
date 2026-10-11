@@ -6775,6 +6775,7 @@ html[data-theme="dark"] .global-quick-panel {
 }
 
 .qw-account-history-list .qw-transaction-row {
+  align-items: center;
   min-height: 64px;
   padding: 8px 0;
   border-radius: 16px;
@@ -6786,6 +6787,30 @@ html[data-theme="dark"] .global-quick-panel {
   white-space: normal;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+}
+
+.qw-account-history-list .qw-row-side {
+  grid-template-areas:
+    "amount actions"
+    "balance actions";
+  grid-template-columns: minmax(116px, auto) auto;
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 2px;
+  min-width: 190px;
+}
+
+.qw-account-history-list .qw-row-side > strong {
+  grid-area: amount;
+}
+
+.qw-account-history-list .qw-row-side > span {
+  grid-area: balance;
+}
+
+.qw-account-history-list .qw-row-side > .qw-row-actions {
+  grid-area: actions;
+  min-width: 66px;
 }
 
 .salary-analysis-page {
@@ -9697,6 +9722,23 @@ html[data-theme="dark"] .qw-login-submit:hover:not(:disabled) {
   .qw-account-history-list {
     max-height: calc(100dvh - 180px);
     padding: 8px 18px 18px;
+  }
+
+  .qw-account-history-list .qw-transaction-row {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .qw-account-history-list .qw-row-main {
+    flex-basis: calc(100% - 58px);
+  }
+
+  .qw-account-history-list .qw-row-side {
+    grid-template-columns: minmax(0, 1fr) auto;
+    justify-items: start;
+    width: 100%;
+    min-width: 0;
+    padding-left: 58px;
   }
 
   .qw-account-history-list .qw-row-side strong {

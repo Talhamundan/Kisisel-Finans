@@ -7,6 +7,7 @@ import {
     Eye,
     EyeOff,
     Home,
+    KeyRound,
     Landmark,
     LogOut,
     Moon,
@@ -70,6 +71,7 @@ const Header = ({
     setGizliMod,
     user,
     cikisYap,
+    koddanCikis,
     selectedPeriod,
     setSelectedPeriod,
     availablePeriods,
@@ -150,6 +152,10 @@ const Header = ({
                     <SidebarMenuButton isActive={anaSekme === 'ayarlar'} onClick={() => setAnaSekme('ayarlar')} title="Ayarlar">
                         <Settings size={19} strokeWidth={2.25} />
                         <span>Ayarlar</span>
+                    </SidebarMenuButton>
+                    <SidebarMenuButton onClick={koddanCikis} title="Alan Kodundan Çık">
+                        <KeyRound size={19} strokeWidth={2.25} />
+                        <span>Alan Kodundan Çık</span>
                     </SidebarMenuButton>
                     <SidebarMenuButton onClick={cikisYap} title="Çıkış Yap">
                         <LogOut size={19} strokeWidth={2.25} />

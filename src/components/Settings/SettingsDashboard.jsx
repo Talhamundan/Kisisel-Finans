@@ -105,7 +105,6 @@ const SettingsDashboard = ({
     alanKodu,
     veriAlanKodu,
     areaRecord,
-    koddanCikis,
     onCreateAreaPassword,
     onChangeAreaPassword,
     onChangeAreaCode,
@@ -332,9 +331,6 @@ const SettingsDashboard = ({
                             <button type="button" onClick={() => openDialog(hasPassword ? 'change-password' : 'create-password')}>
                                 <LockKeyhole size={16} />
                                 {hasPassword ? 'Şifreyi Değiştir' : 'Şifre Oluştur'}
-                            </button>
-                            <button type="button" className="settings-secondary-button" onClick={koddanCikis}>
-                                Alan Kodundan Çık
                             </button>
                         </div>
                     </div>

@@ -478,7 +478,7 @@ const InvestmentDashboard = ({
                 <div className="responsive-card investment-card investment-fixed-height" style={{ ...cardStyle, height: '500px', display: 'flex', flexDirection: 'column', background: '#f0fff4', border: '1px solid #9ae6b4' }}>
                     <div className="card-title" style={{ marginBottom: '16px', color: '#2f855a' }}>Yeni Yatırım Varlığı Al</div>
                     <form onSubmit={yatirimAl} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                        <input placeholder="Sembol (THYAO, GRAM...)" value={sembol} onChange={e => setSembol(e.target.value)} style={{ ...inputStyle, border: '1px solid #9ae6b4' }} />
+                        <input placeholder="Sembol (THYAO, GRAM...)" value={sembol} onChange={e => setSembol(e.target.value.toLocaleUpperCase('tr-TR'))} style={{ ...inputStyle, border: '1px solid #9ae6b4' }} />
                         <div className="investment-form-row" style={{ display: 'flex', gap: '10px' }}>
                             <input type="number" placeholder="Adet" value={adet} onChange={e => setAdet(e.target.value)} style={{ ...inputStyle, border: '1px solid #9ae6b4' }} />
                             <input type="number" placeholder="Alış Fiyatı" value={alisFiyati} onChange={e => setAlisFiyati(e.target.value)} style={{ ...inputStyle, border: '1px solid #9ae6b4' }} />
