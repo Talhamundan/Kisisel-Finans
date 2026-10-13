@@ -18,6 +18,7 @@ import DefinitionsDashboard from './components/Definitions/DefinitionsDashboard'
 import FinanceCalendarDashboard from './components/Calendar/FinanceCalendarDashboard';
 import SalaryAnalysisDashboard from './components/Salary/SalaryAnalysisDashboard';
 import SpendingAnalysisDashboard from './components/Spending/SpendingAnalysisDashboard';
+import ReceiptsDashboard from './components/Receipts/ReceiptsDashboard';
 import ModalManager from './components/Modals/ModalManager';
 import MobileNav from './components/Layout/MobileNav';
 import AppLogo from './components/Shared/AppLogo';
@@ -38,6 +39,7 @@ import { useAuth } from './hooks/useAuth';
 import { useDataListeners } from './hooks/useDataListeners';
 import { useBudgetActions } from './hooks/useBudgetActions';
 import { useInvestmentActions } from './hooks/useInvestmentActions';
+import { useReceiptActions } from './hooks/useReceiptActions';
 import { useCalculations } from './hooks/useCalculations';
 import Feedback from './components/Feedback';
 
@@ -46,6 +48,9 @@ import Feedback from './components/Feedback';
 import { formatMoneyInputValue, inputStyle, toDateSafe } from './utils/helpers';
 import { buildAvailablePeriods, getDefaultPeriod, getLatestAvailablePeriod, isPeriodAvailable, readInitialPeriod } from './utils/period';
 import { selectHasInvestmentAccount } from './utils/accounts';
+import { getReceiptImportDataFromLocation, getReceiptImportPayloadFromLocation, stripReceiptImportFragment } from './utils/receipts';
+
+const RECEIPT_IMPORT_SESSION_KEY = 'pending_receipt_import_payload';
 
 const normalizeCategoryKey = (value) => String(value || '')
     .normalize('NFKC')
@@ -88,7 +93,9 @@ const getInitialTheme = () => {
 };
 
 const getInitialTab = () => (
-    typeof window !== 'undefined' && window.location.pathname.startsWith('/finansmanlar')
+    typeof window !== 'undefined' && window.location.pathname.startsWith('/fisler')
+        ? 'fisler'
+        : typeof window !== 'undefined' && window.location.pathname.startsWith('/finansmanlar')
         ? 'finansmanlar'
         : typeof window !== 'undefined' && window.location.pathname.startsWith('/tanimlamalar')
             ? 'tanimlamalar'
@@ -100,11 +107,40 @@ const getInitialTab = () => (
 );
 
 const getTabFromPath = (path) => {
+    if (path.startsWith('/fisler')) return 'fisler';
     if (path.startsWith('/finansmanlar')) return 'finansmanlar';
     if (path.startsWith('/tanimlamalar')) return 'tanimlamalar';
     if (path.startsWith('/yatirimlar')) return 'yatirimlar';
     if (path.startsWith('/harcama-analizi')) return 'harcamaAnalizi';
     return 'butcem';
+};
+
+const readReceiptImportFromBrowser = () => {
+    if (typeof window === 'undefined') return null;
+    const rawData = getReceiptImportDataFromLocation(window.location);
+    if (!rawData) return null;
+
+    try {
+        const payload = getReceiptImportPayloadFromLocation(window.location);
+        if (!payload) return null;
+        sessionStorage.setItem(RECEIPT_IMPORT_SESSION_KEY, JSON.stringify(payload));
+        stripReceiptImportFragment();
+        return payload;
+    } catch (error) {
+        console.warn('Fiş import verisi okunamadı:', {
+            message: error?.message || '',
+            cause: error?.details?.cause || '',
+        });
+        const failedImport = {
+            __receiptImportError: error?.message || 'Fiş import verisi okunamadı.',
+            __receiptImportCause: error?.details?.cause || '',
+            __receiptImportRawData: error?.details?.rawData || rawData,
+            __receiptImportDecodedText: error?.details?.decodedText || '',
+        };
+        sessionStorage.setItem(RECEIPT_IMPORT_SESSION_KEY, JSON.stringify(failedImport));
+        stripReceiptImportFragment();
+        return failedImport;
+    }
 };
 
 function App() {
@@ -119,6 +155,13 @@ function App() {
     const [seciliVeri, setSeciliVeri] = useState(null);
     const [formTab, setFormTab] = useState("islem");
     const [globalQuickOpen, setGlobalQuickOpen] = useState(false);
+    const [pendingReceiptImport, setPendingReceiptImport] = useState(() => {
+        if (typeof window === 'undefined') return null;
+        const incomingImport = readReceiptImportFromBrowser();
+        if (incomingImport) return incomingImport;
+        const storedPayload = sessionStorage.getItem(RECEIPT_IMPORT_SESSION_KEY);
+        return storedPayload ? JSON.parse(storedPayload) : null;
+    });
     const [selectedPeriod, setSelectedPeriod] = useState(readInitialPeriod);
     const [theme, setTheme] = useState(getInitialTheme);
 
@@ -146,6 +189,7 @@ function App() {
     const calculations = useCalculations(data, gizliMod, data.aylikLimit, selectedPeriod);
     const budgetActions = useBudgetActions(user, veriAlanKodu, data.hesaplar, data.kategoriListesi, data.tanimliFaturalar, data.etiketler, data.transactionTags, data.cariler);
     const investmentActions = useInvestmentActions(user, veriAlanKodu);
+    const receiptActions = useReceiptActions({ user, alanKodu: veriAlanKodu, receipts: data.fisler, accounts: data.hesaplar });
     const defaultPaymentAccount = useDefaultPaymentAccount(data.hesaplar);
     const defaultPaymentAccountId = defaultPaymentAccount?.id || "";
     const selectedFinancingId = routePath.match(/^\/finansmanlar\/([^/]+)/)?.[1] || null;
@@ -166,9 +210,11 @@ function App() {
             : tab;
 
         setAnaSekme(nextTab);
-        if (nextTab === 'finansmanlar' || nextTab === 'tanimlamalar' || nextTab === 'yatirimlar' || nextTab === 'harcamaAnalizi') {
+        if (nextTab === 'fisler' || nextTab === 'finansmanlar' || nextTab === 'tanimlamalar' || nextTab === 'yatirimlar' || nextTab === 'harcamaAnalizi') {
             const url = new URL(window.location.href);
-            url.pathname = nextTab === 'finansmanlar'
+            url.pathname = nextTab === 'fisler'
+                ? '/fisler'
+                : nextTab === 'finansmanlar'
                 ? '/finansmanlar'
                 : nextTab === 'tanimlamalar'
                     ? '/tanimlamalar'
@@ -181,6 +227,7 @@ function App() {
         }
         if (
             window.location.pathname.startsWith('/finansmanlar')
+            || window.location.pathname.startsWith('/fisler')
             || window.location.pathname.startsWith('/tanimlamalar')
             || window.location.pathname.startsWith('/yatirimlar')
             || window.location.pathname.startsWith('/harcama-analizi')
@@ -207,6 +254,24 @@ function App() {
         };
         window.addEventListener('popstate', handlePopState);
         return () => window.removeEventListener('popstate', handlePopState);
+    }, []);
+
+    useEffect(() => {
+        const handleReceiptImportLocation = () => {
+            const incomingImport = readReceiptImportFromBrowser();
+            if (!incomingImport) return;
+            setPendingReceiptImport(incomingImport);
+            setRoutePath(window.location.pathname);
+            setAnaSekme('fisler');
+        };
+
+        window.addEventListener('hashchange', handleReceiptImportLocation);
+        window.addEventListener('popstate', handleReceiptImportLocation);
+        handleReceiptImportLocation();
+        return () => {
+            window.removeEventListener('hashchange', handleReceiptImportLocation);
+            window.removeEventListener('popstate', handleReceiptImportLocation);
+        };
     }, []);
 
     useEffect(() => {
@@ -1485,7 +1550,7 @@ function App() {
                 selectedPeriod={selectedPeriod}
                 setSelectedPeriod={setSelectedPeriod}
                 availablePeriods={availablePeriods}
-                showPeriodFilter={!['hedefler', 'takvim', 'ayarlar', 'finansmanlar', 'tanimlamalar', 'harcamaAnalizi'].includes(anaSekme)}
+                showPeriodFilter={!['hedefler', 'takvim', 'ayarlar', 'finansmanlar', 'tanimlamalar', 'harcamaAnalizi', 'fisler'].includes(anaSekme)}
                 theme={theme}
                 onThemeToggle={() => setTheme((currentTheme) => currentTheme === 'dark' ? 'light' : 'dark')}
                 hasInvestmentAccount={showInvestmentFeature}
@@ -1528,6 +1593,7 @@ function App() {
                     genelToplamYatirimGucu={calculations.genelToplamYatirimGucu}
                     hasInvestmentAccount={hasInvestmentAccount}
                     netVarlik={calculations.netVarlik}
+                    aktifBorclar={calculations.aktifBorclar}
                     tanimliFaturalar={data.tanimliFaturalar}
                     bekleyenFaturalar={filteredPendingBills}
                     reminders={data.reminders}
@@ -1648,6 +1714,24 @@ function App() {
                     modalAc={modalAc}
                     cariler={data.cariler}
                     borcOde={budgetActions.borcOde}
+                />
+            )}
+
+            {anaSekme === "fisler" && (
+                <ReceiptsDashboard
+                    receipts={data.fisler}
+                    accounts={data.hesaplar}
+                    categories={data.kategoriListesi}
+                    transactions={data.islemler}
+                    actions={receiptActions}
+                    importPayload={pendingReceiptImport?.__receiptImportError ? null : pendingReceiptImport}
+                    importError={pendingReceiptImport?.__receiptImportError ? pendingReceiptImport : null}
+                    activeAreaCode={veriAlanKodu}
+                    onImportHandled={() => {
+                        sessionStorage.removeItem(RECEIPT_IMPORT_SESSION_KEY);
+                        setPendingReceiptImport(null);
+                        if (window.location.pathname.startsWith('/fisler/import')) navigateTo('/fisler');
+                    }}
                 />
             )}
 

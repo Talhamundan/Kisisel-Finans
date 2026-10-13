@@ -2,6 +2,8 @@ import { useState, useMemo } from 'react';
 import { ayIsmiGetir, normalizeAssetType, toDateSafe } from '../utils/helpers';
 import { useNotifications } from './useNotifications';
 import { isDateInPeriod, MONTH_NAMES, periodLabel } from '../utils/period';
+import { summarizeAssets } from '../utils/assetSummary';
+import { sumBesContributions } from '../utils/bes';
 
 const formatDayMonthWeekday = (date) => {
     const safeDate = toDateSafe(date);
@@ -202,10 +204,23 @@ export const useCalculations = (
         }
     }
 
+    const assetSummary = useMemo(() => summarizeAssets({
+        accounts: hesaplar,
+        portfolio: portfoy,
+        besData: besVerisi,
+        debts: borclar,
+        financings: data.finansmanlar,
+        installments: taksitler,
+        transactions: islemler,
+    }), [hesaplar, portfoy, besVerisi, borclar, data.finansmanlar, taksitler, islemler]);
+
     // --- YATIRIM & PORTFÖY ---
-    const portfoyGuncelDegeri = portfoy.reduce((acc, p) => acc + (p.adet * (p.guncelFiyat || p.alisFiyati)), 0);
-    const toplamKarZarar = portfoyGuncelDegeri - portfoy.reduce((acc, p) => acc + (p.adet * p.alisFiyati), 0);
-    const portfoyVerisi = portfoy.reduce((acc, curr) => { const guncelTutar = curr.adet * (curr.guncelFiyat || curr.alisFiyati); const mevcut = acc.find(item => item.name === curr.sembol); if (mevcut) { mevcut.value += guncelTutar; } else { acc.push({ name: curr.sembol, value: guncelTutar }); } return acc; }, []);
+    const portfoyGuncelDegeri = assetSummary.assets.openPositionValue;
+    const yatirimPortfoyu = portfoy.filter((p) => normalizeAssetType(p.varlikTuru) !== 'bes');
+    const toplamKarZarar = portfoyGuncelDegeri - yatirimPortfoyu.reduce((acc, p) => acc + (p.adet * p.alisFiyati), 0);
+    const portfoyVerisi = portfoy
+        .filter((p) => normalizeAssetType(p.varlikTuru) !== 'bes')
+        .reduce((acc, curr) => { const guncelTutar = curr.adet * (curr.guncelFiyat || curr.alisFiyati); const mevcut = acc.find(item => item.name === curr.sembol); if (mevcut) { mevcut.value += guncelTutar; } else { acc.push({ name: curr.sembol, value: guncelTutar }); } return acc; }, []);
 
     const toplamKalanBorc = borclar ? borclar
         .filter((b) => (b.type || 'VERECEK') !== 'ALACAK')
@@ -278,32 +293,25 @@ export const useCalculations = (
         return acc + Math.max(0, totalAmount - (monthlyAmount * normalizedPaid));
     }, 0);
     const toplamSabitGider = abonelikler.reduce((acc, abo) => acc + abo.tutar, 0);
-    const toplamNakitVarlik = hesaplar.reduce((acc, h) => acc + (parseFloat(h.guncelBakiye) || 0), 0);
-    const netVarlik = toplamNakitVarlik + portfoyGuncelDegeri + (besVerisi?.guncelTutar || 0);
+    const netVarlik = assetSummary.netWorth;
+    const aktifBorclar = assetSummary.debts.total - assetSummary.debts.manualDebt;
 
-    // Helper for categorization
-    const isAltinOrGumus = (p) => {
-        const t = normalizeAssetType(p.varlikTuru);
-        const s = p.sembol?.toUpperCase() || "";
-        return t === 'altin' || t === 'gümüş' || t === 'gumus' || s === 'GAUTRY' || s === 'GMSTR' || s === 'GOLD' || s.includes('GLD') || s === 'ALTIN' || s === 'GUMUS';
-    };
-
-    const portfoyYatirimDegeri = portfoy.filter(p => !['doviz', 'bes'].includes(normalizeAssetType(p.varlikTuru)) && !isAltinOrGumus(p)).reduce((acc, p) => acc + (p.adet * (p.guncelFiyat || p.alisFiyati)), 0);
-    const toplamDovizVarligi = portfoy.filter(p => normalizeAssetType(p.varlikTuru) === 'doviz').reduce((acc, p) => acc + (p.adet * (p.guncelFiyat || p.alisFiyati)), 0);
-    const toplamBesVarligi = (besVerisi?.guncelTutar || 0) + portfoy.filter(p => normalizeAssetType(p.varlikTuru) === 'bes').reduce((acc, p) => acc + (p.adet * (p.guncelFiyat || p.alisFiyati)), 0);
-    const toplamAltinVarligi = portfoy.filter(p => isAltinOrGumus(p)).reduce((acc, p) => acc + (p.adet * (p.guncelFiyat || p.alisFiyati)), 0);
-    const toplamYatirimHesapNakiti = hesaplar.filter(h => h.hesapTipi === 'yatirim').reduce((acc, h) => acc + (parseFloat(h.guncelBakiye) || 0), 0);
-    const toplamBesYatirimi = islemler.filter(i => i.kategori === 'BES' && i.islemTipi === 'gider' && isDateInPeriod(i.tarih, selectedPeriod)).reduce((acc, i) => acc + i.tutar, 0);
+    const portfoyYatirimDegeri = (assetSummary.investment.byCategory.hisse || 0) + (assetSummary.investment.byCategory.fon || 0) + (assetSummary.investment.byCategory.coin || 0);
+    const toplamDovizVarligi = assetSummary.investment.byCategory.doviz || 0;
+    const toplamBesVarligi = assetSummary.investment.bes || 0;
+    const toplamAltinVarligi = assetSummary.investment.byCategory.emtia || 0;
+    const toplamYatirimHesapNakiti = assetSummary.investment.cash;
+    const toplamBesYatirimi = sumBesContributions(islemler);
 
     // Net nakit (cüzdan)
-    const sadeceCuzdanNakiti = toplamNakitVarlik - toplamYatirimHesapNakiti;
+    const sadeceCuzdanNakiti = assetSummary.cash.available;
 
     // FIX: Gold/Silver should be grouped with Currency (Döviz), NOT Stocks (Hisse)
     const kartYatirimToplami = portfoyYatirimDegeri; // Sadece Hisse/Fon
     const displayDovizVarligi = toplamDovizVarligi + toplamAltinVarligi; // Döviz + Altın
 
     const kartNakitToplami = toplamYatirimHesapNakiti;
-    const genelToplamYatirimGucu = portfoyGuncelDegeri + toplamYatirimHesapNakiti + (besVerisi?.guncelTutar || 0);
+    const genelToplamYatirimGucu = assetSummary.investment.power;
 
     const genelVarlikVerisi = [
         { name: 'Hisse', value: kartYatirimToplami },
@@ -326,7 +334,7 @@ export const useCalculations = (
         // Investment Stats
         portfoyGuncelDegeri, toplamKarZarar, portfoyVerisi,
         genelToplamYatirimGucu, genelVarlikVerisi, toplamYatirimHesapNakiti,
-        netVarlik, sadeceCuzdanNakiti, toplamKalanTaksitBorcu, toplamSabitGider,
+        netVarlik, sadeceCuzdanNakiti, aktifBorclar, toplamKalanTaksitBorcu, toplamSabitGider,
         kartYatirimToplami, toplamDovizVarligi: displayDovizVarligi, toplamBesVarligi, kartNakitToplami, toplamBesYatirimi,
         toplamKalanBorc,
 

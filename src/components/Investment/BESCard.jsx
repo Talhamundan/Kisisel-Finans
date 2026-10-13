@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { cardStyle, formatCurrencyPlain, inputStyle } from '../../utils/helpers';
 import HighQualityModal from '../Shared/HighQualityModal';
-import { isDateInPeriod } from '../../utils/period';
+import { sumBesContributions, sumBesDeductions } from '../../utils/bes';
 import PremiumDonutChart from '../Shared/PremiumDonutChart';
 
 const BESCard = ({
@@ -50,7 +50,7 @@ const BESCard = ({
 
     // Calculcations
     const kesintiler = veri.kesintiler || [];
-    const toplamKesinti = kesintiler.reduce((acc, k) => acc + (parseFloat(k.tutar) || 0), 0);
+    const toplamKesinti = sumBesDeductions(kesintiler);
     const devletKatkisi = (veri.guncelDevletKatkisi !== undefined && veri.guncelDevletKatkisi !== null)
         ? veri.guncelDevletKatkisi
         : (toplamBesYatirimi * 0.30);
@@ -62,14 +62,8 @@ const BESCard = ({
     const ayFiltresiVar = Boolean(selectedPeriod);
 
     if (ayFiltresiVar) {
-        if (yatirimIslemleri) {
-            seciliAyYatirilan = yatirimIslemleri
-                .filter(islem => islem.kategori === 'BES' && isDateInPeriod(islem.tarih, selectedPeriod))
-                .reduce((acc, curr) => acc + (parseFloat(curr.tutar) || 0), 0);
-        }
-        seciliAyKesinti = kesintiler
-            .filter(k => isDateInPeriod(k.tarih, selectedPeriod))
-            .reduce((acc, k) => acc + (parseFloat(k.tutar) || 0), 0);
+        seciliAyYatirilan = sumBesContributions(yatirimIslemleri, selectedPeriod);
+        seciliAyKesinti = sumBesDeductions(kesintiler, selectedPeriod);
     }
     const seciliAyNetYatirim = seciliAyYatirilan - seciliAyKesinti;
 

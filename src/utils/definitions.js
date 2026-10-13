@@ -1,10 +1,8 @@
 import { formatCurrencyPlain, toDateSafe } from './helpers.js';
-import { getFinancingMetrics } from './financing.js';
+import { summarizeAssetOverview } from './assetSummary.js';
 
 const parseAmount = (value) => parseFloat(value) || 0;
 const idOf = (value) => String(value || '').trim();
-const getDebtType = (debt) => debt?.type === 'ALACAK' ? 'ALACAK' : 'VERECEK';
-const isDebtCompleted = (debt) => debt?.durum === 'completed' || debt?.status === 'completed' || parseAmount(debt?.kalanTutar ?? debt?.tutar ?? debt?.toplamTutar) <= 0;
 
 export const DEFINITION_STATUS = {
     WAITING: 'waiting',
@@ -515,13 +513,6 @@ export const sumMatchedPayments = (historyRows = []) => {
     }, { total: 0, count: 0 });
 };
 
-const accountTypeLabel = (account) => {
-    if (account?.hesapTipi === 'yatirim') return 'Yatırım Hesabı';
-    if (account?.hesapTipi === 'nakit') return 'Nakit';
-    if (account?.hesapTipi === 'krediKarti') return 'Kredi Kartı';
-    return 'Vadesiz Hesap';
-};
-
 export const summarizeDefinitionsOverview = ({
     accounts = [],
     portfolio = [],
@@ -531,98 +522,5 @@ export const summarizeDefinitionsOverview = ({
     transactions = [],
     besData = null,
 } = {}) => {
-    const cash = (accounts || [])
-        .filter((account) => account.hesapTipi !== 'krediKarti' && account.hesapTipi !== 'yatirim')
-        .reduce((sum, account) => sum + Math.max(0, parseAmount(account.guncelBakiye)), 0);
-    const investmentAccounts = (accounts || [])
-        .filter((account) => account.hesapTipi === 'yatirim')
-        .reduce((sum, account) => sum + Math.max(0, parseAmount(account.guncelBakiye)), 0);
-    const portfolioValue = (portfolio || []).reduce((sum, item) => (
-        sum + (parseAmount(item.guncelFiyat || item.alisFiyati) * parseAmount(item.adet || item.miktar || 1))
-    ), 0);
-    const besValue = parseAmount(besData?.guncelDeger || besData?.toplamBirikim || besData?.birikim);
-    const creditCards = (accounts || [])
-        .filter((account) => account.hesapTipi === 'krediKarti')
-        .reduce((sum, account) => sum + Math.max(0, -parseAmount(account.guncelBakiye)), 0);
-    const financingContext = { transactions, installments };
-    const financingDebt = (financings || []).reduce((sum, financing) => (
-        sum + getFinancingMetrics(financing, financingContext).remainingPlannedPayment
-    ), 0);
-    const financingInstallmentIds = new Set((financings || []).map((item) => item.installmentId).filter(Boolean));
-    const installmentDebt = (installments || [])
-        .filter((installment) => !financingInstallmentIds.has(installment.id))
-        .reduce((sum, installment) => sum + getInstallmentStatus(installment, transactions).remainingAmount, 0);
-    const activePayables = (debts || []).filter((debt) => getDebtType(debt) === 'VERECEK' && !isDebtCompleted(debt));
-    const manualDebt = activePayables.reduce((sum, debt) => sum + parseAmount(debt.kalanTutar ?? debt.tutar ?? debt.toplamTutar), 0);
-    const assetItems = [
-        ...(accounts || [])
-            .filter((account) => account.hesapTipi !== 'krediKarti')
-            .map((account) => ({
-                id: `account-${account.id}`,
-                group: 'Hesaplar',
-                label: account.hesapAdi || 'İsimsiz hesap',
-                meta: accountTypeLabel(account),
-                value: Math.max(0, parseAmount(account.guncelBakiye)),
-            })),
-        ...(portfolioValue > 0 ? [{
-            id: 'portfolio-positions',
-            group: 'Yatırımlar',
-            label: 'Portföy Varlıkları',
-            meta: 'Açık pozisyonlar',
-            value: portfolioValue,
-        }] : []),
-        ...(besValue > 0 ? [{
-            id: 'bes-value',
-            group: 'Diğer Varlıklar',
-            label: 'BES Birikimi',
-            meta: 'Emeklilik birikimi',
-            value: besValue,
-        }] : []),
-    ];
-    const debtItems = [
-        ...(accounts || [])
-            .filter((account) => account.hesapTipi === 'krediKarti' && parseAmount(account.guncelBakiye) < 0)
-            .map((account) => ({
-                id: `credit-card-${account.id}`,
-                group: 'Kredi Kartları',
-                label: account.hesapAdi || 'Kredi kartı',
-                meta: 'Kredi Kartı',
-                value: Math.max(0, -parseAmount(account.guncelBakiye)),
-            })),
-        ...(financings || []).map((financing) => {
-            const metrics = getFinancingMetrics(financing, financingContext);
-            return {
-                id: `financing-${financing.id}`,
-                group: 'Finansmanlar',
-                label: financing.ad || financing.bankName || 'Finansman',
-                meta: financing.bankName || 'Finansman',
-                value: metrics.remainingPlannedPayment,
-            };
-        }).filter((item) => item.value > 0),
-        ...activePayables.map((debt) => ({
-            id: `manual-debt-${debt.id}`,
-            group: 'Manuel Borçlar',
-            label: debt.baslik || debt.ad || debt.aciklama || 'Borç',
-            meta: debt.kisi || debt.kurum || 'Verecek',
-            value: parseAmount(debt.kalanTutar ?? debt.tutar ?? debt.toplamTutar),
-        })).filter((item) => item.value > 0),
-        ...(installments || [])
-            .filter((installment) => !financingInstallmentIds.has(installment.id))
-            .map((installment) => ({
-                id: `installment-debt-${installment.id}`,
-                group: 'Manuel Borçlar',
-                label: installment.baslik || 'Taksitli alışveriş',
-                meta: 'Taksit yükü',
-                value: getInstallmentStatus(installment, transactions).remainingAmount,
-            }))
-            .filter((item) => item.value > 0),
-    ];
-    const totalAssets = cash + investmentAccounts + portfolioValue + besValue;
-    const totalDebts = creditCards + financingDebt + manualDebt + installmentDebt;
-
-    return {
-        assets: { cash, investmentAccounts, portfolioValue, besValue, total: totalAssets, items: assetItems },
-        debts: { creditCards, financings: financingDebt, manualDebt, installmentDebt, total: totalDebts, items: debtItems },
-        netWorth: totalAssets - totalDebts,
-    };
+    return summarizeAssetOverview({ accounts, portfolio, debts, financings, installments, transactions, besData });
 };

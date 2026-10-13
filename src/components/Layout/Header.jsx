@@ -11,6 +11,7 @@ import {
     Landmark,
     LogOut,
     Moon,
+    ReceiptText,
     Settings,
     Sun,
     Target,
@@ -45,6 +46,7 @@ const navItems = [
     { id: 'butcem', label: 'Dashboard', icon: Home },
     { id: 'maasAnalizi', label: 'Maaş Analizi', icon: Banknote },
     { id: 'harcamaAnalizi', label: 'Harcama Analizi', icon: TrendingDown },
+    { id: 'fisler', label: 'Fişler', icon: ReceiptText },
     { id: 'yatirimlar', label: 'Yatırımlar', icon: WalletCards },
     { id: 'finansmanlar', label: 'Finansmanlar', icon: Landmark },
     { id: 'tanimlamalar', label: 'Tanımlamalar', icon: ClipboardList },
@@ -55,6 +57,7 @@ const navItems = [
 const pageMeta = {
     butcem: ['Dashboard', 'Finansal durumuna genel bakış'],
     harcamaAnalizi: ['Harcama Analizi', 'Harcama trendleri, karşılaştırmalar ve içgörüler'],
+    fisler: ['Fişler', 'Kestirmeden gelen fişleri incele ve onayla'],
     maasAnalizi: ['Maaş Analizi', 'Maaş dönemindeki gelir, harcama ve kalan tutarı incele'],
     yatirimlar: ['Yatırımlar', 'Portföy ve varlık performansı'],
     hedefler: ['Varlıklar', 'Envanter ve birikim planları'],

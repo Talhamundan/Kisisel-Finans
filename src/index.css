@@ -84,6 +84,451 @@
   --accent-2: #4338ca;
 }
 
+.receipts-page {
+  display: grid;
+  gap: 16px;
+  padding-bottom: 34px;
+}
+
+.receipts-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.receipts-import-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.receipts-import-card form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.receipts-import-card textarea,
+.receipts-form-grid input,
+.receipts-form-grid select {
+  width: 100%;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--surface-solid);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  outline: none;
+}
+
+.receipts-import-card textarea {
+  min-height: 76px;
+  resize: vertical;
+  padding: 10px 12px;
+  line-height: 1.4;
+}
+
+.receipts-import-card button,
+.receipts-detail-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--surface-solid);
+  color: var(--text-primary);
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.receipts-import-card button {
+  min-height: 44px;
+}
+
+.receipts-manual-toggle {
+  justify-self: start;
+}
+
+.receipts-manual-toggle svg:last-child {
+  transition: transform 160ms ease;
+}
+
+.receipts-manual-toggle svg:last-child.is-open {
+  transform: rotate(180deg);
+}
+
+.receipts-import-message {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 750;
+}
+
+.receipts-import-error {
+  display: grid;
+  gap: 8px;
+  border: 1px solid color-mix(in srgb, var(--danger) 22%, var(--border-soft));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--danger) 7%, var(--surface-solid));
+  padding: 12px;
+  color: var(--text-primary);
+  font-size: 12.5px;
+  font-weight: 750;
+}
+
+.receipts-import-error small {
+  color: var(--text-secondary);
+  font-weight: 700;
+}
+
+.receipts-import-error summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+
+.receipts-import-error textarea {
+  margin-top: 8px;
+  min-height: 94px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 650;
+}
+
+.receipts-import-error button {
+  justify-self: start;
+}
+
+.receipts-target-confirm {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, var(--warning) 22%, var(--border-soft));
+  border-radius: 12px;
+  background: var(--warning-soft);
+  padding: 10px;
+}
+
+.receipts-target-confirm span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.receipts-target-confirm strong {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.receipts-target-confirm small {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.receipts-target-confirm button.is-primary {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.receipts-target-confirm button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.receipts-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: fit-content;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--surface-muted);
+}
+
+.receipts-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 9px 12px;
+  font-size: 13px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.receipts-tabs button.is-active {
+  background: var(--surface-solid);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.receipts-workspace {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.92fr) minmax(360px, 1.08fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.receipts-list-card,
+.receipts-detail-card {
+  padding: 12px;
+}
+
+.receipts-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-primary);
+  padding: 10px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.receipts-row:hover,
+.receipts-row.is-active {
+  border-color: var(--border-soft);
+  background: var(--surface-soft);
+}
+
+.receipts-row span {
+  display: grid;
+  min-width: 0;
+}
+
+.receipts-row strong,
+.receipts-row small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.receipts-row strong {
+  font-size: 13.5px;
+  font-weight: 850;
+}
+
+.receipts-row small {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.receipts-row b {
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.receipts-row-warning {
+  color: var(--warning);
+}
+
+.receipts-detail-card {
+  display: grid;
+  gap: 14px;
+}
+
+.receipts-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.receipts-detail-header h2 {
+  margin: 2px 0 0;
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.receipts-warning-box {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 9px;
+  align-items: start;
+  border: 1px solid color-mix(in srgb, var(--warning) 22%, var(--border-soft));
+  border-radius: 10px;
+  background: var(--warning-soft);
+  color: var(--warning);
+  padding: 10px;
+}
+
+.receipts-warning-box span {
+  display: grid;
+  gap: 2px;
+}
+
+.receipts-warning-box small {
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.receipts-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.receipts-form-grid label {
+  display: grid;
+  gap: 5px;
+}
+
+.receipts-form-grid label span {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.receipts-form-grid input,
+.receipts-form-grid select {
+  min-height: 38px;
+  padding: 0 11px;
+}
+
+.receipts-form-grid input:disabled,
+.receipts-form-grid select:disabled {
+  color: var(--text-secondary);
+  background: var(--surface-muted);
+}
+
+.receipts-form-grid__wide {
+  grid-column: 1 / -1;
+}
+
+.receipts-kv {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.receipts-kv span {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  border-radius: 9px;
+  background: var(--surface-soft);
+  color: var(--text-secondary);
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.receipts-kv b {
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.receipts-items {
+  display: grid;
+  gap: 7px;
+}
+
+.receipts-items > strong {
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.receipts-items > small {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.receipts-items > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-soft);
+  padding: 6px 0;
+  font-size: 13px;
+  font-weight: 780;
+}
+
+.receipts-items span small {
+  color: var(--text-tertiary);
+  font-weight: 750;
+}
+
+.receipts-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.receipts-detail-actions button {
+  min-height: 38px;
+}
+
+.receipts-detail-actions button.is-primary {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.receipts-detail-actions button.is-danger {
+  border-color: color-mix(in srgb, var(--danger) 28%, var(--border-soft));
+  color: var(--danger);
+}
+
+html[data-theme="dark"] .receipts-import-card textarea,
+html[data-theme="dark"] .receipts-form-grid input,
+html[data-theme="dark"] .receipts-form-grid select {
+  background: color-mix(in srgb, var(--surface-solid) 86%, #000);
+}
+
+@media (max-width: 980px) {
+  .receipts-stats,
+  .receipts-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .receipts-import-card form {
+    grid-template-columns: 1fr;
+  }
+
+  .receipts-target-confirm {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .receipts-target-confirm button {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 640px) {
+  .receipts-form-grid,
+  .receipts-kv {
+    grid-template-columns: 1fr;
+  }
+
+  .receipts-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .receipts-row-warning {
+    display: none;
+  }
+}
+
 .salary-control-left .salary-period-info {
   display: inline-flex !important;
   align-items: center !important;

@@ -71,7 +71,7 @@ const Actions = ({ onEdit, onPassive, onDelete }) => (
 
 const getValueItemVisuals = (item, listType) => {
     if (listType === 'assets') {
-        if (item.group === 'Yatırımlar' || item.meta === 'Yatırım Hesabı') return { Icon: TrendingUp, tone: 'investment' };
+        if (item.group === 'Yatırım Hesapları' || item.group === 'Yatırım Varlıkları' || item.meta === 'Yatırım Hesabı') return { Icon: TrendingUp, tone: 'investment' };
         return { Icon: Wallet, tone: item.meta === 'Nakit' ? 'cash' : 'account' };
     }
     if (item.group === 'Kredi Kartları') return { Icon: CreditCard, tone: 'credit-card' };
@@ -82,7 +82,8 @@ const getValueItemVisuals = (item, listType) => {
 
 const getDisplayGroup = (item, listType) => (
     listType === 'debts' && item.meta === 'Taksit yükü' ? 'Taksit Yükü'
-        : listType === 'assets' && (item.group === 'Yatırımlar' || item.meta === 'Yatırım Hesabı') ? 'Yatırımlar'
+        : listType === 'assets' && item.group === 'Yatırım Hesapları' ? 'Yatırım Hesapları'
+            : listType === 'assets' && item.group === 'Yatırım Varlıkları' ? 'Yatırım Varlıkları'
             : item.group
 );
 
@@ -106,7 +107,7 @@ const GroupedValueList = ({ title, items = [], emptyTitle, hidden = false, listT
     }, new Map());
     const activeItems = items.filter((item) => !hiddenItems?.has(item.id));
     const total = sumItems(activeItems);
-    const countLabel = listType === 'assets' ? `${items.length} hesap` : `${items.length} borç kalemi`;
+    const countLabel = listType === 'assets' ? `${items.length} kalem` : `${items.length} borç kalemi`;
 
     return (
         <div className="definitions-value-list">
@@ -183,8 +184,9 @@ const Overview = ({ data, gizliMod }) => {
 
     const assetChart = [
         { name: 'Nakit / Vadesiz', value: sumItems(activeAssetItems.filter((item) => getDisplayGroup(item, 'assets') === 'Hesaplar')), color: '#38bdf8' },
-        { name: 'Yatırım Hesapları', value: sumItems(activeAssetItems.filter((item) => getDisplayGroup(item, 'assets') === 'Yatırımlar')), color: '#8b5cf6' },
-        { name: 'Diğer Varlıklar', value: sumItems(activeAssetItems.filter((item) => getDisplayGroup(item, 'assets') === 'Diğer Varlıklar')), color: '#22c55e' },
+        { name: 'Yatırım Hesapları', value: sumItems(activeAssetItems.filter((item) => getDisplayGroup(item, 'assets') === 'Yatırım Hesapları')), color: '#8b5cf6' },
+        { name: 'Yatırım Varlıkları', value: sumItems(activeAssetItems.filter((item) => getDisplayGroup(item, 'assets') === 'Yatırım Varlıkları')), color: '#22c55e' },
+        { name: 'Diğer Varlıklar', value: sumItems(activeAssetItems.filter((item) => getDisplayGroup(item, 'assets') === 'Diğer Varlıklar')), color: '#f59e0b' },
     ];
     const debtChart = [
         { name: 'Kredi Kartları', value: sumItems(activeDebtItems.filter((item) => getDisplayGroup(item, 'debts') === 'Kredi Kartları')), color: '#f97316' },

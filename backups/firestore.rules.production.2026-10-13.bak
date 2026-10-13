@@ -1,0 +1,108 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function areaMeta(code) {
+      return get(/databases/$(database)/documents/area_access_codes/$(code)).data;
+    }
+
+    function activeAreaCode(code) {
+      return exists(/databases/$(database)/documents/area_access_codes/$(code))
+        && areaMeta(code).disabled != true;
+    }
+
+    function canReadArea(code) {
+      return signedIn()
+        && (
+          !exists(/databases/$(database)/documents/area_access_codes/$(code))
+          || areaMeta(code).ownerUid == request.auth.uid
+          || areaMeta(code).ownerUid == null
+        );
+    }
+
+    function validAreaWrite() {
+      return signedIn()
+        && request.resource.data.alanKodu is string
+        && canReadArea(request.resource.data.alanKodu);
+    }
+
+    match /area_access_codes/{code} {
+      allow read: if signedIn() && (
+        !exists(/databases/$(database)/documents/area_access_codes/$(code))
+        || resource.data.ownerUid == request.auth.uid
+        || resource.data.ownerUid == null
+      );
+
+      allow create: if signedIn()
+        && request.resource.data.accessCode == code
+        && (request.resource.data.ownerUid == request.auth.uid || request.resource.data.ownerUid == null)
+        && (
+          request.resource.data.passwordConfigured == false
+          || request.resource.data.passwordHash is string
+        )
+        && !('password' in request.resource.data);
+
+      allow update: if signedIn()
+        && (resource.data.ownerUid == request.auth.uid || resource.data.ownerUid == null)
+        && (request.resource.data.ownerUid == request.auth.uid || request.resource.data.ownerUid == null)
+        && !('password' in request.resource.data);
+    }
+
+    match /ayarlar/{areaCode} {
+      allow read: if canReadArea(areaCode);
+      allow create, update: if signedIn() && canReadArea(areaCode);
+    }
+
+    match /fisler/{receiptId} {
+      allow read: if resource.data.alanKodu is string && canReadArea(resource.data.alanKodu);
+      allow create: if validAreaWrite()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.approvedTransactionId == '';
+      allow update: if signedIn()
+        && resource.data.alanKodu is string
+        && canReadArea(resource.data.alanKodu)
+        && request.resource.data.alanKodu == resource.data.alanKodu
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.importId == resource.data.importId
+        && request.resource.data.source == resource.data.source
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.status in ['pending', 'approved', 'rejected']
+        && (
+          (
+            resource.data.status == 'approved'
+            && request.resource.data.status == 'approved'
+            && request.resource.data.approvedTransactionId == resource.data.approvedTransactionId
+          )
+          || (
+            resource.data.status != 'approved'
+            && request.resource.data.status == 'approved'
+            && request.resource.data.approvedTransactionId is string
+            && request.resource.data.approvedTransactionId.size() > 0
+          )
+          || (
+            resource.data.status != 'approved'
+            && request.resource.data.status != 'approved'
+            && request.resource.data.approvedTransactionId == resource.data.approvedTransactionId
+          )
+        );
+      allow delete: if false;
+    }
+
+    match /{collectionName}/{documentId} {
+      allow read: if collectionName != 'fisler'
+        && resource.data.alanKodu is string
+        && canReadArea(resource.data.alanKodu);
+      allow create: if collectionName != 'fisler' && validAreaWrite();
+      allow update: if collectionName != 'fisler' && validAreaWrite();
+      allow delete: if collectionName != 'fisler'
+        && signedIn()
+        && resource.data.alanKodu is string
+        && canReadArea(resource.data.alanKodu);
+    }
+  }
+}

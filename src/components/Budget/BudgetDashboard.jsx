@@ -503,6 +503,7 @@ const BudgetDashboard = ({
     genelToplamYatirimGucu,
     hasInvestmentAccount = true,
     netVarlik,
+    aktifBorclar = 0,
     tanimliFaturalar,
     bekleyenFaturalar,
     reminders = [],
@@ -1009,8 +1010,9 @@ const BudgetDashboard = ({
                 return date && date >= rangeStart && date <= targetMonthEnd;
             })
             .sort((a, b) => {
-                if (a.isOverdue !== b.isOverdue) return a.isOverdue ? -1 : 1;
-                return getDateTime(a.date) - getDateTime(b.date);
+                const dateDiff = getDateTime(a.date) - getDateTime(b.date);
+                if (dateDiff !== 0) return dateDiff;
+                return String(a.title || '').localeCompare(String(b.title || ''), 'tr-TR', { sensitivity: 'base' });
             });
     }, [abonelikler, abonelikOde, bekleyenFaturalar, borclar, getInstallmentPaidCount, hesaplar, modalAc, selectedPeriod, taksitOde, taksitler, tanimliFaturalar, tumIslemler]);
 
@@ -1437,8 +1439,8 @@ const BudgetDashboard = ({
             <div className="qw-top-summary-grid">
                 <PremiumCard tone="hero" className="qw-net-worth-card">
                     <div className="qw-hero-copy">
-                        <span className="qw-eyebrow">Toplam Net Varlık</span>
-                        <h2>{formatPara(netVarlik)}</h2>
+                        <span className="qw-eyebrow">Kullanılabilir Nakit</span>
+                        <h2>{formatPara(sadeceCuzdanNakiti)}</h2>
                     </div>
                     <div className="qw-hero-chart">
                         <Sparkline data={expenseSparkline} color="#6d5dfc" />
@@ -1474,10 +1476,10 @@ const BudgetDashboard = ({
                 <PremiumCard className="qw-compact-summary-card">
                     <SectionHeader title="Mevcut Durum" />
                     <div className="qw-summary-lines">
-                        <SummaryLine label="Cüzdan nakdi" value={formatPara(sadeceCuzdanNakiti)} tone={sadeceCuzdanNakiti >= 0 ? undefined : 'danger'} />
                         {hasInvestmentAccount && (
                             <SummaryLine label="Yatırım gücü" value={formatPara(genelToplamYatirimGucu)} tone="info" />
                         )}
+                        <SummaryLine label="Aktif borçlar" value={formatPara(aktifBorclar)} tone={aktifBorclar > 0 ? 'danger' : undefined} />
                         <SummaryLine label="Hesap sayısı" value={`${(hesaplar || []).length} hesap`} />
                         <SummaryLine label="Hareket sayısı" value={`${filteredCount} kayıt`} />
                     </div>

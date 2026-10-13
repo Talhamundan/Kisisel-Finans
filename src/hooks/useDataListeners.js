@@ -22,6 +22,7 @@ export const useDataListeners = (user, alanKodu) => {
     const [finansmanlar, setFinansmanlar] = useState([]);
     const [cariIslemler, setCariIslemler] = useState([]);
     const [reminders, setReminders] = useState([]);
+    const [fisler, setFisler] = useState([]);
     const [besVerisi, setBesVerisi] = useState(null);
     const [hedefler, setHedefler] = useState([]);
     const [envanter, setEnvanter] = useState([]);
@@ -42,7 +43,7 @@ export const useDataListeners = (user, alanKodu) => {
     useEffect(() => {
         if (!user || !alanKodu) {
             // Temizle
-            setHesaplar([]); setRawIslemler([]); setEtiketler([]); setTransactionTags([]); setAbonelikler([]); setTaksitler([]); setMaaslar([]); setPortfoy([]); setBekleyenFaturalar([]); setTanimliFaturalar([]); setBorclar([]); setCariler([]); setFinansmanlar([]); setCariIslemler([]); setReminders([]);
+            setHesaplar([]); setRawIslemler([]); setEtiketler([]); setTransactionTags([]); setAbonelikler([]); setTaksitler([]); setMaaslar([]); setPortfoy([]); setBekleyenFaturalar([]); setTanimliFaturalar([]); setBorclar([]); setCariler([]); setFinansmanlar([]); setCariIslemler([]); setReminders([]); setFisler([]);
             setHesaplarLoaded(false);
             return;
         }
@@ -64,6 +65,7 @@ export const useDataListeners = (user, alanKodu) => {
         const qFinansmanlar = query(collection(db, "finansmanlar"), where("alanKodu", "==", alanKodu));
         const qCariIslemler = query(collection(db, "cari_islemleri"), where("alanKodu", "==", alanKodu));
         const qReminders = query(collection(db, "reminders"), where("alanKodu", "==", alanKodu));
+        const qFisler = query(collection(db, "fisler"), where("alanKodu", "==", alanKodu));
 
         // TEK REFERANS: Kullanıcının kendi ayar dokümanı (hem limitler hem BES verisi burada)
         const ayarlarDocRef = doc(db, "ayarlar", alanKodu);
@@ -126,6 +128,13 @@ export const useDataListeners = (user, alanKodu) => {
         const uReminders = onSnapshot(qReminders, (s) => {
             if (s && s.docs) setReminders(s.docs.map(d => ({ id: d.id, ...d.data() })));
         });
+        const uFisler = onSnapshot(qFisler, (s) => {
+            if (s && s.docs) {
+                const v = s.docs.map(d => ({ id: d.id, ...d.data() }));
+                v.sort((a, b) => (b.createdAt?.seconds || b.date?.seconds || 0) - (a.createdAt?.seconds || a.date?.seconds || 0));
+                setFisler(v);
+            }
+        });
 
         // Consolidated Listener for Settings (Limit, Categories, BES Data all in one doc)
         const u10 = onSnapshot(ayarlarDocRef, (docSnap) => {
@@ -160,7 +169,7 @@ export const useDataListeners = (user, alanKodu) => {
             }
         });
 
-        return () => { u1(); u2(); uTags(); uTransactionTags(); u4(); u5(); u6(); u7(); u8(); u9(); u10(); uBorc(); uCariler(); uFinansman(); uCari(); uReminders(); }
+        return () => { u1(); u2(); uTags(); uTransactionTags(); u4(); u5(); u6(); u7(); u8(); u9(); u10(); uBorc(); uCariler(); uFinansman(); uCari(); uReminders(); uFisler(); }
     }, [user, alanKodu]);
 
     useEffect(() => {
@@ -223,7 +232,7 @@ export const useDataListeners = (user, alanKodu) => {
     }, [rawIslemler, etiketler, transactionTags]);
 
     return {
-        hesaplar, hesaplarLoaded, islemler, abonelikler, taksitler, maaslar, portfoy, bekleyenFaturalar, tanimliFaturalar, besVerisi, borclar, cariler, finansmanlar, cariIslemler, reminders,
+        hesaplar, hesaplarLoaded, islemler, abonelikler, taksitler, maaslar, portfoy, bekleyenFaturalar, tanimliFaturalar, besVerisi, borclar, cariler, finansmanlar, cariIslemler, reminders, fisler,
         etiketler, transactionTags,
         kategoriListesi, setKategoriListesi,
         yatirimTurleri, setYatirimTurleri,

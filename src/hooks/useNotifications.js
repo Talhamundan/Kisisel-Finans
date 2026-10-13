@@ -3,6 +3,7 @@ import { formatCurrencyPlain, toDateSafe } from '../utils/helpers';
 import { getCreditCardStatementPaymentSummary } from '../utils/creditCardPayments';
 import { buildSubscriptionOccurrences } from '../utils/recurringPayments';
 import { buildDueNotificationMessage } from '../utils/notifications';
+import { getBesPaymentReminder } from '../utils/bes';
 
 const NOTIFICATION_WINDOW_DAYS = 3;
 const CREDIT_CARD_LIMIT_THRESHOLDS = [50, 20, 10];
@@ -155,29 +156,21 @@ export const useNotifications = ({
             }
         });
 
-        if (besVerisi && besVerisi.durum !== 'durduruldu') {
-            const odemeGunu = besVerisi.odemeGunu || 15;
-            const besOdemeTarihi = startOfDay(new Date(mevcutYil, mevcutAy, odemeGunu));
-            const kalanGun = Math.ceil((besOdemeTarihi - today0) / (1000 * 60 * 60 * 24));
-            const besOdendi = islemler.some(i =>
-                i.kategori === 'BES' &&
-                i.islemTipi === 'gider' &&
-                (() => {
-                    const d = toDateSafe(i.tarih);
-                    return d && d.getMonth() === mevcutAy && d.getFullYear() === mevcutYil;
-                })()
-            );
-
-            if (!besOdendi && kalanGun <= NOTIFICATION_WINDOW_DAYS) {
-                tempBildirimler.push({
-                    id: 'bes-gecikme',
-                    tip: 'bes_odeme',
-                    mesaj: buildDueNotificationMessage({ name: 'BES Ödemesi', daysLeft: kalanGun, overdueText: 'Gecikti' }),
-                    tutar: parseFloat(besVerisi.aylikTutar) || 0,
-                    data: besVerisi,
-                    renk: kalanGun < 0 ? 'red' : 'orange'
-                });
-            }
+        const besReminder = getBesPaymentReminder({
+            besData: besVerisi,
+            transactions: islemler,
+            now,
+            notificationWindowDays: NOTIFICATION_WINDOW_DAYS,
+        });
+        if (besReminder) {
+            tempBildirimler.push({
+                id: 'bes-gecikme',
+                tip: 'bes_odeme',
+                mesaj: buildDueNotificationMessage({ name: 'BES Ödemesi', daysLeft: besReminder.daysLeft, overdueText: 'Gecikti' }),
+                tutar: besReminder.amount,
+                data: besVerisi,
+                renk: besReminder.tone
+            });
         }
 
         maaslar.forEach(maas => {
