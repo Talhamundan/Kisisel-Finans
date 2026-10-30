@@ -90,6 +90,13 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Transactions check a new payment ID before creating it. Missing documents
+    // have no alanKodu; permit only that existence check, never an existing record.
+    match /nakit_islemleri/{paymentId} {
+      allow get: if signedIn()
+        && !exists(/databases/$(database)/documents/nakit_islemleri/$(paymentId));
+    }
+
     match /{collectionName}/{documentId} {
       allow read: if collectionName != 'fisler'
         && resource.data.alanKodu is string

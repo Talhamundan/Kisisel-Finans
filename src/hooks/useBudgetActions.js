@@ -575,20 +575,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
                             batch.update(taksitRef, { odenmisTaksit: increment(-1) });
                         }
 
-                        // 3. Borç Ödeme Durumu
-                        if (data.borcId) {
-                            const borcRef = doc(db, "borclar", data.borcId);
-                            batch.update(borcRef, {
-                                kalanTutar: increment(tutar),
-                                durum: "active",
-                                status: "active",
-                                tamamlanmaTarihi: deleteField(),
-                                completedAt: deleteField(),
-                                tamamlayanIslemId: deleteField(),
-                                completedTransactionId: deleteField(),
-                                sonIslemTarihi: new Date()
-                            });
-                        }
+                        // Geçmiş hareketini silmek cari tahsilat/ödeme durumunu değiştirmez.
 
                         // 4. İşlemi Sil
                         transactionTags
@@ -967,7 +954,9 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
             return true;
         } catch (err) {
             console.error(err);
-            toast.error(err?.message || "Ödeme hatası");
+            toast.error(err?.code === 'permission-denied'
+                ? "Ödeme kaydedilemedi: bu veri alanı için erişim izni doğrulanamadı. Lütfen oturumunuzu ve seçili alanı kontrol edin."
+                : err?.message || "Ödeme kaydedilemedi. Lütfen tekrar deneyin.");
             return false;
         }
     };

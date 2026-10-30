@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { createPortal } from 'react-dom';
 import { auth, db } from './firebase'
 import { doc, getDoc, setDoc, writeBatch } from 'firebase/firestore'
 import { sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth';
@@ -1355,7 +1356,10 @@ function App() {
 
     return (
         <div className="app-shell">
-            <ToastContainer position="top-right" autoClose={2000} theme={theme === 'dark' ? 'dark' : 'light'} />
+            {createPortal(
+                <ToastContainer position="top-right" autoClose={2000} theme={theme === 'dark' ? 'dark' : 'light'} />,
+                document.body
+            )}
 
             {showPasswordSetupPrompt && (
                 <div className="area-security-dialog-layer" role="presentation">
@@ -1675,6 +1679,7 @@ function App() {
                     faturaGirisAciklama={budgetActions.faturaGirisAciklama} setFaturaGirisAciklama={budgetActions.setFaturaGirisAciklama}
 
                     borclar={filteredDebts}
+                    tumBorclar={data.borclar}
                     cariler={data.cariler}
                     finansmanlar={data.finansmanlar}
                     navigateTo={navigateTo}

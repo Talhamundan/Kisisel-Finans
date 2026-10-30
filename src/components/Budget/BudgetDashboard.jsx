@@ -552,6 +552,7 @@ const BudgetDashboard = ({
     filtreKategori, setFiltreKategori,
     filtreEtiket, setFiltreEtiket,
     borclar,
+    tumBorclar = borclar,
     cariler = [],
     finansmanlar = [],
     navigateTo,
@@ -1042,7 +1043,7 @@ const BudgetDashboard = ({
         .sort((a, b) => (parseInt(a.gun) || 32) - (parseInt(b.gun) || 32))
         .slice(0, 8);
 
-    const cariSummaries = useMemo(() => buildCariSummaries(borclar, cariler), [borclar, cariler]);
+    const cariSummaries = useMemo(() => buildCariSummaries(tumBorclar, cariler), [tumBorclar, cariler]);
     const activeCariSummaries = cariSummaries;
     useEffect(() => {
         if (typeof window === 'undefined') return undefined;
@@ -1073,8 +1074,8 @@ const BudgetDashboard = ({
         return () => window.removeEventListener('finance-open-cari-detail', handleOpenCariDetail);
     }, [cariSummaries]);
     useEffect(() => {
-        if (!selectedCariSummary?.id) return;
-        const updated = cariSummaries.find((summary) => summary.id === selectedCariSummary.id);
+        if (!selectedCariSummary) return;
+        const updated = cariSummaries.find((summary) => summary.key === selectedCariSummary.key);
         if (updated && updated !== selectedCariSummary) setSelectedCariSummary(updated);
     }, [cariSummaries, selectedCariSummary]);
     const receivableCariRows = activeCariSummaries

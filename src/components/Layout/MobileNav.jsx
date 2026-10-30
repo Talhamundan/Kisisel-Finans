@@ -8,7 +8,7 @@ const items = [
     { id: 'fisler', label: 'Fiş', icon: ReceiptText },
     { id: 'yatirimlar', label: 'Yatırım', icon: Briefcase },
     { id: 'tanimlamalar', label: 'Tanım', icon: ClipboardList },
-    { id: 'hedefler', label: 'Varlık', icon: Target },
+    { id: 'hedefler', label: 'Envanter', icon: Target },
     { id: 'takvim', label: 'Takvim', icon: CalendarDays },
     { id: 'ayarlar', label: 'Ayarlar', icon: Settings },
 ];

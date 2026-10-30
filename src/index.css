@@ -1,4 +1,9 @@
 /* --- GLOBAL THEME (LIGHT, PREMIUM) --- */
+/* Keep feedback above modal and confirmation overlays, including portalled ones. */
+body .Toastify__toast-container {
+  z-index: 300000;
+}
+
 :root {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Text',
     'Segoe UI', sans-serif;
@@ -9583,6 +9588,7 @@ button.salary-debt-detail-row:hover {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  padding: 0 4px;
 }
 
 .definitions-detail-hero h2 {
@@ -9597,6 +9603,43 @@ button.salary-debt-detail-row:hover {
   color: var(--text-secondary);
   font-size: 13px;
   font-weight: 650;
+}
+
+.definitions-list-section {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.definitions-list-section > .qw-section-header {
+  margin: 0;
+  padding: 0 4px;
+}
+
+.definitions-list-section > .qw-section-header h2 {
+  font-size: 24px;
+}
+
+.definitions-metrics--compact {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.definitions-metrics--compact .qw-card {
+  min-height: 76px;
+  padding: 14px 18px;
+  gap: 6px;
+}
+
+.definitions-metrics--compact strong {
+  font-size: clamp(18px, 1.6vw, 22px);
+  overflow-wrap: anywhere;
+}
+
+.definitions-metrics--compact small {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .definitions-kv {
@@ -9910,6 +9953,10 @@ button.definitions-value-row {
   .definitions-overview-grid,
   .definitions-detail-grid {
     grid-template-columns: 1fr;
+  }
+
+  .definitions-metrics--compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .definitions-row {

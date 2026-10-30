@@ -46,12 +46,12 @@ const navItems = [
     { id: 'butcem', label: 'Dashboard', icon: Home },
     { id: 'maasAnalizi', label: 'Maaş Analizi', icon: Banknote },
     { id: 'harcamaAnalizi', label: 'Harcama Analizi', icon: TrendingDown },
-    { id: 'fisler', label: 'Fişler', icon: ReceiptText },
     { id: 'yatirimlar', label: 'Yatırımlar', icon: WalletCards },
     { id: 'finansmanlar', label: 'Finansmanlar', icon: Landmark },
     { id: 'tanimlamalar', label: 'Tanımlamalar', icon: ClipboardList },
-    { id: 'hedefler', label: 'Varlıklar', icon: Target },
+    { id: 'hedefler', label: 'Envanter', icon: Target },
     { id: 'takvim', label: 'Takvim', icon: CalendarDays },
+    { id: 'fisler', label: 'Fişler', icon: ReceiptText },
 ];
 
 const pageMeta = {
@@ -60,7 +60,7 @@ const pageMeta = {
     fisler: ['Fişler', 'Kestirmeden gelen fişleri incele ve onayla'],
     maasAnalizi: ['Maaş Analizi', 'Maaş dönemindeki gelir, harcama ve kalan tutarı incele'],
     yatirimlar: ['Yatırımlar', 'Portföy ve varlık performansı'],
-    hedefler: ['Varlıklar', 'Envanter ve birikim planları'],
+    hedefler: ['Envanter', 'Envanter ve birikim planları'],
     takvim: ['Finans Takvimi', 'Yaklaşan hareketlerini izle'],
     finansmanlar: ['Finansmanlar', 'Kredi ve nakit avans takibi'],
     tanimlamalar: ['Tanımlamalar', 'Sabit gider, fatura ve taksit takip alanı'],

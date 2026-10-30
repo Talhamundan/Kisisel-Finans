@@ -64,9 +64,12 @@ export const buildCariSummaries = (debts = [], cariler = []) => {
 
     (debts || []).forEach((debt) => {
         const cariName = getDebtCariName(debt, cariler);
-        const linked = debt?.cariId ? (cariler || []).find((cari) => cari.id === debt.cariId) : null;
+        const linked = (cariler || []).find((cari) => cari.id === debt?.cariId)
+            || (!debt?.cariId ? (cariler || []).find((cari) => (
+                getCariNameKey(cari.ad || cari.name) === getCariNameKey(cariName)
+            )) : null);
         const summary = ensureSummary({
-            id: debt?.cariId || linked?.id,
+            id: linked?.id || debt?.cariId,
             name: linked?.ad || linked?.name || cariName,
             nameKey: linked?.nameKey || getCariNameKey(cariName),
         });
