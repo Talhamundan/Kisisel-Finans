@@ -16,3 +16,12 @@ export const maskMoneyInNotificationMessage = (message, hidden = false) => {
     if (!hidden) return message;
     return String(message || '').replace(/(?:₺\s*)\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?|\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?\s*₺/g, '**** ₺');
 };
+
+// Keep overdue items first and undated alerts last. Equal days retain source order.
+export const sortNotificationsByDueDay = (notifications = []) => (
+    [...notifications].sort((a, b) => {
+        const aDay = Number.isFinite(a.daysLeft) ? a.daysLeft : Infinity;
+        const bDay = Number.isFinite(b.daysLeft) ? b.daysLeft : Infinity;
+        return aDay - bDay;
+    })
+);

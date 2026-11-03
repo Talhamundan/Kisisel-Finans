@@ -81,7 +81,7 @@ const IslemEkleMobilModal = ({ close, islemEkle, hesaplar, kategoriListesi, inpu
     }
 
     return (
-        <HighQualityModal isOpen={true} onClose={close} title="Hızlı İşlem Ekle" icon="⚡" color="#805ad5">
+        <HighQualityModal isOpen={true} onClose={close} title="Hızlı İşlem Ekle" icon="⚡" color="#805ad5" className="transaction-form-bold">
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                 <div style={{ display: 'flex', gap: '10px' }}>
                     <select value={hesapId} onChange={e => setHesapId(e.target.value)} style={{ flex: 1, ...inputStyle }} required>
@@ -1862,6 +1862,7 @@ const ModalManager = ({
             icon={icon}
             width={customWidth}
             minHeight={customMinHeight}
+            className={aktifModal?.startsWith('duzenle_') ? 'transaction-form-bold' : undefined}
         >
             {content}
         </HighQualityModal>

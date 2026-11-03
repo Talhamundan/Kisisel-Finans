@@ -5,7 +5,7 @@ import { toast } from 'react-toastify';
 import Swal from 'sweetalert2';
 import { formatCurrencyPlain, formatMoneyInputValue } from '../utils/helpers';
 import { canBeDefaultPaymentAccount } from '../utils/defaultPaymentAccount';
-import { getCariNameKey, normalizeCariName } from '../utils/cari';
+import { buildCariSummaries, getCariNameKey, normalizeCariName } from '../utils/cari';
 import { buildTransactionTagId, normalizeTagKey, normalizeTagName, uniqueTagIds } from '../utils/tags';
 import {
     CREDIT_CARD_PAYMENT_STRATEGIES,
@@ -1624,6 +1624,52 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
         }
     };
 
+    const cariTanimSil = async (summary) => {
+        if (!user || !alanKodu || !summary?.key) return false;
+        try {
+            const [debtSnapshot, cariSnapshot] = await Promise.all([
+                getDocs(query(collection(db, 'borclar'), where('alanKodu', '==', alanKodu))),
+                getDocs(query(collection(db, 'cariler'), where('alanKodu', '==', alanKodu))),
+            ]);
+            const debts = debtSnapshot.docs.map((item) => ({ ...item.data(), id: item.id }));
+            const currentCariler = cariSnapshot.docs.map((item) => ({ ...item.data(), id: item.id }));
+            const current = buildCariSummaries(debts, currentCariler).find((item) => item.key === summary.key);
+            if (!current) {
+                toast.info('Cari kayıt zaten silinmiş.');
+                return true;
+            }
+            const result = await Swal.fire({
+                title: 'Cari silinsin mi?',
+                text: `${current.name} ve bağlı ${current.activeItems.length} açık, ${current.completedItems.length} tamamlanan alacak/verecek kaydı kalıcı olarak silinecek. Hesap hareketleri ve bakiyeler korunacak.`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                confirmButtonText: 'Evet, Cariyi Sil',
+                cancelButtonText: 'Vazgeç',
+            });
+            if (!result.isConfirmed) return false;
+
+            const debtIds = new Set(current.allItems.map((item) => item.id));
+            const records = debtSnapshot.docs.filter((item) => debtIds.has(item.id));
+            const cariRecord = cariSnapshot.docs.find((item) => item.id === current.id);
+            if (cariRecord) records.push(cariRecord);
+            if (records.length > 500) {
+                toast.error('Tek seferde en fazla 500 kayıt silinebilir. Önce cari işlem sayısını azaltın.');
+                return false;
+            }
+            const batch = writeBatch(db);
+            records.forEach((record) => batch.delete(record.ref));
+            await batch.commit();
+            publishCariLocalChange('delete', { id: current.id, alanKodu });
+            toast.success('Cari ve bağlı alacak/verecek kayıtları silindi.');
+            return true;
+        } catch (error) {
+            console.error('Cari silme hatası:', error);
+            toast.error('Cari silinemedi.');
+            return false;
+        }
+    };
+
     const cariSil = async (cari) => {
         if (!cari?.id) return false;
         try {
@@ -2082,7 +2128,7 @@ export const useBudgetActions = (user, alanKodu, hesaplar, kategoriListesi, tani
         taksitEkle, taksitOde, taksitDuzenle,
         abonelikEkle, abonelikOde, abonelikDuzenle,
         maasEkle, maasYatir, maasDuzenle,
-        borcEkle, borcDuzenle, borcOrderGuncelle, borcOde, borcSil, cariTanimla, resetCariTanimForm,
+        borcEkle, borcDuzenle, borcOrderGuncelle, borcOde, borcSil, cariTanimla, cariTanimSil, resetCariTanimForm,
         cariHarcamaEkle, cariHarcamaDuzenle, cariIadeAl, cariSil,
         faturaTanimEkle, faturaGir, faturaOde, bekleyenFaturaDuzenle, faturaTanimDuzenle,
         reminderEkle, reminderDuzenle, reminderSil, reminderTamamla, resetReminderForm,

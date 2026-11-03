@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { formatCurrencyPlain, toDateSafe } from '../utils/helpers';
 import { getCreditCardStatementPaymentSummary } from '../utils/creditCardPayments';
 import { buildSubscriptionOccurrences } from '../utils/recurringPayments';
-import { buildDueNotificationMessage } from '../utils/notifications';
+import { buildDueNotificationMessage, sortNotificationsByDueDay } from '../utils/notifications';
 import { getBesPaymentReminder } from '../utils/bes';
 
 const NOTIFICATION_WINDOW_DAYS = 3;
@@ -166,6 +166,7 @@ export const useNotifications = ({
             tempBildirimler.push({
                 id: 'bes-gecikme',
                 tip: 'bes_odeme',
+                daysLeft: besReminder.daysLeft,
                 mesaj: buildDueNotificationMessage({ name: 'BES Ödemesi', daysLeft: besReminder.daysLeft, overdueText: 'Gecikti' }),
                 tutar: besReminder.amount,
                 data: besVerisi,
@@ -192,7 +193,7 @@ export const useNotifications = ({
                 const mesaj = kalanGun < 0
                     ? `💰 ${maas.ad} yatmadı! (${Math.abs(kalanGun)} gün gecikti)`
                     : `💰 ${maas.ad} günü geldi!`;
-                tempBildirimler.push({ id: maas.id, tip: 'maas', mesaj, tutar: maas.tutar, data: maas, renk: 'green' });
+                tempBildirimler.push({ id: maas.id, tip: 'maas', daysLeft: kalanGun, mesaj, tutar: maas.tutar, data: maas, renk: 'green' });
             }
         });
 
@@ -210,6 +211,7 @@ export const useNotifications = ({
             tempBildirimler.push({
                 id: abo.id,
                 tip: 'abonelik',
+                daysLeft: kalanGun,
                 mesaj: buildDueNotificationMessage({ name: abo.ad, daysLeft: kalanGun, overdueText: 'ödenmedi' }),
                 tutar: abo.tutar,
                 data: abo,
@@ -243,6 +245,7 @@ export const useNotifications = ({
             tempBildirimler.push({
                 id: `${taksit.id}_taksit_${siradakiTaksit}`,
                 tip: 'taksit',
+                daysLeft: kalanGun,
                 mesaj: buildDueNotificationMessage({ name: `${taksit.baslik} ${taksitEtiketi}`, daysLeft: kalanGun, overdueText: 'ödenmedi' }),
                 tutar: parseFloat(taksit.aylikTutar) || 0,
                 data: { ...taksit, odenmisTaksit, nextInstallmentNumber: siradakiTaksit, installmentCount: taksitSayisi },
@@ -263,6 +266,7 @@ export const useNotifications = ({
                     tempBildirimler.push({
                         id: f.id,
                         tip: 'fatura',
+                        daysLeft: kalanGun,
                         mesaj: buildDueNotificationMessage({ name: ad, daysLeft: kalanGun, overdueText: 'GECİKTİ' }),
                         tutar: f.tutar,
                         data: f,
@@ -291,6 +295,7 @@ export const useNotifications = ({
                 tempBildirimler.push({
                     id: `${reminder.id}_reminder`,
                     tip: 'hatirlatici',
+                    daysLeft: kalanGun,
                     mesaj,
                     tutar: parseFloat(reminder.amount) || 0,
                     data: reminder,
@@ -313,6 +318,7 @@ export const useNotifications = ({
                         tempBildirimler.push({
                             id: b.id + '_borc',
                             tip: debtType === 'ALACAK' ? 'alacak_hatirlatma' : 'borc_hatirlatma',
+                            daysLeft: kalanGun,
                             mesaj: buildDueNotificationMessage({ name: `${b.ad} ${debtType === 'ALACAK' ? 'Alacağı' : 'Vereceği'}`, daysLeft: kalanGun, overdueText: 'GECİKTİ' }),
                             tutar: remaining,
                             data: b,
@@ -339,7 +345,7 @@ export const useNotifications = ({
             });
         }
 
-        setBildirimler(tempBildirimler);
+        setBildirimler(sortNotificationsByDueDay(tempBildirimler));
     }, [islemler, abonelikler, taksitler, maaslar, hesaplar, bekleyenFaturalar, tanimliFaturalar, besVerisi, satislar, borclar, reminders]);
 
     return bildirimler;

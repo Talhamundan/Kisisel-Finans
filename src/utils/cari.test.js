@@ -35,3 +35,24 @@ test('explicit cari links take priority over matching names', () => {
     assert.equal(summaries.find((item) => item.id === cari.id).activeCount, 0);
     assert.equal(summaries.find((item) => item.id === 'another').activeReceivable, 4000);
 });
+
+test('cari deletion selection includes completed and legacy debts without taking another cari records', () => {
+    const summaries = buildCariSummaries([
+        { id: 'active', cariId: cari.id, kalanTutar: 200 },
+        { id: 'completed', cariId: cari.id, kalanTutar: 0, status: 'completed' },
+        { id: 'legacy', ad: ' yusuf kuliyev ', kalanTutar: 0, status: 'completed' },
+        { id: 'other', cariId: 'another', ad: cari.ad, kalanTutar: 50 },
+    ], [cari, { id: 'another', ad: cari.ad }]);
+    const selected = summaries.find((item) => item.key === cari.id);
+    assert.deepEqual(selected.allItems.map((item) => item.id), ['active', 'completed', 'legacy']);
+    assert.equal(selected.activeItems.length, 1);
+    assert.equal(selected.completedItems.length, 2);
+});
+
+test('legacy cari without a definition and empty registered cari can be selected for deletion', () => {
+    const summaries = buildCariSummaries([
+        { id: 'legacy', ad: 'Eski Cari', kalanTutar: 0, status: 'completed' },
+    ], [cari]);
+    assert.equal(summaries.find((item) => item.key === 'eski cari').allItems[0].id, 'legacy');
+    assert.deepEqual(summaries.find((item) => item.key === cari.id).allItems, []);
+});

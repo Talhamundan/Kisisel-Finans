@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { ArrowDownRight, ArrowUpRight, CalendarClock, Edit3, Plus, Trash2 } from 'lucide-react';
 import HighQualityModal from './HighQualityModal';
 import { IconTile, StatusBadge } from './PremiumUI';
@@ -50,9 +51,19 @@ const CompletedRow = ({ item, gizliMod }) => (
 );
 
 const CariDetailModal = ({ summary, isOpen, onClose, gizliMod = false, modalAc }) => {
+    const [deleting, setDeleting] = useState(false);
     if (!summary) return null;
     const netTone = summary.netBalance >= 0 ? 'success' : 'danger';
     const netLabel = summary.netBalance >= 0 ? 'Alacak' : 'Verecek';
+    const deleteCari = async () => {
+        if (deleting) return;
+        setDeleting(true);
+        try {
+            if (await modalAc?.('cari_tanim_sil', summary)) onClose?.();
+        } finally {
+            setDeleting(false);
+        }
+    };
 
     return (
         <HighQualityModal
@@ -103,6 +114,12 @@ const CariDetailModal = ({ summary, isOpen, onClose, gizliMod = false, modalAc }
                         {summary.completedItems.map((item) => <CompletedRow key={item.id} item={item} gizliMod={gizliMod} />)}
                         {summary.completedItems.length === 0 && <p className="cari-detail-empty">Tamamlanan işlem yok.</p>}
                     </div>
+                </div>
+                <div className="cari-detail-actions">
+                    <button type="button" className="qw-action-button is-danger" onClick={deleteCari} disabled={deleting} aria-busy={deleting}>
+                        <Trash2 size={15} />
+                        {deleting ? 'Siliniyor…' : 'Cariyi Sil'}
+                    </button>
                 </div>
             </div>
         </HighQualityModal>

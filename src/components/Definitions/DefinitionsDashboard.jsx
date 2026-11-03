@@ -87,6 +87,27 @@ const getDisplayGroup = (item, listType) => (
             : item.group
 );
 
+const sumAmounts = (items, getAmount) => items.reduce((sum, item) => sum + (parseFloat(getAmount(item)) || 0), 0);
+
+const TotalsFooter = ({ items, hidden = false }) => (
+    <div className={`definitions-summary-footer${items.length > 1 ? ' definitions-summary-footer--stack' : ''}`}>
+        {items.map(({ label, value, detail }) => (
+            items.length === 1 ? (
+                <React.Fragment key={label}>
+                    <span><strong>{label}</strong>{detail && <small>{detail}</small>}</span>
+                    <b>{formatDefinitionMoney(value, hidden)}</b>
+                </React.Fragment>
+            ) : (
+                <span key={label}>
+                    <strong>{label}</strong>
+                    <b>{formatDefinitionMoney(value, hidden)}</b>
+                    {detail && <small>{detail}</small>}
+                </span>
+            )
+        ))}
+    </div>
+);
+
 const sumItems = (items = []) => items.reduce((sum, item) => sum + item.value, 0);
 
 const toggleHiddenItem = (setHiddenItems, id) => {
@@ -143,8 +164,10 @@ const GroupedValueList = ({ title, items = [], emptyTitle, hidden = false, listT
                             );
                         })}
                     </div>
+                    <TotalsFooter hidden={hidden} items={[{ label: `${group} Toplamı`, value: sumItems(groupItems.filter((item) => !hiddenItems?.has(item.id))) }]} />
                 </div>
             ))}
+            <TotalsFooter hidden={hidden} items={[{ label: title === 'Borçlar' ? 'Toplam Borç' : 'Toplam Varlık', value: total, detail: `${activeItems.length} seçili kalem` }]} />
             {items.length === 0 && <EmptyState title={emptyTitle} />}
         </div>
     );
@@ -157,12 +180,12 @@ const PaymentSummaryFooter = ({ label = 'Toplam Ödenen', summary }) => (
     </div>
 );
 
-const InstallmentSummaryFooter = ({ status }) => (
-    <div className="definitions-summary-footer definitions-summary-footer--stack">
-        <span><strong>Toplam Planlanan</strong><small>{formatDefinitionMoney(status.total)}</small></span>
-        <span><strong>Toplam Ödenen</strong><small>{formatDefinitionMoney(status.paidAmount)}</small></span>
-        <span><strong>Kalan</strong><small>{formatDefinitionMoney(status.remainingAmount)}</small></span>
-    </div>
+const InstallmentSummaryFooter = ({ status, hidden = false }) => (
+    <TotalsFooter hidden={hidden} items={[
+        { label: 'Toplam Planlanan', value: status.total },
+        { label: 'Toplam Ödenen', value: status.paidAmount },
+        { label: 'Toplam Kalan', value: status.remainingAmount },
+    ]} />
 );
 
 const Overview = ({ data, gizliMod }) => {
@@ -220,7 +243,7 @@ const Overview = ({ data, gizliMod }) => {
     );
 };
 
-const SubscriptionList = ({ data, navigateTo, modalAc }) => (
+const SubscriptionList = ({ data, navigateTo, modalAc, gizliMod }) => (
     <div className="definitions-list-section">
         <SectionHeader
             title="Sabit Giderler"
@@ -247,11 +270,16 @@ const SubscriptionList = ({ data, navigateTo, modalAc }) => (
                 ))}
                 {(data.abonelikler || []).length === 0 && <EmptyState title="Sabit gider yok" icon={Repeat2} />}
             </div>
+            <TotalsFooter hidden={gizliMod} items={[
+                { label: 'Toplam Sabit Gider', value: sumAmounts(data.abonelikler || [], (item) => item.tutar) },
+                { label: 'Aktif Giderler', value: sumAmounts((data.abonelikler || []).filter((item) => item.aktif !== false), (item) => item.tutar) },
+                { label: 'Pasif Giderler', value: sumAmounts((data.abonelikler || []).filter((item) => item.aktif === false), (item) => item.tutar) },
+            ]} />
         </PremiumCard>
     </div>
 );
 
-const BillList = ({ data, navigateTo, modalAc }) => {
+const BillList = ({ data, navigateTo, modalAc, gizliMod }) => {
     const rows = (data.tanimliFaturalar || []).map((definition) => getBillDefinitionStatus(definition, {
         pendingBills: data.bekleyenFaturalar,
         transactions: data.islemler,
@@ -285,12 +313,17 @@ const BillList = ({ data, navigateTo, modalAc }) => {
                     ))}
                     {rows.length === 0 && <EmptyState title="Fatura tanımı yok" icon={ReceiptText} />}
                 </div>
+                <TotalsFooter hidden={gizliMod} items={[{
+                    label: 'Toplam Fatura Tutarı',
+                    value: sumAmounts(rows, (row) => row.current?.expectedAmount),
+                    detail: 'Listede gösterilen dönem tutarları · Tutarı bilinmeyenler hariç',
+                }]} />
             </PremiumCard>
         </div>
     );
 };
 
-const InstallmentList = ({ data, navigateTo, modalAc }) => {
+const InstallmentList = ({ data, navigateTo, modalAc, gizliMod }) => {
     const [filter, setFilter] = useState('active');
     const rows = getAllInstallmentStatuses(data.taksitler, data.islemler);
     const filteredRows = rows.filter((row) => {
@@ -339,6 +372,16 @@ const InstallmentList = ({ data, navigateTo, modalAc }) => {
                     ))}
                     {filteredRows.length === 0 && <EmptyState title="Taksit planı yok" icon={CalendarClock} />}
                 </div>
+                <TotalsFooter hidden={gizliMod} items={[{
+                    label: 'Sıradaki Taksitler Toplamı',
+                    value: sumAmounts(filteredRows, (row) => row.nextPayment?.plannedAmount),
+                    detail: `${filteredRows.length} plan · Seçili filtreye göre`,
+                }]} />
+                <InstallmentSummaryFooter hidden={gizliMod} status={{
+                    total: sumAmounts(filteredRows, (row) => row.total),
+                    paidAmount: sumAmounts(filteredRows, (row) => row.paidAmount),
+                    remainingAmount: sumAmounts(filteredRows, (row) => row.remainingAmount),
+                }} />
             </PremiumCard>
         </div>
     );
@@ -349,6 +392,8 @@ const ReceivablePayableList = ({ data, modalAc, gizliMod }) => {
     const summaries = useMemo(() => buildCariSummaries(data.borclar, data.cariler), [data.borclar, data.cariler]);
     const currentCari = selectedCari ? summaries.find((summary) => summary.key === selectedCari.key) : null;
     const activeSummaries = summaries.filter((summary) => summary.activeCount > 0 || summary.completedCount > 0);
+    const totalReceivable = sumAmounts(activeSummaries, (summary) => summary.activeReceivable);
+    const totalPayable = sumAmounts(activeSummaries, (summary) => summary.activePayable);
 
     return (
         <div className="definitions-list-section">
@@ -371,6 +416,11 @@ const ReceivablePayableList = ({ data, modalAc, gizliMod }) => {
                     })}
                     {activeSummaries.length === 0 && <EmptyState title="Cari kayıt yok" icon={CreditCard} />}
                 </div>
+                <TotalsFooter hidden={gizliMod} items={[
+                    { label: 'Toplam Alacak', value: totalReceivable },
+                    { label: 'Toplam Verecek', value: totalPayable },
+                    { label: 'Net Bakiye', value: Math.abs(totalReceivable - totalPayable), detail: totalReceivable >= totalPayable ? 'Alacak' : 'Verecek' },
+                ]} />
             </PremiumCard>
             <CariDetailModal
                 isOpen={Boolean(selectedCari)}
@@ -582,9 +632,9 @@ const DefinitionsDashboard = ({ data, gizliMod, routePath, navigateTo, modalAc }
                 ))}
             </div>
             {activeTab === 'overview' && <Overview data={data} gizliMod={gizliMod} />}
-            {activeTab === 'subscriptions' && <SubscriptionList data={data} navigateTo={navigateTo} modalAc={modalAc} />}
-            {activeTab === 'bills' && <BillList data={data} navigateTo={navigateTo} modalAc={modalAc} />}
-            {activeTab === 'installments' && <InstallmentList data={data} navigateTo={navigateTo} modalAc={modalAc} />}
+            {activeTab === 'subscriptions' && <SubscriptionList data={data} navigateTo={navigateTo} modalAc={modalAc} gizliMod={gizliMod} />}
+            {activeTab === 'bills' && <BillList data={data} navigateTo={navigateTo} modalAc={modalAc} gizliMod={gizliMod} />}
+            {activeTab === 'installments' && <InstallmentList data={data} navigateTo={navigateTo} modalAc={modalAc} gizliMod={gizliMod} />}
             {activeTab === 'receivables' && <ReceivablePayableList data={data} modalAc={modalAc} gizliMod={gizliMod} />}
         </div>
     );

@@ -2089,6 +2089,13 @@ input[type="radio"] {
   font-weight: 800;
 }
 
+.cari-detail-actions {
+    display: flex;
+    justify-content: flex-end;
+    border-top: 1px solid var(--border);
+    padding-top: 16px;
+}
+
 .cari-detail-section__header {
   display: flex;
   align-items: center;
@@ -11880,6 +11887,12 @@ input[type="radio"] {
 .qw-quick-form {
   display: grid !important;
   gap: 14px !important;
+}
+
+/* Restore bold field text only in quick-entry and edit forms. */
+.qw-quick-form :is(input, select, textarea),
+.transaction-form-bold :is(input, select, textarea) {
+  font-weight: 700 !important;
 }
 
 .qw-form-row {

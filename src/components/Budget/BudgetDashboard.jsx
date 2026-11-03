@@ -28,6 +28,7 @@ import {
 import { formatCurrencyPlain, tarihFormatla, titleCaseTr, toDateSafe, sortTurkishText } from '../../utils/helpers';
 import { buildCariSummaries } from '../../utils/cari';
 import { isDateInPeriod, MONTH_NAMES } from '../../utils/period';
+import { getActiveDashboardInstallmentStatuses } from '../../utils/dashboardInstallments';
 import {
     formatSalaryPeriodRange,
     getSalaryPeriod,
@@ -64,7 +65,6 @@ import {
 } from '../../utils/financing';
 import {
     DEFINITION_STATUS,
-    getAllInstallmentStatuses,
     getBillDefinitionStatus,
     getBillPeriodRows,
     statusLabels,
@@ -1088,7 +1088,7 @@ const BudgetDashboard = ({
         .filter((summary) => Math.abs(summary.netBalance) < 0.01)
         .slice(0, 4);
 
-    const allInstallmentStatuses = getAllInstallmentStatuses(taksitler, tumIslemler);
+    const allInstallmentStatuses = getActiveDashboardInstallmentStatuses(taksitler, tumIslemler);
     const allInstallmentRows = allInstallmentStatuses
         .map((status) => {
             const item = status.installment;

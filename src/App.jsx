@@ -365,8 +365,12 @@ function App() {
         const url = new URL(window.location.href);
         url.searchParams.set('year', String(selectedPeriod.year));
         url.searchParams.set('month', selectedPeriod.month === 'all' ? 'all' : String(selectedPeriod.month));
-        window.history.replaceState({}, document.title, `${url.pathname}?${url.searchParams.toString()}`);
-    }, [selectedPeriod]);
+        if (anaSekme !== 'takvim') {
+            url.searchParams.delete('calendarYear');
+            url.searchParams.delete('calendarMonth');
+        }
+        window.history.replaceState({}, document.title, `${url.pathname}?${url.searchParams.toString()}${url.hash}`);
+    }, [selectedPeriod, anaSekme]);
 
     const filteredPendingBills = data.bekleyenFaturalar.filter((bill) => (
         isDueBySelectedPeriodEnd(bill.sonOdemeTarihi, selectedPeriod)
@@ -725,6 +729,7 @@ function App() {
 
     // Modal Control Wrapper
     const modalAc = (tip, veri) => {
+        if (tip === 'cari_tanim_sil') return budgetActions.cariTanimSil(veri);
         setAktifModal(tip);
         setSeciliVeri(veri);
 
